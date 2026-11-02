@@ -18,8 +18,20 @@ for dependency in gh keytool openssl base64 git; do
   fi
 done
 
-if ! gh auth status --hostname github.com >/dev/null 2>&1; then
-  echo "GitHub CLI is not authenticated. Run: gh auth login" >&2
+# Codespaces injects an integration token which overrides the user OAuth login,
+# but that token often lacks permission to manage repository Actions Secrets.
+gh_user() { env -u GH_TOKEN -u GITHUB_TOKEN gh "$@"; }
+
+if ! gh_user auth status --hostname github.com >/dev/null 2>&1; then
+  echo "Authorize your GitHub account first (the default Codespaces token cannot set secrets):" >&2
+  echo "  env -u GH_TOKEN -u GITHUB_TOKEN gh auth login --hostname github.com --web --scopes repo" >&2
+  echo "Then rerun this script. Existing keys are preserved." >&2
+  exit 1
+fi
+if ! gh_user api "repos/$REPO/actions/secrets/public-key" > /dev/null 2>&1; then
+  echo "Your GitHub CLI login cannot manage Actions Secrets in $REPO." >&2
+  echo "Try: env -u GH_TOKEN -u GITHUB_TOKEN gh auth refresh --hostname github.com --scopes repo" >&2
+  echo "Then rerun this script. Existing keys are preserved." >&2
   exit 1
 fi
 
@@ -73,10 +85,10 @@ keytool -list -keystore "$KEY_FILE" \
   -storepass:env NLIC_DEV_GENERATED_PASSWORD -alias "$ALIAS" >/dev/null
 
 echo "Uploading dev signing secrets to $REPO..."
-base64 -w0 "$KEY_FILE" | gh secret set NLIC_DEV_KEYSTORE_BASE64 --repo "$REPO" --app actions
-printf '%s' "$NLIC_DEV_GENERATED_PASSWORD" | gh secret set NLIC_DEV_STORE_PASSWORD --repo "$REPO" --app actions
-printf '%s' "$NLIC_DEV_GENERATED_PASSWORD" | gh secret set NLIC_DEV_KEY_PASSWORD --repo "$REPO" --app actions
-printf '%s' "$ALIAS" | gh secret set NLIC_DEV_KEY_ALIAS --repo "$REPO" --app actions
+base64 -w0 "$KEY_FILE" | gh_user secret set NLIC_DEV_KEYSTORE_BASE64 --repo "$REPO" --app actions
+printf '%s' "$NLIC_DEV_GENERATED_PASSWORD" | gh_user secret set NLIC_DEV_STORE_PASSWORD --repo "$REPO" --app actions
+printf '%s' "$NLIC_DEV_GENERATED_PASSWORD" | gh_user secret set NLIC_DEV_KEY_PASSWORD --repo "$REPO" --app actions
+printf '%s' "$ALIAS" | gh_user secret set NLIC_DEV_KEY_ALIAS --repo "$REPO" --app actions
 
 echo ""
 echo "SUCCESS: dev signing key is in GitHub Actions Secrets."
@@ -89,4 +101,4 @@ echo "Do not commit them or upload them to GitHub Releases/Actions artifacts."
 echo "Codespaces can be deleted: verify your local backups before deleting one."
 echo ""
 echo "Installed secrets:"
-gh secret list --repo "$REPO" --app actions
+gh_user secret list --repo "$REPO" --app actions
