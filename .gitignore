@@ -20,3 +20,8 @@ local.properties
 
 # JNI
 app/src/main/jniLibs/
+# Local signing backups - never commit
+.nlic-private/
+*.p12
+*.jks
+*.keystore
