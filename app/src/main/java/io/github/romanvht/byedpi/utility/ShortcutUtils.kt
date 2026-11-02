@@ -7,7 +7,7 @@ import android.content.pm.ShortcutManager
 import android.graphics.drawable.Icon
 import android.os.Build
 import io.github.romanvht.byedpi.R
-import io.github.romanvht.byedpi.activities.ToggleActivity
+import io.github.romanvht.byedpi.activities.MainActivity
 
 object ShortcutUtils {
 
@@ -16,9 +16,10 @@ object ShortcutUtils {
             val shortcutManager = context.getSystemService(ShortcutManager::class.java)
             val shortcuts = mutableListOf<ShortcutInfo>()
 
-            val toggleIntent = Intent(context, ToggleActivity::class.java).apply {
+            val toggleIntent = Intent(context, MainActivity::class.java).apply {
                 action = Intent.ACTION_VIEW
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                putExtra("nlic_shortcut_action", "toggle")
             }
 
             val toggleShortcut = ShortcutInfo.Builder(context, "toggle_service")
@@ -35,10 +36,11 @@ object ShortcutUtils {
                 val pinned = history.getHistory().filter { it.pinned }.take(3)
 
                 pinned.forEachIndexed { index, strategy ->
-                    val strategyIntent = Intent(context, ToggleActivity::class.java).apply {
+                    val strategyIntent = Intent(context, MainActivity::class.java).apply {
                         action = Intent.ACTION_VIEW
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                        putExtra("strategy", strategy.text)
+                        putExtra("nlic_shortcut_action", "strategy")
+                        putExtra("nlic_shortcut_strategy", strategy.text)
                     }
 
                     val fullLabel = strategy.name?.takeIf { it.isNotBlank() } ?: strategy.text
