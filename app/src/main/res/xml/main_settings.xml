@@ -153,12 +153,6 @@
             android:summary="@string/battery_optimization_summary">
         </Preference>
 
-        <Preference
-            android:key="storage_access"
-            android:icon="@drawable/ic_folder"
-            android:title="@string/storage_access"
-            android:summary="@string/storage_access_summary">
-        </Preference>
 
     </androidx.preference.PreferenceCategory>
 
@@ -185,7 +179,7 @@
             android:icon="@drawable/ic_github">
             <intent
                 android:action="android.intent.action.VIEW"
-                android:data="https://github.com/romanvht/ByeDPIAndroid" />
+                android:data="https://github.com/vanimusic6-sudo/N-LIC" />
         </Preference>
 
         <Preference
@@ -212,5 +206,14 @@
             android:summary="0.0.1" />
 
     </androidx.preference.PreferenceCategory>
+
+    <Preference
+        android:key="nlic_upstream_credits"
+        android:title="@string/nlic_upstream_credits"
+        android:icon="@drawable/ic_github">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="https://github.com/romanvht/ByeByeDPI" />
+    </Preference>
 
 </PreferenceScreen>

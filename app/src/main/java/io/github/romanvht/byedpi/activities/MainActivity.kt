@@ -42,14 +42,22 @@ class MainActivity : BaseActivity() {
 
     companion object {
         private val TAG: String = MainActivity::class.java.simpleName
-        private const val BATTERY_OPTIMIZATION_REQUESTED = "battery_optimization_requested"
 
         private fun collectLogs(): String? {
             return try {
-                val process = Runtime.getRuntime().exec("logcat *:D -d")
-                process.inputStream.bufferedReader().use { reader ->
-                    reader.readText()
+                // Diagnostic export is initiated by the user. Never dump
+                // unrelated apps' device-wide logs; keep recent app-UID
+                // records from both the UI and separate native process.
+                val selector = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    "--uid=${android.os.Process.myUid()}"
+                } else {
+                    "--pid=${android.os.Process.myPid()}"
                 }
+                val process = Runtime.getRuntime().exec(
+                    arrayOf("logcat", "-d", "-t", "2500", selector, "*:D")
+                )
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                if (process.waitFor() != 0) null else output
             } catch (exception: Exception) {
                 Log.e(TAG, "Failed to collect logs", exception)
                 null
@@ -158,12 +166,10 @@ class MainActivity : BaseActivity() {
             addAction(FAILED_BROADCAST)
         }
 
-        @SuppressLint("UnspecifiedRegisterReceiverFlag")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(receiver, intentFilter, RECEIVER_EXPORTED)
-        } else {
-            registerReceiver(receiver, intentFilter)
-        }
+        // Internal state events must not be spoofable by third-party apps.
+        ContextCompat.registerReceiver(
+            this, receiver, intentFilter, ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         binding.statusButtonCard.setOnClickListener {
             binding.statusButtonCard.isClickable = false
@@ -232,9 +238,8 @@ class MainActivity : BaseActivity() {
 
         if (!PermissionUtils.hasNotificationPermission(this)) {
             PermissionUtils.requestNotificationPermission(this, 1)
-        } else {
-            requestBatteryOptimization()
         }
+        // Battery optimization exemption is optional and only requested from Settings.
 
         if (!TestService.isRunning && getPreferences().getBoolean("auto_connect", false) &&
             appStatus.first != AppStatus.Running) {
@@ -242,6 +247,49 @@ class MainActivity : BaseActivity() {
         }
 
         ShortcutUtils.update(this)
+        if (savedInstanceState == null) handleShortcutIntent(intent)
+    }
+
+    /**
+     * Shortcuts can be sent by any launcher/app because MainActivity is public.
+     * Never execute an external network-control request without visible consent.
+     * A strategy must also be an existing pinned entry, not arbitrary arguments.
+     */
+    private fun handleShortcutIntent(source: Intent?) {
+        val action = source?.getStringExtra("nlic_shortcut_action") ?: return
+        if (action != "toggle" && action != "strategy") return
+        val strategy = source.getStringExtra("nlic_shortcut_strategy")
+        if (action == "strategy") {
+            if (strategy.isNullOrBlank() || strategy.length > 4096 ||
+                HistoryUtils(this).getHistory().none { it.pinned && it.text == strategy }
+            ) {
+                Log.w(TAG, "Ignoring unrecognized strategy shortcut")
+                return
+            }
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.nlic_shortcut_confirm_title)
+            .setMessage(R.string.nlic_shortcut_confirm_message)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                if (action == "strategy" && !strategy.isNullOrBlank()) {
+                    getPreferences().edit(commit = true) {
+                        putString("byedpi_cmd_args", strategy)
+                    }
+                    updateStrategyButton()
+                    if (appStatus.first == AppStatus.Running) {
+                        ServiceManager.restart(this, getPreferences().mode())
+                    } else {
+                        start()
+                    }
+                } else if (appStatus.first == AppStatus.Running) {
+                    stop()
+                } else {
+                    start()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     override fun onResume() {
@@ -254,18 +302,6 @@ class MainActivity : BaseActivity() {
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(receiver)
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-
-        if (requestCode == 1) {
-            requestBatteryOptimization()
-        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -521,13 +557,4 @@ class MainActivity : BaseActivity() {
         }
     }
 
-    private fun requestBatteryOptimization() {
-        val preferences = getPreferences()
-        val alreadyRequested = preferences.getBoolean(BATTERY_OPTIMIZATION_REQUESTED, false)
-
-        if (!alreadyRequested && !PermissionUtils.isBatteryOptimizationDisabled(this)) {
-            PermissionUtils.requestBatteryOptimization(this)
-            preferences.edit { putBoolean(BATTERY_OPTIMIZATION_REQUESTED, true) }
-        }
-    }
 }

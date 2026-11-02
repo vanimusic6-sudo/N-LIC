@@ -16,10 +16,27 @@ val devSigningAvailable = listOf(
     devKeystorePath, devStorePassword, devKeyPassword, devKeyAlias
 ).all { !it.isNullOrBlank() }
 
+// The production certificate is separate from the DEV identity and never
+// committed to the repository. It is supplied only to an approved release job.
+val releaseKeystorePath = System.getenv("NLIC_RELEASE_KEYSTORE_PATH")
+val releaseStorePassword = System.getenv("NLIC_RELEASE_STORE_PASSWORD")
+val releaseKeyPassword = System.getenv("NLIC_RELEASE_KEY_PASSWORD")
+val releaseKeyAlias = System.getenv("NLIC_RELEASE_KEY_ALIAS")
+val releaseSigningAvailable = listOf(
+    releaseKeystorePath, releaseStorePassword, releaseKeyPassword, releaseKeyAlias
+).all { !it.isNullOrBlank() }
+
+// Explicit opt-in for an internal, release-optimized TEST artifact.
+// Uses the existing N-LIC DEV certificate; it is NOT a production signature.
+// Do not publish as an official release. Permanent releases require nlicRelease.
+val devSignedReleaseTest = System.getenv("NLIC_DEV_SIGN_RELEASE_TEST") == "true"
+
 android {
     namespace = "io.github.romanvht.byedpi"
     //noinspection GradleDependency
     compileSdk = 36
+    // Pin the native toolchain used by both Gradle/CMake and ndk-build.
+    ndkVersion = "27.2.12479018"
 
     defaultConfig {
         applicationId = "io.github.vanimusic6sudo.nlic"
@@ -50,6 +67,14 @@ android {
                 keyPassword = devKeyPassword
             }
         }
+        if (releaseSigningAvailable) {
+            create("nlicRelease") {
+                storeFile = file(requireNotNull(releaseKeystorePath))
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
@@ -60,6 +85,12 @@ android {
             }
         }
         release {
+            if (releaseSigningAvailable) {
+                signingConfig = signingConfigs.getByName("nlicRelease")
+            } else if (devSignedReleaseTest && devSigningAvailable) {
+                // Only the dedicated internal QA workflow sets this flag.
+                signingConfig = signingConfigs.getByName("nlicDev")
+            }
             buildConfigField("String", "VERSION_NAME",  "\"${defaultConfig.versionName}\"")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             isMinifyEnabled = true

@@ -1,0 +1,120 @@
+name: N-LIC binary provenance comparison (read-only)
+
+on:
+  push:
+    branches:
+      - feature/nlic-identity-security-20261103
+    paths:
+      - .github/workflows/apk-forensics.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Set up Android SDK for APK metadata
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        with:
+          packages: platform-tools
+
+      - name: Install stable APK inspection tools
+        run: sdkmanager --install "build-tools;36.0.0"
+
+      - name: Download authentic upstream and signed N-LIC controls
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p samples/original samples/dev samples/compare evidence
+          curl --fail --location --retry 4 --retry-delay 3 \
+            "https://github.com/romanvht/ByeByeDPI/releases/download/v.1.8.2/ByeByeDPI-v1.8.2-universal-release.apk" \
+            --output samples/original/ByeByeDPI-v1.8.2-universal-release.apk
+          gh run download 41499460549 --repo "${GITHUB_REPOSITORY}" \
+            --name N-LIC-Dev-APK --dir samples/dev
+          gh run download 41492502618 --repo "${GITHUB_REPOSITORY}" \
+            --name N-LIC-Play-Protect-Audit-Only --dir samples/compare
+          test -s samples/original/ByeByeDPI-v1.8.2-universal-release.apk
+          test -s samples/dev/app-universal-debug.apk
+          test -s samples/compare/N-LIC-release-optimized-test.apk
+
+      - name: Compare binary containers, metadata and JNI libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          from hashlib import sha256
+          from zipfile import ZipFile, BadZipFile
+          import json, subprocess, os
+
+          files = {
+            'official-upstream': Path('samples/original/ByeByeDPI-v1.8.2-universal-release.apk'),
+            'nlic-dev': Path('samples/dev/app-universal-debug.apk'),
+            'nlic-optimized-test': Path('samples/compare/N-LIC-release-optimized-test.apk')
+          }
+          results = {}
+          aapt = f"{os.environ['ANDROID_HOME']}/build-tools/36.0.0/aapt"
+          apksigner = f"{os.environ['ANDROID_HOME']}/build-tools/36.0.0/apksigner"
+
+          for label, file in files.items():
+            badging = subprocess.run([aapt,'dump','badging',str(file)],capture_output=True,text=True,check=True)
+            permissions = subprocess.run([aapt,'dump','permissions',str(file)],capture_output=True,text=True,check=True)
+            certs = subprocess.run([apksigner,'verify','--print-certs',str(file)],capture_output=True,text=True,check=True)
+            with ZipFile(file) as z:
+              bad = z.testzip()
+              assert bad is None, f"Corrupted zip member {bad}"
+              entries = {}
+              for x in z.infolist():
+                if x.filename.startswith('lib/') and x.filename.endswith('.so'):
+                  entries[x.filename]={'sha256':sha256(z.read(x)).hexdigest(),'size':x.file_size}
+              allnames = set(z.namelist())
+              results[label] = {
+                'file_size':file.stat().st_size,
+                'sha256':sha256(file.read_bytes()).hexdigest(),
+                'apk_members':len(allnames),
+                'native_libraries':entries,
+                'dex_names':sorted(x for x in allnames if x.endswith('.dex')),
+                'badging': [x for x in badging.stdout.splitlines() if x.startswith(('package:','application-label:','application-debuggable','sdkVersion:','targetSdkVersion:'))],
+                'permissions':permissions.stdout.splitlines(),
+                'signing_certificates':[x for x in certs.stdout.splitlines() if x.startswith('Signer #1 certificate ')],
+              }
+
+          baseline=results['official-upstream']['native_libraries']
+          for label in ['nlic-dev','nlic-optimized-test']:
+            theirs=results[label]['native_libraries']
+            results[label]['native_library_comparison_with_official']={
+              'same_names':set(theirs)==set(baseline),
+              'identical':sorted(k for k in baseline.keys() & theirs.keys()
+                                 if baseline[k]['sha256']==theirs[k]['sha256']),
+              'different':sorted(k for k in baseline.keys() & theirs.keys()
+                                 if baseline[k]['sha256']!=theirs[k]['sha256'])
+            }
+
+          Path('evidence/APK_BINARY_PROVENANCE.json').write_text(
+            json.dumps(results, indent=2, ensure_ascii=False)+'\n')
+          with open('evidence/README.txt','w') as out:
+            out.write('APK provenance comparison — machine verifiable, NOT a malware clearance.\n')
+            out.write('Samples: official romanvht v1.8.2 universal release and two N-LIC GitHub Actions builds.\n')
+            out.write('Changes in app ID/signatures/dex are expected for an independently branded fork.\n')
+            out.write('Identical native library checksums only prove identical bytes, not safe behavior.\n\n')
+            for label,v in results.items():
+              out.write(f"{label}: sha256={v['sha256']} size={v['file_size']} bytes\n")
+              for x in v['badging']: out.write('  '+x+'\n')
+              for x in v['signing_certificates'][:3]: out.write('  '+x+'\n')
+              out.write('  native compare: '+str(v.get('native_library_comparison_with_official','reference'))+'\n')
+          print(Path('evidence/README.txt').read_text())
+          PY
+
+      - name: Upload evidence ONLY, never redistribute APKs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: N-LIC-Binary-Provenance-Report
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 30

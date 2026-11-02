@@ -82,11 +82,6 @@ object DiagnosticUtils {
                 R.string.diagnostic_battery_exclusion,
                 availability(context, PermissionUtils.isBatteryOptimizationDisabled(context))
             ))
-            appendLine(value(
-                context,
-                R.string.storage_access,
-                availability(context, PermissionUtils.hasStorageAccess(context))
-            ))
 
             appendLine()
             appendLine(context.getString(R.string.diagnostic_test_settings))
