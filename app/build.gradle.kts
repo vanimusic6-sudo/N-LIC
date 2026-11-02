@@ -68,6 +68,16 @@ android {
         debug {
             buildConfigField("String", "VERSION_NAME",  "\"${defaultConfig.versionName}-debug\"")
         }
+        // Audit-only controlled comparison: same source, package ID, and signing
+        // certificate as DEBUG; release optimization and no debuggable flag.
+        create("releaseTest") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".dev"
+            matchingFallbacks += listOf("release")
+            if (devSigningAvailable) {
+                signingConfig = signingConfigs.getByName("nlicDev")
+            }
+        }
     }
 
     compileOptions {
