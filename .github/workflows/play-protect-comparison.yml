@@ -1,0 +1,119 @@
+name: N-LIC Play Protect comparison (audit only)
+
+on:
+  push:
+    branches:
+      - audit/play-protect-20261103
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nlic-play-protect-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    name: Compare DEBUG and release-optimized test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout exact source and pinned native submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install native build dependencies
+        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1" "ndk;27.2.12479018"
+
+      - name: Restore known development signing identity
+        env:
+          KEYSTORE_BASE64: ${{ secrets.NLIC_DEV_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.NLIC_DEV_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.NLIC_DEV_KEY_ALIAS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64"
+          test -n "$STORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          mkdir -p .signing
+          chmod 700 .signing
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > .signing/nlic-dev.p12
+          chmod 600 .signing/nlic-dev.p12
+          keytool -list -keystore .signing/nlic-dev.p12 \
+            -storepass:env STORE_PASSWORD -alias "$KEY_ALIAS" >/dev/null
+
+      - name: Build both variants from the same commit
+        env:
+          NLIC_DEV_KEYSTORE_PATH: ${{ github.workspace }}/.signing/nlic-dev.p12
+          NLIC_DEV_STORE_PASSWORD: ${{ secrets.NLIC_DEV_STORE_PASSWORD }}
+          NLIC_DEV_KEY_PASSWORD: ${{ secrets.NLIC_DEV_KEY_PASSWORD }}
+          NLIC_DEV_KEY_ALIAS: ${{ secrets.NLIC_DEV_KEY_ALIAS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug :app:assembleReleaseTest --no-daemon --stacktrace
+
+      - name: Compare APK signatures and package metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p comparison
+          debug="$(find app/build/outputs/apk -type f -iname '*universal*debug*.apk' | head -n 1)"
+          release="$(find app/build/outputs/apk -type f -iname '*universal*releasetest*.apk' | head -n 1)"
+          test -s "$debug"
+          test -s "$release"
+          cp "$debug" comparison/N-LIC-debug.apk
+          cp "$release" comparison/N-LIC-release-optimized-test.apk
+
+          apksigner="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          aapt="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          for label in debug release-optimized-test; do
+            apk="comparison/N-LIC-$label.apk"
+            "$apksigner" verify --verbose --print-certs "$apk"
+            "$aapt" dump badging "$apk" | grep -E "^package:|^application-debuggable" || :
+            sha256sum "$apk"
+          done
+
+          debug_package="$("$aapt" dump badging comparison/N-LIC-debug.apk | sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p")"
+          release_package="$("$aapt" dump badging comparison/N-LIC-release-optimized-test.apk | sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p")"
+          test "$debug_package" = "$release_package"
+          test "$debug_package" = "io.github.vanimusic6sudo.nlic.dev"
+          {
+            printf 'N-LIC controlled build comparison\\n'
+            printf 'Commit: %s\\n' "${GITHUB_SHA}"
+            printf 'Same package: %s\\n' "$debug_package"
+            printf 'NOTE: identical package does NOT imply equal reputation or detection.\\n'
+            printf 'DO NOT install APKs to bypass Play Protect. Use as analysis artifacts only.\\n'
+            sha256sum comparison/*.apk
+          } > comparison/REPORT.txt
+
+      - name: Upload controlled comparison artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: N-LIC-Play-Protect-Audit-Only
+          path: comparison/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Destroy temporary key material
+        if: always()
+        shell: bash
+        run: rm -rf .signing
