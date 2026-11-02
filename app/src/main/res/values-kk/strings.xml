@@ -242,4 +242,7 @@
     <string name="file_picker_unavailable">Құрылғыда жүйелік файл таңдау құралы жоқ. Жалғастыру үшін қолданбаға файлдарға рұқсат беріңіз.</string>
     <string name="grant_access">Рұқсат беру</string>
     <string name="storage_access_not_granted">Файлдарға рұқсат берілмеді</string>
+    <string name="nlic_shortcut_confirm_title">N-LIC әрекетін растау</string>
+    <string name="nlic_shortcut_confirm_message">Төте жол әрекетін орындау керек пе? Желі параметрлерін өзгерту үшін растау қажет.</string>
+    <string name="nlic_upstream_credits">Бастапқы ByeByeDPI · romanvht, hufrea, heiher</string>
 </resources>
