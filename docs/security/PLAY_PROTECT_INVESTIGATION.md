@@ -87,3 +87,23 @@ No hypothesis alone explains the verdict without additional evidence.
 9. Until verified, do not recommend normal installation on a primary device.
 
 **Conclusion:** The APK is signed with N-LIC's development certificate and incorporates the expected engines. That establishes provenance, not safety. The exact reason for Play Protect's classifier remains unverified.
+
+## Device verification: release-optimized build ALSO blocked (2026-11-03)
+
+User confirmed the official upstream ByeByeDPI **v.1.8.2**, downloaded from the author's GitHub, is **not** flagged by Google Play Protect on their phone; however, both N-LIC **Debug** and N-LIC **ReleaseTest** APKs provoke the harmful-app block.
+
+**Updated interpretation:**
+- `android:debuggable` and lack of release shrinking cannot explain the outcome *alone*. Mark prior debug-only theory as **not supported**.
+- The two N-LIC APKs were compiled from the same source under the same app ID `io.github.vanimusic6sudo.nlic.dev` and signing certificate fingerprint `9eac8e...`. Distinguishing them by build type did not change the Google verdict.
+- Most important unisolated variables compared with upstream are **different application package ID, different signer and signer reputation, upstream vs N-LIC compiled artifact, and distribution context**. These are hypotheses, **not proof** of Play Protect's internal rationale.
+- Original upstream 1.8.2 universal release is about 3,332,888 bytes, N-LIC release-optimized test 3,333,400 bytes (difference 512 bytes). Near-equal APK size **does not prove** binary equivalence.
+- Local ZIP file comparison of the two N-LIC variants: all 4 `libhev-socks5-tunnel.so` files have identical bytes; `libbyedpi.so` differs between debug and release variants as expected from compile modes. All 9 common assets files are identical.
+- Google's published Riskware warning text closely resembles the user's Russian generic text, but **category must be treated as tentative** without verified exact category metadata.
+- Until deeper independent code and behavior review, recommend **not overriding Play Protect** and do not treat the official original's clean classification as definitive evidence for the fork.
+
+**Next actions:**
+1. Capture the exact Play Protect details/category and check whether the user can view a detection reason.
+2. Seek an official review of the Play Protect classification from the developer portal if security review supports a false positive: https://developers.google.com/android/play-protect/warning-dev-guidance
+3. Continue native library, exported-component and dependency security audit on a controlled device. Verify no unexpected traffic or private data leakage.
+4. Avoid signing-key rotation, APK renaming, or artificial obfuscation as a means of hiding from the scanner; prioritize genuine hardening and reproducible evidence.
+
