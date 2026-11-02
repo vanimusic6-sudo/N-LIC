@@ -59,3 +59,34 @@ If independent review establishes a benign build, use Google's [official review/
 - [ ] The Play Protect classification is independently investigated/resolved before general release.
 
 **Do not declare the app safe or distribute it as a public production release until the open issues are resolved.**
+
+
+## Repeated Play Protect block after rebranding — binary forensic follow-up (2026-11-03)
+
+**User reproduction**: The post-hardening N-LIC Dev APK still triggers the same "Вредоносное приложение заблокировано" Google Play Protect warning. Screenshot shows the **new N-LIC icon and name**, so rebranding was present in the tested binary. Thus, changing the app label and graphic identity **did not resolve** classification. Neither did reducing storage permissions or disabling external activities. This is an unresolved harmful-app block, not merely a first-install "unknown app" prompt.
+
+**Independent read-only provenance test**: https://github.com/vanimusic6-sudo/N-LIC/actions/runs/41501956136 (completed successfully, report artifact `N-LIC-Binary-Provenance-Report`). Compared three exact APK files using `aapt`, `apksigner` and ZIP integrity checks, with machine-readable hashes:
+
+| Image | SHA-256 | Package ID | Native .so entries |
+| --- | --- | --- | --- |
+| Official upstream `v.1.8.2` universal release | `3df9570313c9fb03de19fde7dbf7e56b943fd0845b2d57b687c5859aff4e0001` | `io.github.romanvht.byedpi` | 8 |
+| N-LIC hardened DEV (reproduces warning) | `f66196d40515c326a45dc10270991fb393d2e61c84a89db8f596036657df1bfa` | `io.github.vanimusic6sudo.nlic.dev` | 8 |
+| N-LIC old optimized release test (reproduces warning) | `3a429002267a26935386264a92ce02504f2f3835b29b82f1bc36f8f9c1a16b82` | `io.github.vanimusic6sudo.nlic.dev` | 8 |
+
+**Important technical findings:**
+
+- Package ID and signing certificate both differ from the upstream official release.
+- N-LIC builds use the same Android target SDK 34 and minimum SDK 21 as official upstream.
+- The hardened DEV build has removed broad storage permissions, unlike the official upstream. Google still blocks hardened N-LIC.
+- All **eight** bundled native library names and architectures match between official and fork. **None of the eight N-LIC native library hashes matches the official built binaries.** This can be explained by different NDK/compiler/build environment, native build flags or other source/build differences; it is **not evidence of malware or an established reason for the Play Protect block**. A reproducible native build diff and memory-safety analysis are still needed.
+- Signing cert fingerprints (SHA-256): official `77451075acea406406475d74d459883a49a64051faf32e42f718f3f9777a8dfb`; N-LIC Dev `9eac8ece5fb89eeacb03c5eff20155724a206d73180d58c78fc7d3911dbee5c5`.
+- The official release contains one minified DEX; N-LIC optimized test contains one minified DEX; hardened N-LIC Debug contains 10 unminified DEX. This is consistent with the chosen build variants, but not itself a benign-code validation.
+- The CodeQL GitHub Actions jobs for N-LIC passed on commit `5de14a2a09...` (workflow runs 41499460530 / 41499469417), but passing a job does not guarantee zero alerts or a clean dynamic/native audit.
+- **No definitive malware classification subtype, trigger or benign/malicious verdict has been obtained from Google.** Do not claim "Riskware" as a confirmed subtype.
+
+**Official Google guidance:** https://developers.google.com/android/play-protect/warning-dev-guidance  
+**Official developer appeal:** https://support.google.com/googleplay/android-developer/contact/protectappeals
+
+The appeal form requires a SHA-256 for the exact APK **uploaded to VirusTotal**. A hash alone is not enough: the developer must upload the exact public test APK to VirusTotal before filing (be aware VirusTotal files may be shared with security vendors), verify SHA and include screenshot, GitHub source, controlled sample comparison, and reproducible behavior. Submit only after reviewing unresolved code/security issues; this is not a way to suppress protection on a phone.
+
+**Do not** keep changing package IDs, icons or signing keys to find an identity that bypasses Play Protect. Avoid overriding the installer warning. Continue security validation and request a classification review supported by facts.
