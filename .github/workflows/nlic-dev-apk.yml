@@ -2,7 +2,7 @@ name: N-LIC Dev APK
 
 on:
   push:
-    branches: [master]
+    branches: [master, feature/nlic-identity-security-20261103]
   workflow_dispatch:
 
 permissions:
@@ -66,12 +66,36 @@ jobs:
             -storepass:env NLIC_DEV_STORE_PASSWORD \
             -alias "$NLIC_DEV_KEY_ALIAS" > /dev/null
 
+      - name: Verify least-privilege security baseline
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          android='{http://schemas.android.com/apk/res/android}'
+          manifest=ET.parse('app/src/main/AndroidManifest.xml').getroot()
+          forbidden={'android.permission.MANAGE_EXTERNAL_STORAGE',
+                     'android.permission.READ_EXTERNAL_STORAGE',
+                     'android.permission.WRITE_EXTERNAL_STORAGE'}
+          permissions={e.get(android+'name') for e in manifest.findall('uses-permission')}
+          assert not (permissions & forbidden), permissions & forbidden
+          app=manifest.find('application')
+          assert app is not None and app.get(android+'allowBackup') == 'false'
+          assert app.get(android+'label') == '@string/app_name'
+          for name in ('.activities.ToggleActivity', '.activities.SettingsActivity'):
+              matches=[x for x in app.findall('activity') if x.get(android+'name')==name]
+              assert len(matches)==1 and matches[0].get(android+'exported')=='false', name
+          assert '<string name="app_name">N-LIC</string>' in Path('app/src/main/res/values/strings.xml').read_text()
+          assert 'RECEIVER_NOT_EXPORTED' in Path('app/src/main/java/io/github/romanvht/byedpi/activities/MainActivity.kt').read_text()
+          print('Security baseline checks passed')
+          PY
+
       - name: Build signed DEV APK
         shell: bash
         run: |
           set -euo pipefail
           chmod +x ./gradlew
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          ./gradlew :app:assembleDebug :app:lintDebug :app:testDebugUnitTest --no-daemon --stacktrace
 
       - name: Locate and verify APK
         id: apk
