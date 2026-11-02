@@ -153,12 +153,6 @@
             android:summary="@string/battery_optimization_summary">
         </Preference>
 
-        <Preference
-            android:key="storage_access"
-            android:icon="@drawable/ic_folder"
-            android:title="@string/storage_access"
-            android:summary="@string/storage_access_summary">
-        </Preference>
 
     </androidx.preference.PreferenceCategory>
 
