@@ -26,6 +26,11 @@ val releaseSigningAvailable = listOf(
     releaseKeystorePath, releaseStorePassword, releaseKeyPassword, releaseKeyAlias
 ).all { !it.isNullOrBlank() }
 
+// Explicit opt-in for an internal, release-optimized TEST artifact.
+// Uses the existing N-LIC DEV certificate; it is NOT a production signature.
+// Do not publish as an official release. Permanent releases require nlicRelease.
+val devSignedReleaseTest = System.getenv("NLIC_DEV_SIGN_RELEASE_TEST") == "true"
+
 android {
     namespace = "io.github.romanvht.byedpi"
     //noinspection GradleDependency
@@ -82,6 +87,9 @@ android {
         release {
             if (releaseSigningAvailable) {
                 signingConfig = signingConfigs.getByName("nlicRelease")
+            } else if (devSignedReleaseTest && devSigningAvailable) {
+                // Only the dedicated internal QA workflow sets this flag.
+                signingConfig = signingConfigs.getByName("nlicDev")
             }
             buildConfigField("String", "VERSION_NAME",  "\"${defaultConfig.versionName}\"")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
