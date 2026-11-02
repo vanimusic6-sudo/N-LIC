@@ -227,6 +227,11 @@ object SettingsUtils {
                                 }
                             }
                         }
+                    // Imported files must never silently enable network
+                    // interception at app launch or reboot. Users can opt in
+                    // again from the normal application settings UI.
+                    putBoolean("autostart", false)
+                    putBoolean("auto_connect", false)
                 }
             }
 

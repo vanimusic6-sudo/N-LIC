@@ -76,9 +76,13 @@ jobs:
           manifest=ET.parse('app/src/main/AndroidManifest.xml').getroot()
           forbidden={'android.permission.MANAGE_EXTERNAL_STORAGE',
                      'android.permission.READ_EXTERNAL_STORAGE',
-                     'android.permission.WRITE_EXTERNAL_STORAGE'}
+                     'android.permission.WRITE_EXTERNAL_STORAGE',
+                     'android.permission.QUERY_ALL_PACKAGES',
+                     'android.permission.FOREGROUND_SERVICE_SPECIAL_USE',
+                     'android.permission.QUICKBOOT_POWERON'}
           permissions={e.get(android+'name') for e in manifest.findall('uses-permission')}
           assert not (permissions & forbidden), permissions & forbidden
+          assert len(manifest.findall("queries")) == 1, "App visibility must be declared narrowly"
           app=manifest.find('application')
           assert app is not None and app.get(android+'allowBackup') == 'false'
           assert app.get(android+'label') == '@string/app_name'
@@ -121,6 +125,15 @@ jobs:
           signer="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -n "$signer"
           "$signer" verify --verbose --print-certs "$apk"
+          # Verify compiled manifest after dependency manifest merging, not
+          # just the source XML. This prevents broad permissions reappearing.
+          aapt="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          "$aapt" dump permissions "$apk" > /tmp/nlic-apk-permissions.txt
+          if grep -E 'MANAGE_EXTERNAL_STORAGE|QUERY_ALL_PACKAGES|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|FOREGROUND_SERVICE_SPECIAL_USE|QUICKBOOT_POWERON' /tmp/nlic-apk-permissions.txt; then
+            echo "Unexpected broad permission in assembled APK" >&2
+            exit 1
+          fi
+          "$signer" verify --print-certs "$apk" | grep -i '9eac8ece5fb89eeacb03c5eff20155724a206d73180d58c78fc7d3911dbee5c5'
           echo "path=$apk" >> "$GITHUB_OUTPUT"
           sha256sum "$apk"
 

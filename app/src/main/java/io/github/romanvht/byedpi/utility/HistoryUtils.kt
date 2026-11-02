@@ -63,12 +63,17 @@ class HistoryUtils(context: Context) {
     }
 
     fun getHistory(): List<Command> {
-        val historyJson = sharedPreferences.getString(historyKey, null)
-        return if (historyJson != null) {
-            Gson().fromJson(historyJson, Array<Command>::class.java).toList()
-        } else {
-            emptyList()
-        }
+        val historyJson = sharedPreferences.getString(historyKey, null) ?: return emptyList()
+        // Preferences may originate from a user-supplied JSON backup. An
+        // invalid, oversized or null-containing array must not crash launch.
+        return runCatching {
+            Gson().fromJson(historyJson, Array<Command>::class.java)
+                ?.asSequence()
+                ?.filterNotNull()
+                ?.filter { it.text.isNotBlank() && it.text.length <= 4096 }
+                ?.take(maxHistorySize)
+                ?.toList() ?: emptyList()
+        }.getOrElse { emptyList() }
     }
 
     fun getPinnedHistory(): List<Command> {
@@ -76,7 +81,9 @@ class HistoryUtils(context: Context) {
     }
 
     fun saveHistory(history: List<Command>) {
-        val historyJson = Gson().toJson(history)
+        val sanitized = history.filter { it.text.isNotBlank() && it.text.length <= 4096 }
+            .take(maxHistorySize)
+        val historyJson = Gson().toJson(sanitized)
         sharedPreferences.edit { putString(historyKey, historyJson) }
         ShortcutUtils.update(context)
     }
