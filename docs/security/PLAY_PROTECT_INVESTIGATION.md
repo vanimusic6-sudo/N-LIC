@@ -1,5 +1,21 @@
 # N-LIC — Play Protect block: preliminary security review (2026-11-03)
 
+## Upstream version comparison — critical evidence (added 2026-11-03)
+
+- N-LIC was forked from upstream `romanvht/ByeByeDPI` **master** at commit `7b7eecf6b2b1e5174e1c857489e207bf0e919863`. N-LIC source is not a different experimental branch of the upstream project.
+- The latest official upstream APK release is **v.1.8.2**, published 2026-10-02, tag commit `96a3c1ff555043d915af814aa4f0e9a572c89aba`.
+- Comparing upstream `v.1.8.2...master`: only **3 commits**, modifying **one file**: `app/src/main/assets/proxytest_strategies.list`. There are **no Kotlin, C, manifest or Gradle changes** between those two upstream versions.
+- The **actual source AndroidManifest.xml Git blob SHA** is `5d1a10f3b1938e37544c5e562a889be8e5feb66f` in both the official `v.1.8.2` tag and the N-LIC fork. Therefore the broad permissions and exported activities are inherited from the upstream release, **not newly introduced by N-LIC**.
+- N-LIC adds independent `applicationId`, `.dev` application ID suffix, our new dev signing certificate, and **builds `:app:assembleDebug`**. The official public release is a **release build** with a different cert and application ID.
+- This narrows possible explanation of differing Play Protect verdicts to **APK build mode/content, new signing identity, package identity/reputation or device-specific Play Protect assessment**, rather than a different branch or newly added Android permission. **None is proven as the trigger.**
+- Reproducing the verdict with a same-tag release-mode comparison build under controlled conditions is a high-priority next step; do not use this as a pretext to suppress or evade malware detection.
+
+Source references:
+- https://github.com/romanvht/ByeByeDPI/releases/tag/v.1.8.2
+- https://github.com/romanvht/ByeByeDPI/compare/v.1.8.2...master
+- https://github.com/vanimusic6-sudo/N-LIC/compare/romanvht:master...master
+
+
 Status: **OPEN / investigation**, not a clearance to install. The first N-LIC Dev APK was blocked by Google Play Protect with a harmful-app warning. **Do not bypass, suppress or disable security scanning** to test this build on a primary device.
 
 ## Build examined
