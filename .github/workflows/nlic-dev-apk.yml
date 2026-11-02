@@ -97,6 +97,17 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :app:assembleDebug :app:lintDebug :app:testDebugUnitTest --no-daemon --stacktrace
 
+      - name: Upload Android Lint report for independent review
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: N-LIC-Lint-Report
+          path: |
+            app/build/reports/lint-results-debug.*
+            app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Locate and verify APK
         id: apk
         shell: bash
