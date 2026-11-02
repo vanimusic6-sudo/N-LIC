@@ -242,4 +242,7 @@
     <string name="file_picker_unavailable">Cihazda sistem dosya seçicisi yok. Devam etmek için uygulamaya dosya erişimi verin.</string>
     <string name="grant_access">Erişim ver</string>
     <string name="storage_access_not_granted">Dosya erişimi verilmedi</string>
+    <string name="nlic_shortcut_confirm_title">N-LIC işlemini onayla</string>
+    <string name="nlic_shortcut_confirm_message">Kısayol işlemi çalıştırılsın mı? Ağ yönetimi için onay gerekiyor.</string>
+    <string name="nlic_upstream_credits">Orijinal ByeByeDPI · romanvht, hufrea, heiher</string>
 </resources>
