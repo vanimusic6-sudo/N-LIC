@@ -7,13 +7,22 @@ plugins {
 
 val abis = setOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
 
+// Dev signing values are injected by GitHub Actions; no signing secrets live in the repo.
+val devKeystorePath = System.getenv("NLIC_DEV_KEYSTORE_PATH")
+val devStorePassword = System.getenv("NLIC_DEV_STORE_PASSWORD")
+val devKeyPassword = System.getenv("NLIC_DEV_KEY_PASSWORD")
+val devKeyAlias = System.getenv("NLIC_DEV_KEY_ALIAS")
+val devSigningAvailable = listOf(
+    devKeystorePath, devStorePassword, devKeyPassword, devKeyAlias
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "io.github.romanvht.byedpi"
     //noinspection GradleDependency
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.github.romanvht.byedpi"
+        applicationId = "io.github.vanimusic6sudo.nlic"
         minSdk = 21
         //noinspection OldTargetApi
         targetSdk = 34
@@ -32,7 +41,24 @@ android {
         viewBinding = true
     }
 
+    signingConfigs {
+        if (devSigningAvailable) {
+            create("nlicDev") {
+                storeFile = file(requireNotNull(devKeystorePath))
+                storePassword = devStorePassword
+                keyAlias = devKeyAlias
+                keyPassword = devKeyPassword
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            applicationIdSuffix = ".dev"
+            if (devSigningAvailable) {
+                signingConfig = signingConfigs.getByName("nlicDev")
+            }
+        }
         release {
             buildConfigField("String", "VERSION_NAME",  "\"${defaultConfig.versionName}\"")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
