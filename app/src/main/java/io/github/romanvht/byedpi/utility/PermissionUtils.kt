@@ -1,7 +1,6 @@
 package io.github.romanvht.byedpi.utility
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -13,7 +12,6 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.core.net.toUri
 
 /**
  * The project never requests broad device storage permission:
@@ -45,22 +43,19 @@ object PermissionUtils {
         }
     }
 
-    @SuppressLint("BatteryLife")
+    /**
+     * Battery exemption is user-managed. Open the normal Android settings
+     * screen rather than requesting privileged direct exemption access.
+     */
     fun requestBatteryOptimization(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
-
         try {
-            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-            intent.data = "package:${context.packageName}".toUri()
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            context.startActivity(intent)
+            context.startActivity(
+                Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
         } catch (error: Exception) {
-            Log.e(TAG, "Could not request a battery-optimization exception", error)
-            try {
-                context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            } catch (fallback: Exception) {
-                Log.e(TAG, "Could not open battery optimization settings", fallback)
-            }
+            Log.e(TAG, "Unable to open system battery settings", error)
         }
     }
 }

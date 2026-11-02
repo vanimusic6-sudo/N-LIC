@@ -79,10 +79,14 @@ jobs:
                      'android.permission.WRITE_EXTERNAL_STORAGE',
                      'android.permission.QUERY_ALL_PACKAGES',
                      'android.permission.FOREGROUND_SERVICE_SPECIAL_USE',
-                     'android.permission.QUICKBOOT_POWERON'}
+                     'android.permission.QUICKBOOT_POWERON',
+                     'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS'}
           permissions={e.get(android+'name') for e in manifest.findall('uses-permission')}
           assert not (permissions & forbidden), permissions & forbidden
           assert len(manifest.findall("queries")) == 1, "App visibility must be declared narrowly"
+          assert 'ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS' not in Path(
+              'app/src/main/java/io/github/romanvht/byedpi/utility/PermissionUtils.kt'
+          ).read_text(), "Direct power-exemption request must not return"
           app=manifest.find('application')
           assert app is not None and app.get(android+'allowBackup') == 'false'
           assert app.get(android+'label') == '@string/app_name'

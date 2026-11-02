@@ -90,3 +90,20 @@ If independent review establishes a benign build, use Google's [official review/
 The appeal form requires a SHA-256 for the exact APK **uploaded to VirusTotal**. A hash alone is not enough: the developer must upload the exact public test APK to VirusTotal before filing (be aware VirusTotal files may be shared with security vendors), verify SHA and include screenshot, GitHub source, controlled sample comparison, and reproducible behavior. Submit only after reviewing unresolved code/security issues; this is not a way to suppress protection on a phone.
 
 **Do not** keep changing package IDs, icons or signing keys to find an identity that bypasses Play Protect. Avoid overriding the installer warning. Continue security validation and request a classification review supported by facts.
+
+## N-LIC permission/native hardening follow-up (2026-11-03)
+
+Reviewed the inherited manifest and networking code after two N-LIC binaries were blocked by Play Protect while the official ByeByeDPI v1.8.2 installed cleanly on the same phone.
+
+**Changes on the development PR branch:**
+
+- Removed `QUERY_ALL_PACKAGES`. On Android 11+ package visibility is now limited to applications exposing phone/Android TV launchers through `<queries>`. **Trade-off:** the per-app VPN picker may no longer show some background-only/system apps; this requires device testing and is preferable to silently obtaining a full installed-app inventory.
+- Removed unused `FOREGROUND_SERVICE_SPECIAL_USE` and vendor-specific `QUICKBOOT_POWERON` permissions/receiver. Explicit user-enabled boot autostart remains available via the standard `BOOT_COMPLETED` receiver.
+- Removed `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`. Battery optimization changes are now initiated by the user from system settings; N-LIC no longer directly requests a privileged exemption.
+- Kept `FOREGROUND_SERVICE_SYSTEM_EXEMPTED` for the user-initiated Android VPN service, and `FOREGROUND_SERVICE_DATA_SYNC` for the app's existing Proxy/Test foreground services; simply removing required service permissions would cause runtime failures.
+- User-triggered log export now only reads recent logs from the app UID (including the native worker process) on Android 10+, or the UI process on older releases. This reduces unintended collection of unrelated logs.
+- Imported settings cannot silently enable `autostart` or `auto_connect`: a person must opt in afterward. Strategy history is bounded and corrupt JSON handled without a startup crash.
+- JNI validates argument count and sizes before passing untrusted strategy strings or YAML to native C parsers; native builds explicitly enable stronger compiler/linker protection (`FORTIFY_SOURCE=2`, `-fstack-protector-strong`, RELRO/NOW), and NDK is pinned at 27.2.12479018.
+- CI independently checks source and **merged APK** permissions and the expected DEV signer identity, runs Android Lint, JVM unit tests, and CodeQL Java/Kotlin and C/C++. A green job does not guarantee malware-free behavior, and runtime leak/fuzz tests remain necessary.
+
+**No supported conclusion that these changes remove Google’s warning.** The app performs legitimate traffic manipulation using native code and a local VPN interface, which remains a core function. If Play Protect rejects the hardened build, stop changing package names/keys and pursue Google's official classification review with exact APK hash, source code, permissions and behavioral evidence: https://developers.google.com/android/play-protect/warning-dev-guidance.

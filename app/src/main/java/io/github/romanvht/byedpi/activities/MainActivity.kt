@@ -45,10 +45,19 @@ class MainActivity : BaseActivity() {
 
         private fun collectLogs(): String? {
             return try {
-                val process = Runtime.getRuntime().exec("logcat *:D -d")
-                process.inputStream.bufferedReader().use { reader ->
-                    reader.readText()
+                // Diagnostic export is initiated by the user. Never dump
+                // unrelated apps' device-wide logs; keep recent app-UID
+                // records from both the UI and separate native process.
+                val selector = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    "--uid=${android.os.Process.myUid()}"
+                } else {
+                    "--pid=${android.os.Process.myPid()}"
                 }
+                val process = Runtime.getRuntime().exec(
+                    arrayOf("logcat", "-d", "-t", "2500", selector, "*:D")
+                )
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                if (process.waitFor() != 0) null else output
             } catch (exception: Exception) {
                 Log.e(TAG, "Failed to collect logs", exception)
                 null
