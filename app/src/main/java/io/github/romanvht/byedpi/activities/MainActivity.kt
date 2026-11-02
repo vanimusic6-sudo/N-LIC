@@ -158,12 +158,10 @@ class MainActivity : BaseActivity() {
             addAction(FAILED_BROADCAST)
         }
 
-        @SuppressLint("UnspecifiedRegisterReceiverFlag")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(receiver, intentFilter, RECEIVER_EXPORTED)
-        } else {
-            registerReceiver(receiver, intentFilter)
-        }
+        // Internal state events must not be spoofable by third-party apps.
+        ContextCompat.registerReceiver(
+            this, receiver, intentFilter, ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         binding.statusButtonCard.setOnClickListener {
             binding.statusButtonCard.isClickable = false
@@ -242,6 +240,49 @@ class MainActivity : BaseActivity() {
         }
 
         ShortcutUtils.update(this)
+        if (savedInstanceState == null) handleShortcutIntent(intent)
+    }
+
+    /**
+     * Shortcuts can be sent by any launcher/app because MainActivity is public.
+     * Never execute an external network-control request without visible consent.
+     * A strategy must also be an existing pinned entry, not arbitrary arguments.
+     */
+    private fun handleShortcutIntent(source: Intent?) {
+        val action = source?.getStringExtra("nlic_shortcut_action") ?: return
+        if (action != "toggle" && action != "strategy") return
+        val strategy = source.getStringExtra("nlic_shortcut_strategy")
+        if (action == "strategy") {
+            if (strategy.isNullOrBlank() || strategy.length > 4096 ||
+                HistoryUtils(this).getHistory().none { it.pinned && it.text == strategy }
+            ) {
+                Log.w(TAG, "Ignoring unrecognized strategy shortcut")
+                return
+            }
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.nlic_shortcut_confirm_title)
+            .setMessage(R.string.nlic_shortcut_confirm_message)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                if (action == "strategy" && !strategy.isNullOrBlank()) {
+                    getPreferences().edit(commit = true) {
+                        putString("byedpi_cmd_args", strategy)
+                    }
+                    updateStrategyButton()
+                    if (appStatus.first == AppStatus.Running) {
+                        ServiceManager.restart(this, getPreferences().mode())
+                    } else {
+                        start()
+                    }
+                } else if (appStatus.first == AppStatus.Running) {
+                    stop()
+                } else {
+                    start()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     override fun onResume() {
