@@ -24,11 +24,11 @@ Store them encrypted and separate from the repository. Download both **before de
 
 ## If GitHub CLI cannot save secrets
 
-GitHub Codespaces tokens may not have permission to modify Actions Secrets. If `gh secret set` fails with 403, authenticate with an account that has permission:
+GitHub Codespaces tokens may not have permission to modify Actions Secrets. If you see `HTTP 403: Resource not accessible by integration`, authenticate your personal GitHub account, using the command below. The script explicitly ignores the injected integration token when uploading secrets:
 
 ```bash
-unset GH_TOKEN GITHUB_TOKEN
-gh auth login --hostname github.com --web --scopes repo
+env -u GH_TOKEN -u GITHUB_TOKEN gh auth login --hostname github.com --web --scopes repo
+git pull --ff-only
 bash scripts/setup-codespaces-dev-key.sh
 ```
 
