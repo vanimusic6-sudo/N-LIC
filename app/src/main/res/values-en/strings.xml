@@ -1,6 +1,6 @@
 <resources>
     <string name="byedpi_docs">https://github.com/hufrea/byedpi/blob/main/README.md</string>
-    <string name="app_name">ByeByeDPI</string>
+    <string name="app_name">N-LIC</string>
     <string name="cmd_documentation">Documentation</string>
     <string name="toggle_connect">On/Off</string>
     <string name="vpn_connect">Connect</string>
@@ -55,13 +55,13 @@
     <string name="byedpi_tlsrec_enabled_setting">Split TLS record</string>
     <string name="byedpi_tlsrec_position_setting">TLS record split position</string>
     <string name="byedpi_tlsrec_at_sni_setting">Split TLS record at SNI</string>
-    <string name="version">ByeByeDPI</string>
+    <string name="version">N-LIC</string>
     <string name="source_code_link">Source code</string>
     <string name="byedpi_readme_link">What does it all mean?</string>
     <string name="failed_to_start">Failed to start %1$s</string>
     <string name="vpn_channel_name">VPN</string>
     <string name="proxy_channel_name">Proxy</string>
-    <string name="notification_title">ByeByeDPI</string>
+    <string name="notification_title">N-LIC</string>
     <string name="vpn_notification_content">VPN is running</string>
     <string name="proxy_notification_content">Proxy is running</string>
     <string name="general_category">General</string>
@@ -94,7 +94,7 @@
     <string name="automation">Automation</string>
     <string name="autostart_settings">Autostart service on device startup</string>
     <string name="autohide_settings">Automatically hide application after autostart</string>
-    <string name="autoconnect_settings">Automatically connect when the ByeByeDPI start</string>
+    <string name="autoconnect_settings">Automatically connect when the N-LIC start</string>
     <string name="applist_setting">Apps filter</string>
     <string name="apps_select">Select apps</string>
     <string name="search_apps">Search apps</string>
@@ -190,7 +190,7 @@
     <string name="main_btn_test">Test</string>
     <string name="main_btn_list">Lists</string>
     <string name="donate">Donate</string>
-    <string name="donate_message">If the app has been useful to you, you can buy me a cup of coffee ☕️</string>
+    <string name="donate_message">These links support the original ByeByeDPI developer.</string>
     <string name="donate_cloudtips">💳 CloudTips (RU cards only)</string>
     <string name="donate_boosty">🧡 Boosty (RU and international cards)</string>
     <string name="donate_telegram_bot">🍰 Telegram Bot (cards, wallets, crypto)</string>
@@ -242,4 +242,7 @@
     <string name="file_picker_unavailable">The device has no system file picker. Grant the app file access to continue.</string>
     <string name="grant_access">Grant access</string>
     <string name="storage_access_not_granted">File access was not granted</string>
+    <string name="nlic_shortcut_confirm_title">Confirm N-LIC action</string>
+    <string name="nlic_shortcut_confirm_message">Run the shortcut action? Network control requires confirmation.</string>
+    <string name="nlic_upstream_credits">Original ByeByeDPI · romanvht, hufrea, heiher</string>
 </resources>
