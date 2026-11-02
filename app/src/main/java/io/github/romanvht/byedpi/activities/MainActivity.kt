@@ -42,7 +42,6 @@ class MainActivity : BaseActivity() {
 
     companion object {
         private val TAG: String = MainActivity::class.java.simpleName
-        private const val BATTERY_OPTIMIZATION_REQUESTED = "battery_optimization_requested"
 
         private fun collectLogs(): String? {
             return try {
@@ -230,9 +229,8 @@ class MainActivity : BaseActivity() {
 
         if (!PermissionUtils.hasNotificationPermission(this)) {
             PermissionUtils.requestNotificationPermission(this, 1)
-        } else {
-            requestBatteryOptimization()
         }
+        // Battery optimization exemption is optional and only requested from Settings.
 
         if (!TestService.isRunning && getPreferences().getBoolean("auto_connect", false) &&
             appStatus.first != AppStatus.Running) {
@@ -295,18 +293,6 @@ class MainActivity : BaseActivity() {
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(receiver)
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-
-        if (requestCode == 1) {
-            requestBatteryOptimization()
-        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -562,13 +548,4 @@ class MainActivity : BaseActivity() {
         }
     }
 
-    private fun requestBatteryOptimization() {
-        val preferences = getPreferences()
-        val alreadyRequested = preferences.getBoolean(BATTERY_OPTIMIZATION_REQUESTED, false)
-
-        if (!alreadyRequested && !PermissionUtils.isBatteryOptimizationDisabled(this)) {
-            PermissionUtils.requestBatteryOptimization(this)
-            preferences.edit { putBoolean(BATTERY_OPTIMIZATION_REQUESTED, true) }
-        }
-    }
 }
