@@ -16,6 +16,16 @@ val devSigningAvailable = listOf(
     devKeystorePath, devStorePassword, devKeyPassword, devKeyAlias
 ).all { !it.isNullOrBlank() }
 
+// The production certificate is separate from the DEV identity and never
+// committed to the repository. It is supplied only to an approved release job.
+val releaseKeystorePath = System.getenv("NLIC_RELEASE_KEYSTORE_PATH")
+val releaseStorePassword = System.getenv("NLIC_RELEASE_STORE_PASSWORD")
+val releaseKeyPassword = System.getenv("NLIC_RELEASE_KEY_PASSWORD")
+val releaseKeyAlias = System.getenv("NLIC_RELEASE_KEY_ALIAS")
+val releaseSigningAvailable = listOf(
+    releaseKeystorePath, releaseStorePassword, releaseKeyPassword, releaseKeyAlias
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "io.github.romanvht.byedpi"
     //noinspection GradleDependency
@@ -50,6 +60,14 @@ android {
                 keyPassword = devKeyPassword
             }
         }
+        if (releaseSigningAvailable) {
+            create("nlicRelease") {
+                storeFile = file(requireNotNull(releaseKeystorePath))
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
@@ -60,6 +78,9 @@ android {
             }
         }
         release {
+            if (releaseSigningAvailable) {
+                signingConfig = signingConfigs.getByName("nlicRelease")
+            }
             buildConfigField("String", "VERSION_NAME",  "\"${defaultConfig.versionName}\"")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             isMinifyEnabled = true
