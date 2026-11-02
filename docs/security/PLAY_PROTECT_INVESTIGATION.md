@@ -1,5 +1,24 @@
 # N-LIC — Play Protect block: preliminary security review (2026-11-03)
 
+## Controlled two-variant build — completed
+
+GitHub Actions comparison run: https://github.com/vanimusic6-sudo/N-LIC/actions/runs/41492502618 — **success**, artifacts `N-LIC-Play-Protect-Audit-Only`.
+
+The workflow built two APKs from the *same* commit with the *same* package ID, version code and N-LIC development signing certificate. The variants differ in debuggability, release minification/shrinking and compiled build mode.
+
+| Metric | Debug | Release-optimized test |
+| --- | --- | --- |
+| Artifact | `N-LIC-debug.apk` | `N-LIC-release-optimized-test.apk` |
+| SHA-256 | `04de8103aa0373ac9d2b21a4f9365b2aabaf89d596c7c761d97abb75840b64c9` | `3a429002267a26935386264a92ce02504f2f3835b29b82f1bc36f8f9c1a16b82` |
+| Package ID | `io.github.vanimusic6sudo.nlic.dev` | `io.github.vanimusic6sudo.nlic.dev` |
+| Version code | `1820` | `1820` |
+| Certificate SHA-256 | `9eac8ece5fb89eeacb03c5eff20155724a206d73180d58c78fc7d3911dbee5c5` | Same |
+| `application-debuggable` | Present | Absent |
+| APK verification | Passed | Passed |
+
+This **isolates build type** better than simply comparing the N-LIC debug build against the original upstream release (which also differs by signing identity and package name). No installation, Play Protect result, device behavior or dynamic malware scan has yet been observed for the release-optimized test. **A successful build and valid APK signature are not evidence of benign software.** Do not circumvent installation warnings.
+
+
 ## Upstream version comparison — critical evidence (added 2026-11-03)
 
 - N-LIC was forked from upstream `romanvht/ByeByeDPI` **master** at commit `7b7eecf6b2b1e5174e1c857489e207bf0e919863`. N-LIC source is not a different experimental branch of the upstream project.
