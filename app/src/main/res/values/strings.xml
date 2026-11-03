@@ -249,4 +249,6 @@
     <string name="stream_probe_enable_desc">Необязательный тест загрузки через SOCKS5. В отличие от картинок, показывает медленный поток и обрыв после первых килобайт.</string>
     <string name="stream_probe_url">HTTPS-ссылка на видеопоток для проверки</string>
     <string name="stream_probe_url_desc">Вставьте действующую ссылку googlevideo.com/videoplayback или https://speed.cloudflare.com/__down?bytes=262144. Ссылка удаляется после запуска проверки, в результаты не попадает.</string>
+    <string name="nlic_mobile_safe_mtu">Мобильная сеть: безопасный MTU (эксперимент)</string>
+    <string name="nlic_mobile_safe_mtu_desc">На мобильном интернете уменьшать виртуальные пакеты до 1280–1400 байт. Wi-Fi не меняется. Если подключение станет хуже, выключите и переподключите N-LIC.</string>
 </resources>

@@ -19,6 +19,7 @@ class NetworkEnvironmentTest {
         assertEquals(1400, AccessPolicy.tunMtu(AccessSnapshot(AccessType.CELLULAR, 1500)))
         assertEquals(1280, AccessPolicy.tunMtu(AccessSnapshot(AccessType.CELLULAR, 1320)))
         assertEquals(1400, AccessPolicy.tunMtu(AccessSnapshot(AccessType.CELLULAR, 0)))
+        assertEquals(8500, AccessPolicy.tunMtu(AccessSnapshot(AccessType.CELLULAR, 1500), false))
     }
 
     @Test fun `never guess IPv4 support on IPv6 only mobile link`() {

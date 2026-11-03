@@ -95,9 +95,10 @@ class ByeDpiVpnService : VpnService() {
         }
     }
 
-    private fun createTunnel(configuration: Configuration): ParcelFileDescriptor {
+    private fun createTunnel(configuration: Configuration, underlyingLink: AccessSnapshot, mtu: Int): ParcelFileDescriptor {
         val builder = Builder()
         builder.setSession("N-LIC")
+        if (underlyingLink.isCellular && mtu < 8500) builder.setMtu(mtu)
         builder.setConfigureIntent(
             PendingIntent.getActivity(
                 this,
@@ -120,7 +121,10 @@ class ByeDpiVpnService : VpnService() {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            builder.setMetered(false)
+            // Respect mobile carrier metering; do not falsely advertise unmetered data.
+            if (underlyingLink.type != AccessType.UNKNOWN) {
+                builder.setMetered(underlyingLink.isCellular)
+            }
         }
 
         when (configuration.appListType) {

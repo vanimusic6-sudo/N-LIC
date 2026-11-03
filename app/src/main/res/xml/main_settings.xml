@@ -52,6 +52,13 @@
             android:defaultValue="1.1.1.1" />
 
         <SwitchPreference
+            android:key="nlic_mobile_safe_mtu"
+            android:icon="@drawable/ic_network"
+            android:title="@string/nlic_mobile_safe_mtu"
+            android:summary="@string/nlic_mobile_safe_mtu_desc"
+            android:defaultValue="true" />
+
+        <SwitchPreference
             android:key="ipv6_enable"
             android:icon="@drawable/ic_network"
             android:title="@string/ipv6_setting"

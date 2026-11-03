@@ -59,8 +59,8 @@ internal object AccessPolicy {
      * 1280 is the mandatory IPv6 minimum. Reserve some room below path MTU
      * where possible; cap mobile virtual frames at 1400 bytes.
      */
-    fun tunMtu(snapshot: AccessSnapshot): Int =
-        if (snapshot.isCellular) {
+    fun tunMtu(snapshot: AccessSnapshot, mobileTuningEnabled: Boolean = true): Int =
+        if (snapshot.isCellular && mobileTuningEnabled) {
             val pathMtu = snapshot.physicalMtu
             if (pathMtu >= 1280) (pathMtu - 80).coerceIn(1280, MOBILE_TUN_MTU)
             else MOBILE_TUN_MTU
