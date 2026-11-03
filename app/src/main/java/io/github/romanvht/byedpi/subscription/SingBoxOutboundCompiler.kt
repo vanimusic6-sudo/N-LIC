@@ -60,7 +60,8 @@ internal object SingBoxOutboundCompiler {
         }
         val user = try { URLDecoder.decode(uri.rawUserInfo ?: "", "UTF-8") }
             catch (_: Exception) { throw IllegalArgumentException("Invalid credentials") }
-        require(user.isNotBlank() && user.length <= 512 && !user.contains(':') || protocol == "trojan" && user.isNotBlank()) {
+        require(user.isNotBlank() && user.length <= 512 &&
+            (protocol == "trojan" || !user.contains(':'))) {
             "Missing or invalid credentials"
         }
         if (protocol == "vless") {
@@ -108,7 +109,7 @@ internal object SingBoxOutboundCompiler {
                     values.all { protocol -> protocol in setOf("h2", "http/1.1") }) {
                     "Unsupported ALPN"
                 }
-                add("alpn", JsonArray().apply { values.forEach(::add) })
+                add("alpn", JsonArray().apply { values.forEach { item -> add(item) } })
             }
         }
         if (sec == "reality") {
