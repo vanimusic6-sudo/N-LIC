@@ -53,6 +53,8 @@ internal object LICAuto {
                                     it.connect(InetSocketAddress(node.host, node.port), CONNECT_TIMEOUT_MS)
                                 }
                                 samples.add((SystemClock.elapsedRealtime() - start).coerceAtLeast(1))
+                            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                throw cancelled
                             } catch (_: Exception) {
                                 // No credentials, IPs or server names in logs.
                             }

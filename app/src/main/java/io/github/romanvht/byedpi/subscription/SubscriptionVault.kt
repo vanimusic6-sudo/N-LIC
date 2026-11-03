@@ -19,6 +19,9 @@ import javax.crypto.spec.GCMParameterSpec
  *
  * Import requires API 23+; earlier Android devices keep legacy ByeDPI only.
  */
+// Every public entry point gates the API-23 Keystore at runtime. Android 5
+// retains the old ByeDPI mode and never reaches these methods.
+@android.annotation.SuppressLint("NewApi")
 internal object SubscriptionVault {
     private const val FILE = "nlic_subscription_vault.v1"
     private const val KEY_ALIAS = "nlic_subscriptions_aes256_v1"

@@ -158,7 +158,9 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
             setSingleLine(false)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or
                 InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
+            }
             setText(initial)
             setSelection(text.length)
         }
