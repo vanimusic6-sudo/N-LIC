@@ -401,4 +401,8 @@
     <string name="nlic_home_auto_network_details">Проверенные стратегии выбираются для Wi-Fi, мобильной сети или Ethernet. Без результатов используется консервативный профиль. Смена оператора сама по себе не гарантирует работу.</string>
     <string name="nlic_home_supported_protocols">Подписки: VLESS, VMess, Trojan, Shadowsocks, AnyTLS, Hysteria2, TUIC. Файлы: WireGuard .conf и безопасные серверы sing-box .json.</string>
     <string name="nlic_home_refresh_partial">Обновлено серверов: %1$d · не удалось обновить подписок: %2$d. Старые данные сохранены.</string>
+    <string name="nlic_privacy_title">Защита от утечек Android</string>
+    <string name="nlic_privacy_description">Открой системные настройки VPN и, если хочешь режим без обходных путей, включи «Всегда включённый VPN» и «Блокировать соединения без VPN». Пока это не включено, приложения могут выходить в сеть во время переподключения.</string>
+    <string name="nlic_privacy_confirmation">Открыть системные настройки VPN? N-LIC не может включить блокировку трафика без VPN за тебя. Проверь выбранное приложение в Android.</string>
+    <string name="nlic_privacy_unavailable">На этом устройстве не удалось открыть настройки VPN.</string>
 </resources>
