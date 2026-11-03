@@ -405,4 +405,8 @@
     <string name="nlic_privacy_description">Открой системные настройки VPN и, если хочешь режим без обходных путей, включи «Всегда включённый VPN» и «Блокировать соединения без VPN». Пока это не включено, приложения могут выходить в сеть во время переподключения.</string>
     <string name="nlic_privacy_confirmation">Открыть системные настройки VPN? N-LIC не может включить блокировку трафика без VPN за тебя. Проверь выбранное приложение в Android.</string>
     <string name="nlic_privacy_unavailable">На этом устройстве не удалось открыть настройки VPN.</string>
+    <string name="nlic_home_policy_loading">Ищем подходящую стратегию…</string>
+    <string name="nlic_home_policy_measured">Стратегия выбрана по последним проверкам этой сети</string>
+    <string name="nlic_home_policy_baseline">Нет свежих проверок · используется щадящий базовый профиль</string>
+    <string name="nlic_home_policy_off">Авто-стратегия отключена</string>
 </resources>
