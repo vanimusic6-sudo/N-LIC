@@ -379,4 +379,25 @@
     <string name="nlic_core_advice_config">Движок отклонил настройки сервера. Проверь протокол, TLS/REALITY и поддерживаемый транспорт.</string>
     <string name="nlic_core_advice_catalog">Не удалось прочитать настройки или защищённое хранилище подписок. Не удаляй приложение: сначала проверь доступ к подписке.</string>
     <string name="nlic_core_advice_engine">Ошибка запуска ядра. Код ниже показывает этап сбоя; для точной причины нужен обезличенный лог после попытки.</string>
+    <string name="nlic_home_eyebrow">ЗАЩИТА СЕТИ  /  N-LIC</string>
+    <string name="nlic_home_heading">Интернет под контролем</string>
+    <string name="nlic_home_intro">Один экран для VPN, ByeDPI и диагностики.</string>
+    <string name="nlic_home_tunnel">СТАТУС ТУННЕЛЯ</string>
+    <string name="nlic_home_power">Подключить или отключить VPN</string>
+    <string name="nlic_home_open_servers">Серверы и подключение</string>
+    <string name="nlic_home_connection">Текущая сеть</string>
+    <string name="nlic_home_shortcuts">Быстрый доступ</string>
+    <string name="nlic_home_servers">Серверы</string>
+    <string name="nlic_home_check_network">Проверка сети</string>
+    <string name="nlic_home_rules">Фильтры</string>
+    <string name="nlic_home_disclaimer">Подключение не означает полной анонимности. Сервер VPN может видеть метаданные.</string>
+    <string name="nlic_home_file_import">Импорт файла</string>
+    <string name="nlic_home_refresh_subscriptions">Обновить подписки</string>
+    <string name="nlic_home_file_imported">Импортировано профилей: %1$d</string>
+    <string name="nlic_home_file_rejected">Формат файла не поддерживается или профиль небезопасен.</string>
+    <string name="nlic_home_policy_description">Для этого подключения используется адаптивная стратегия: выбор основан на реальных проверках для данного типа сети, а не на названии оператора.</string>
+    <string name="nlic_home_policy_label">Адаптация к сети</string>
+    <string name="nlic_home_auto_network">Авто-стратегия</string>
+    <string name="nlic_home_auto_network_details">Проверенные стратегии выбираются для Wi-Fi, мобильной сети или Ethernet. Без результатов используется консервативный профиль. Смена оператора сама по себе не гарантирует работу.</string>
+    <string name="nlic_home_supported_protocols">Подписки: VLESS, VMess, Trojan, Shadowsocks, AnyTLS, Hysteria2, TUIC. Файлы: WireGuard .conf и безопасные серверы sing-box .json.</string>
 </resources>
