@@ -372,4 +372,11 @@
     <string name="nlic_control_apply">Применить и переподключиться</string>
     <string name="nlic_control_generic_failure">Действие не удалось. Настройки сохранены; проверь подключение и попробуй снова.</string>
     <string name="nlic_control_bay_risk">⚠ Локальный SOCKS ByeDPI не использует пароль и доступен другим приложениям. LIC-Bay пока только для экспериментов.</string>
+    <string name="nlic_core_advice_bay">ByeDPI не смог установить TCP-соединение с выбранным VPN-сервером. Проверь стратегию LIC-Bay или попробуй другой сервер. Для сравнения отключи LIC-Bay.</string>
+    <string name="nlic_core_advice_socks">Внутренний SOCKS5 от sing-box не запустился или не принял авторизацию. Проблема на устройстве, а не в скорости сервера.</string>
+    <string name="nlic_core_advice_https">Локальный движок отвечает, но HTTPS через VPN не подтвердился. Проверь сервер и его TLS/REALITY, либо попробуй другой.</string>
+    <string name="nlic_core_advice_tun">Движок дошёл до создания Android VPN, но системный туннель не поднялся. Проверь разрешение VPN и отключи другой VPN.</string>
+    <string name="nlic_core_advice_config">Движок отклонил настройки сервера. Проверь протокол, TLS/REALITY и поддерживаемый транспорт.</string>
+    <string name="nlic_core_advice_catalog">Не удалось прочитать настройки или защищённое хранилище подписок. Не удаляй приложение: сначала проверь доступ к подписке.</string>
+    <string name="nlic_core_advice_engine">Ошибка запуска ядра. Код ниже показывает этап сбоя; для точной причины нужен обезличенный лог после попытки.</string>
 </resources>
