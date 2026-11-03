@@ -8,7 +8,7 @@ import java.net.Inet4Address
 import java.net.Inet6Address
 
 /** No carrier name, SSID, addresses or network identifiers are stored. */
-internal enum class AccessType { WIFI, CELLULAR, ETHERNET, OTHER, UNKNOWN }
+enum class AccessType { WIFI, CELLULAR, ETHERNET, OTHER, UNKNOWN }
 
 internal data class AccessSnapshot(
     val type: AccessType,
