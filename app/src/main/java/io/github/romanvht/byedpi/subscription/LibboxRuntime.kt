@@ -62,8 +62,8 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
             set(setup, "debug", false)
             set(setup, "logMaxLines", 128L)
             set(setup, "commandServerSecret", java.util.UUID.randomUUID().toString())
-            set(setup, "appVersion", "nlic-1.9.2")
-            set(setup, "appMarketingVersion", "1.9.2")
+            set(setup, "appVersion", "nlic-1.9.3")
+            set(setup, "appMarketingVersion", "1.9.3")
             val libbox = Class.forName(LIBBOX + "Libbox")
             libbox.getMethod("setup", setupClass).invoke(null, setup)
 
