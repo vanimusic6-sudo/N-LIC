@@ -104,10 +104,11 @@ internal object SingBoxConfigCompiler {
             root.add("outbounds", outbounds)
             root.add("route", JsonObject().apply {
                 addProperty("final", PROXY_TAG)
-                // Select the physical interface, not Android's new VPN interface.
-                // The platform hook uses VpnService.protect(fd) for each
-                // upstream dial; disabling this can loop a VPN into itself.
-                addProperty("auto_detect_interface", true)
+                // Android libbox rejects auto_detect_interface=true (supported
+                // only on desktop OS in sing-box 1.14). The Android
+                // PlatformInterface.ProtectFunc calls VpnService.protect(fd)
+                // independently, so routing loops are still prevented.
+                addProperty("auto_detect_interface", false)
                 addProperty("default_domain_resolver", "lic-bootstrap-dns")
             })
             Result.Compiled(root.toString(), protocol)
