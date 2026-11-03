@@ -316,4 +316,23 @@
     <string name="nlic_core_connected">VPN қосылды · сервер арқылы HTTPS тексерілді</string>
     <string name="nlic_core_connect_failed">VPN тексерілмеді. Серверді тексеріңіз немесе LIC-Bay мүмкіндігін өшіріп, қайталаңыз.</string>
     <string name="nlic_core_disconnect">VPN желісін ажырату</string>
+    <string name="nlic_ui_running">VPN жұмыс істеп тұр · LIC-Core таңдалған</string>
+    <string name="nlic_ui_legacy_running">Әдеттегі VPN жұмыс істеп тұр</string>
+    <string name="nlic_ui_disconnected">VPN қосылмаған</string>
+    <string name="nlic_ui_no_server">Сервер таңдалмаған</string>
+    <string name="nlic_ui_step_import">1-қадам · Жазылым не қосылым сілтемесін импорттаңыз</string>
+    <string name="nlic_ui_step_choose">2-қадам · Тізімнен қолдау көрсетілетін серверді таңдаңыз</string>
+    <string name="nlic_ui_running_hint">Android VPN іске қосылған. Параметрлер өзгерсе, қайта қосылыңыз.</string>
+    <string name="nlic_ui_step_connect">3-қадам · Қосылыңыз. Алдымен LIC-Bay мүмкіндігін өшіріп көріңіз.</string>
+    <string name="nlic_ui_help">Қалай қосылуға болады?</string>
+    <string name="nlic_ui_help_steps">1. N-LIC негізгі параметрлерінен VPN режимін таңдаңыз.\n2. HTTPS жазылымын немесе vless://, trojan:// және басқа сілтемелерді қосыңыз.\n3. Тізімнен сервер таңдаңыз.\n4. Қосылу түймесін басып, Android VPN рұқсатын беріңіз.\n5. Байланыс жұмыс істесе LIC-Auto қосыңыз. LIC-Bay тек TCP серверлеріне арналған.\n\nБұл тәжірибелік нұсқа. DNS және IPv6 ағып кетпеуін өзіңіз тексеріңіз.</string>
+    <string name="nlic_ui_import_section">01  /  ИМПОРТ</string>
+    <string name="nlic_ui_unsupported">Қолдау көрсетілмейтін баптау</string>
+    <string name="nlic_ui_selected">Таңдалды · қолдану үшін қайта қосылыңыз</string>
+    <string name="nlic_ui_available">Таңдауға болады</string>
+    <string name="nlic_ui_enhancements_section">03  /  ЖАҚСАРТУЛАР</string>
+    <string name="nlic_ui_advanced_section">04  /  ТЕКСЕРУ ЖӘНЕ ҚАЛПЫНА КЕЛТІРУ</string>
+    <string name="nlic_ui_legacy_action">Қалыпты ByeDPI режиміне оралу</string>
+    <string name="nlic_ui_legacy_desc">VPN өшіріліп, LIC-Core сөнеді. Жазылымдар сақталады.</string>
+    <string name="nlic_ui_legacy_confirm">VPN өшіріліп, қалыпты ByeDPI режиміне оралсын ба? Интернет VPN-сыз уақытша қолжетімді болуы мүмкін.</string>
 </resources>
