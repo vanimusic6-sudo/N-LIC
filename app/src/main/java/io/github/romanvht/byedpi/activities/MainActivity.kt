@@ -31,6 +31,7 @@ import io.github.romanvht.byedpi.databinding.ActivityMainBinding
 import io.github.romanvht.byedpi.services.ServiceManager
 import io.github.romanvht.byedpi.services.TestService
 import io.github.romanvht.byedpi.services.appStatus
+import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.utility.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -177,7 +178,13 @@ class MainActivity : BaseActivity() {
 
             val (status, _) = appStatus
             when (status) {
-                AppStatus.Halted -> start()
+                AppStatus.Halted -> {
+                    if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+                        startActivity(Intent(this, SubscriptionLabActivity::class.java).apply {
+                            putExtra("nlic_quick_connect", true)
+                        })
+                    } else start()
+                }
                 AppStatus.Running -> stop()
             }
 
@@ -220,6 +227,10 @@ class MainActivity : BaseActivity() {
         }
 
         binding.editorButton.setOnClickListener {
+            if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+                startActivity(Intent(this, SubscriptionLabActivity::class.java))
+                return@setOnClickListener
+            }
             val useCmdSettings = getPreferences().getCmdEnable()
 
             if (!useCmdSettings && appStatus.first == AppStatus.Running) {
@@ -243,7 +254,9 @@ class MainActivity : BaseActivity() {
         }
 
         binding.strategyButton.setOnClickListener {
-            showStrategyPicker()
+            if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+                startActivity(Intent(this, TestActivity::class.java))
+            } else showStrategyPicker()
         }
 
         if (!PermissionUtils.hasNotificationPermission(this)) {
@@ -420,7 +433,17 @@ class MainActivity : BaseActivity() {
         val preferences = getPreferences()
         val (ip, port) = preferences.getProxyIpAndPort()
 
-        binding.proxyAddress.text = getString(R.string.proxy_address, ip, port)
+        binding.proxyAddress.text =
+            if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+                runCatching {
+                    val catalog = SubscriptionVault.read(applicationContext)
+                    val selected = catalog.allNodes.firstOrNull {
+                        it.id == catalog.selectedNodeId
+                    }
+                    selected?.let { it.name + " · " + it.protocol }
+                        ?: getString(R.string.nlic_control_start_hint)
+                }.getOrDefault(getString(R.string.nlic_control_status_hint))
+            } else getString(R.string.proxy_address, ip, port)
 
         when (status) {
             AppStatus.Halted -> {
@@ -458,6 +481,22 @@ class MainActivity : BaseActivity() {
     }
 
     private fun updateStrategyButton() {
+        if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+            // No raw ByeDPI command-line text on the new VPN-first home.
+            binding.cmdButtonsRow.visibility = View.VISIBLE
+            binding.strategyButton.visibility = View.VISIBLE
+            binding.strategyButtonName.visibility = View.VISIBLE
+            binding.strategyButtonName.text =
+                when (NetworkEnvironment.capture(this).type) {
+                    AccessType.WIFI -> "Wi-Fi"
+                    AccessType.CELLULAR -> getString(R.string.nlic_home_auto_network)
+                    AccessType.ETHERNET -> "Ethernet"
+                    else -> getString(R.string.nlic_home_connection)
+                }
+            binding.strategyButtonText.text =
+                getString(R.string.nlic_home_policy_description)
+            return
+        }
         val useCmdSettings = getPreferences().getCmdEnable()
 
         if (!useCmdSettings) {
