@@ -317,4 +317,23 @@
     <string name="nlic_core_connected">Đã kết nối VPN · đã xác minh HTTPS qua máy chủ</string>
     <string name="nlic_core_connect_failed">Không thể xác minh VPN. Kiểm tra máy chủ hoặc tắt LIC-Bay rồi thử lại.</string>
     <string name="nlic_core_disconnect">Ngắt kết nối VPN</string>
+    <string name="nlic_ui_running">VPN đang chạy · đã chọn LIC-Core</string>
+    <string name="nlic_ui_legacy_running">VPN cũ đang chạy</string>
+    <string name="nlic_ui_disconnected">VPN chưa kết nối</string>
+    <string name="nlic_ui_no_server">Chưa chọn máy chủ</string>
+    <string name="nlic_ui_step_import">Bước 1 · Nhập liên kết thuê bao hoặc cấu hình bên dưới</string>
+    <string name="nlic_ui_step_choose">Bước 2 · Chọn máy chủ được hỗ trợ trong danh sách</string>
+    <string name="nlic_ui_running_hint">Android VPN đang chạy. Hãy kết nối lại nếu đã thay đổi cài đặt.</string>
+    <string name="nlic_ui_step_connect">Bước 3 · Kết nối. Hãy thử tắt LIC-Bay trước.</string>
+    <string name="nlic_ui_help">Cách kết nối</string>
+    <string name="nlic_ui_help_steps">1. Trong cài đặt N-LIC chính, chọn chế độ VPN.\n2. Nhập thuê bao HTTPS hoặc liên kết vless://, trojan:// và các loại khác.\n3. Chọn máy chủ trong danh sách.\n4. Nhấn Kết nối và cho phép Android tạo VPN.\n5. Khi kết nối hoạt động, thử LIC-Auto. Chỉ bật LIC-Bay cho máy chủ TCP nếu cần.\n\nĐây là phần mềm thử nghiệm. Hãy tự kiểm tra kết nối, DNS và IPv6; chưa bảo đảm chống rò rỉ.</string>
+    <string name="nlic_ui_import_section">01  /  NHẬP</string>
+    <string name="nlic_ui_unsupported">Cấu hình chưa được hỗ trợ</string>
+    <string name="nlic_ui_selected">Đã chọn · kết nối lại để áp dụng</string>
+    <string name="nlic_ui_available">Có thể chọn</string>
+    <string name="nlic_ui_enhancements_section">03  /  TĂNG CƯỜNG</string>
+    <string name="nlic_ui_advanced_section">04  /  CHẨN ĐOÁN VÀ ĐẶT LẠI</string>
+    <string name="nlic_ui_legacy_action">Quay lại ByeDPI cũ</string>
+    <string name="nlic_ui_legacy_desc">Ngắt VPN và tắt LIC-Core. Giữ lại thuê bao.</string>
+    <string name="nlic_ui_legacy_confirm">Ngắt VPN hiện tại và quay lại ByeDPI cũ? Có thể truy cập internet ngoài VPN trong thời gian ngắn.</string>
 </resources>
