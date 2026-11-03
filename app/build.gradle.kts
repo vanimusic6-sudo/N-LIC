@@ -165,7 +165,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.14.0")
     // Pin a modern TLS-validated HTTPS client; its DNS callback is used to
     // prevent DNS rebinding when importing user-provided subscription URLs.
-    implementation("com.squareup.okhttp3:okhttp:5.5.1")
+    implementation("com.squareup.okhttp3:okhttp:5.3.2")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
