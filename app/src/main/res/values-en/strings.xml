@@ -401,4 +401,8 @@
     <string name="nlic_home_auto_network_details">Verified choices for Wi-Fi, mobile or Ethernet. If no test result exists, use a conservative profile. Carrier names alone do not guarantee bypass.</string>
     <string name="nlic_home_supported_protocols">Subscriptions: VLESS, VMess, Trojan, Shadowsocks, AnyTLS, Hysteria2, TUIC. Files: WireGuard .conf and curated sing-box JSON.</string>
     <string name="nlic_home_refresh_partial">Refreshed nodes: %1$d · subscriptions failed: %2$d. Cached data preserved.</string>
+    <string name="nlic_privacy_title">Android leak protection</string>
+    <string name="nlic_privacy_description">Open Android VPN settings and consider Always-on VPN and Block connections without VPN. Without this, apps can access the network directly during reconnection.</string>
+    <string name="nlic_privacy_confirmation">Open system VPN settings? N-LIC cannot enable Android\'s Block connections without VPN on your behalf. Check the selected app.</string>
+    <string name="nlic_privacy_unavailable">Cannot open system VPN settings on this device.</string>
 </resources>
