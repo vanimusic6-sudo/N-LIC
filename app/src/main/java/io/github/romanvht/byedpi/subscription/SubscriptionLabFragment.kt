@@ -94,6 +94,13 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
             SingBoxConfigCompiler.compile(it) is SingBoxConfigCompiler.Result.Compiled
         } == true
         val byedpiVpnMode = prefs.getString("byedpi_mode", "vpn") == "vpn"
+        val autoEnabled = prefs.getBoolean("nlic_core_auto", false)
+        val autoPlan = SingBoxConfigCompiler.compileAuto(
+            saved.allNodes,
+            if (prefs.getBoolean("nlic_core_bay", false))
+                SingBoxConfigCompiler.Bay.ON else SingBoxConfigCompiler.Bay.OFF,
+        )
+        val autoAvailable = autoPlan is SingBoxConfigCompiler.Result.Compiled
 
         section.addPreference(SwitchPreferenceCompat(context).apply {
             key = "nlic_core_mode"
@@ -101,11 +108,13 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
             summary = when {
                 !BuildConfig.NLIC_LIBBOX_INCLUDED -> getString(R.string.nlic_core_missing)
                 !byedpiVpnMode -> getString(R.string.nlic_core_requires_vpn)
-                !canCompile -> getString(R.string.nlic_core_choose_supported)
+                !(if (autoEnabled) autoAvailable else canCompile) ->
+                    getString(R.string.nlic_core_choose_supported)
                 else -> getString(R.string.nlic_core_reconnect)
             }
             isChecked = prefs.getBoolean(key, false)
-            isEnabled = BuildConfig.NLIC_LIBBOX_INCLUDED && byedpiVpnMode && canCompile
+            isEnabled = BuildConfig.NLIC_LIBBOX_INCLUDED && byedpiVpnMode &&
+                (if (autoEnabled) autoAvailable else canCompile)
             setOnPreferenceChangeListener { _, newValue ->
                 prefs.edit().putBoolean(key, newValue as Boolean).commit()
                 render()
@@ -113,8 +122,27 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
             }
         })
 
-        val bayEligible = selectedNode != null &&
-            LICBay.plan(selectedNode).canWrapTcp
+        val bayEligible = if (autoEnabled) {
+            saved.allNodes.any { node ->
+                LICBay.plan(node).canWrapTcp &&
+                    SingBoxConfigCompiler.compile(node) is
+                        SingBoxConfigCompiler.Result.Compiled
+            }
+        } else selectedNode != null && LICBay.plan(selectedNode).canWrapTcp
+
+        section.addPreference(SwitchPreferenceCompat(context).apply {
+            key = "nlic_core_auto"
+            title = getString(R.string.nlic_core_auto_toggle)
+            summary = getString(R.string.nlic_core_auto_desc)
+            isChecked = prefs.getBoolean(key, false)
+            isEnabled = BuildConfig.NLIC_LIBBOX_INCLUDED && byedpiVpnMode &&
+                saved.allNodes.isNotEmpty()
+            setOnPreferenceChangeListener { _, newValue ->
+                prefs.edit().putBoolean(key, newValue as Boolean).commit()
+                render()
+                true
+            }
+        })
         section.addPreference(SwitchPreferenceCompat(context).apply {
             key = "nlic_core_bay"
             title = getString(R.string.nlic_core_bay_toggle)
@@ -131,7 +159,8 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
 
         section.addPreference(Preference(context).apply {
             title = getString(R.string.nlic_core_profile_check)
-            summary = if (canCompile) getString(R.string.nlic_core_profile_ready)
+            summary = if (if (autoEnabled) autoAvailable else canCompile)
+                getString(R.string.nlic_core_profile_ready)
                 else getString(R.string.nlic_core_profile_unsupported)
             isSelectable = false
         })

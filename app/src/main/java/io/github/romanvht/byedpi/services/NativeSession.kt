@@ -221,10 +221,9 @@ internal class NativeSession(
                     }
                     val preferences = service.getPreferences()
                     val saved = withContext(Dispatchers.IO) { SubscriptionVault.read(service) }
-                    val node = saved.allNodes.firstOrNull { it.id == saved.selectedNodeId }
-                        ?: error("Selected LIC-Core server is not available")
                     val bayEnabled = config.args.getOrNull(1) == "--nlic-bay"
-                    val legacyArgs = config.args.drop(2)
+                    val autoEnabled = config.args.getOrNull(2) == "--nlic-auto"
+                    val legacyArgs = config.args.drop(3)
                     val (legacyHostArg, legacyPortArg) = legacyArgs.checkIpAndPortInArgs()
                     val (defaultHost, defaultPort) = preferences.getProxyIpAndPort()
                     val legacyHost = legacyHostArg ?: defaultHost
@@ -234,11 +233,16 @@ internal class NativeSession(
                         legacyHost in listOf("127.0.0.1", "::1", "[::1]", "localhost")) {
                         "LIC-Bay must listen on loopback"
                     }
-                    val plan = SingBoxConfigCompiler.compile(
-                        node,
-                        if (bayEnabled) SingBoxConfigCompiler.Bay.ON else SingBoxConfigCompiler.Bay.OFF,
-                        legacyPort,
-                    ) as? SingBoxConfigCompiler.Result.Compiled
+                    val bay = if (bayEnabled) SingBoxConfigCompiler.Bay.ON
+                        else SingBoxConfigCompiler.Bay.OFF
+                    val compiled = if (autoEnabled) {
+                        SingBoxConfigCompiler.compileAuto(saved.allNodes, bay, legacyPort)
+                    } else {
+                        val node = saved.allNodes.firstOrNull { it.id == saved.selectedNodeId }
+                            ?: error("Selected LIC-Core server is not available")
+                        SingBoxConfigCompiler.compile(node, bay, legacyPort)
+                    }
+                    val plan = compiled as? SingBoxConfigCompiler.Result.Compiled
                         ?: error("Selected LIC-Core configuration cannot be used")
                     if (bayEnabled) {
                         check(legacyArgs.isNotEmpty()) { "Missing LIC-Bay command" }
