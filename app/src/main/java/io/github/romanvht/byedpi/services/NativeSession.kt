@@ -23,6 +23,8 @@ import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
 import io.github.romanvht.byedpi.subscription.LibboxRuntime
 import io.github.romanvht.byedpi.subscription.CoreStartException
+import io.github.romanvht.byedpi.subscription.BayTransport
+import io.github.romanvht.byedpi.subscription.LICBay
 import io.github.romanvht.byedpi.subscription.LocalSocksAuth
 import java.security.SecureRandom
 import kotlinx.coroutines.CancellationException
@@ -279,29 +281,47 @@ internal class NativeSession(
                                 engine.startProxy(legacyArgs.toTypedArray())
                             }
                             withTimeout(START_TIMEOUT) { awaitProxy(legacyHost, legacyPort) }
-                            // Fast, explicit validation of SOCKS5 detour: it must
-                            // reach the selected server BEFORE sing-box uses it.
-                            // In URLTest mode let the core test candidates itself.
+                            // The native ByeDPI revision supports SOCKS5
+                            // CONNECT and UDP ASSOCIATE. Check the appropriate
+                            // transport before starting libbox, never treat a
+                            // TCP handshake as evidence a UDP server works.
                             if (!autoEnabled) {
-                                corePhase = "BAY_UPSTREAM"
                                 val selected = saved.allNodes.firstOrNull {
                                     it.id == saved.selectedNodeId
                                 } ?: error("LIC-Core / NO_SERVER")
-                                // DPI evasion may add latency; a single 2.5 s
-                                // SYN timeout is not evidence of a broken Bay
-                                // route. Retry without sending private keys.
-                                var bayWorking = false
+                                val transport = LICBay.plan(selected).transport
+                                    ?: error("LIC-Core / BAY_UNSUPPORTED")
+                                corePhase = if (transport == BayTransport.UDP_ASSOCIATE)
+                                    "BAY_UDP" else "BAY_UPSTREAM"
+                                var bayReady = false
                                 repeat(3) { attempt ->
-                                    if (!bayWorking) {
-                                        bayWorking = withContext(Dispatchers.IO) {
-                                            TunnelHealthProbe.checkBay(
-                                                legacyPort, selected.host, selected.port
+                                    if (!bayReady) {
+                                        bayReady = withContext(Dispatchers.IO) {
+                                            if (transport == BayTransport.UDP_ASSOCIATE)
+                                                TunnelHealthProbe.checkBayUdp(legacyPort)
+                                            else TunnelHealthProbe.checkBay(
+                                                legacyPort, selected.host, selected.port,
                                             )
                                         }
                                     }
-                                    if (!bayWorking && attempt < 2) delay(450)
+                                    if (!bayReady && attempt < 2) delay(450)
                                 }
-                                check(bayWorking) { "LIC-Core / BAY_UNREACHABLE" }
+                                check(bayReady) {
+                                    if (transport == BayTransport.UDP_ASSOCIATE)
+                                        "LIC-Core / BAY_UDP_UNAVAILABLE"
+                                    else "LIC-Core / BAY_UNREACHABLE"
+                                }
+                            } else {
+                                // A mixed URLTest set needs both capabilities
+                                // whenever UDP candidates are present.
+                                if (saved.allNodes.any {
+                                        LICBay.plan(it).transport == BayTransport.UDP_ASSOCIATE
+                                    }) {
+                                    corePhase = "BAY_UDP"
+                                    check(withContext(Dispatchers.IO) {
+                                        TunnelHealthProbe.checkBayUdp(legacyPort)
+                                    }) { "LIC-Core / BAY_UDP_UNAVAILABLE" }
+                                }
                             }
                         }
                         corePhase = "CORE_START"
@@ -369,6 +389,8 @@ internal class NativeSession(
                     val safeCode = when {
                         e is CoreStartException -> e.stage
                         e.message == "LIC-Core / BAY_UNREACHABLE" -> "BAY_UNREACHABLE"
+                        e.message == "LIC-Core / BAY_UDP_UNAVAILABLE" -> "BAY_UDP_UNAVAILABLE"
+                        e.message == "LIC-Core / BAY_UNSUPPORTED" -> "BAY_UNSUPPORTED"
                         e.message == "LIC-Core / NO_SERVER" -> "NO_SERVER"
                         else -> corePhase
                     }
