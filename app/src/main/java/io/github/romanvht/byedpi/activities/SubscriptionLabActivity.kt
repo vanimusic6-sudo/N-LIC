@@ -416,9 +416,10 @@ class SubscriptionLabActivity : BaseActivity() {
             latestMessage = null
             render()
         }
-        findViewById<TextView>(R.id.nlic_bay_hint).setText(
-            if (bayEligible) R.string.nlic_control_bay_desc else R.string.nlic_core_bay_udp
-        )
+        val bayHint = if (bayEligible) getString(R.string.nlic_control_bay_desc)
+            else getString(R.string.nlic_core_bay_udp)
+        findViewById<TextView>(R.id.nlic_bay_hint).text =
+            if (bay) bayHint + "\n" + getString(R.string.nlic_control_bay_risk) else bayHint
 
         findViewById<MaterialButton>(R.id.nlic_connect).apply {
             isEnabled = !busy && canConnect(catalog)
