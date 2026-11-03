@@ -55,6 +55,15 @@
                 android:textStyle="bold"/>
         </LinearLayout>
 
+        <TextView
+            android:id="@+id/mediaResultTextView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="?attr/colorPrimary"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
         <LinearLayout
             android:id="@+id/expandButton"
             android:layout_width="match_parent"
