@@ -39,6 +39,28 @@ internal object NativeTunConfig {
         reordered.add(nativeTun)
         inbounds.forEach { reordered.add(it.deepCopy()) }
         root.add("inbounds", reordered)
+
+        // The existing "local" DNS is *bootstrap only*: it may reveal
+        // the VPN server hostname to the underlying resolver. Queries
+        // originating from applications must go via a verified HTTPS
+        // resolver *through the encrypted VPN outbound*. If that fails,
+        // do not fall back to plaintext DNS on the physical network.
+        val dns = root.getAsJsonObject("dns")
+            ?: error("Native VPN requires explicit DNS configuration")
+        dns.getAsJsonArray("servers").add(JsonObject().apply {
+            addProperty("type", "https")
+            addProperty("tag", "lic-private-doh")
+            addProperty("server", "1.1.1.1")
+            addProperty("server_port", 443)
+            addProperty("path", "/dns-query")
+            addProperty("detour", SingBoxConfigCompiler.PROXY_TAG)
+            add("tls", JsonObject().apply {
+                addProperty("enabled", true)
+                addProperty("server_name", "cloudflare-dns.com")
+                addProperty("insecure", false)
+            })
+        })
+        dns.addProperty("final", "lic-private-doh")
         return root.toString()
     }
 }
