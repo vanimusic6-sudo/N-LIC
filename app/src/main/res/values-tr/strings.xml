@@ -304,7 +304,7 @@
     <string name="nlic_core_reconnect">Değişiklikler sonraki bağlantıda uygulanır. VPN bağlantısını yeniden kurun.</string>
     <string name="nlic_core_bay_toggle">LIC-Bay · VPN üst bağlantısını ByeDPI ile koru</string>
     <string name="nlic_core_bay_desc">ByeDPI SOCKS yalnızca VPN sunucusuna dış TCP bağlantısı için kullanılır. Bağlantı başarısızsa kapatın.</string>
-    <string name="nlic_core_bay_udp">ByeDPI TCP yöntemleri Hysteria2/TUIC için uygun değil. TCP sunucusu seçin.</string>
+    <string name="nlic_core_bay_udp">UDP SOCKS5 UDP ASSOCIATE kullanır. Operatör doğrudan UDP'yi engelliyorsa farklı sunucu veya protokol deneyin.</string>
     <string name="nlic_core_profile_check">LIC-Core yapılandırma kontrolü</string>
     <string name="nlic_core_profile_ready">Parametreler sing-box yapılandırmasına çevrilebiliyor. VPN bağlantısı henüz doğrulanmadı.</string>
     <string name="nlic_core_profile_unsupported">Sunucu seçilmedi veya ayarları desteklenmiyor. Bağlantı kapalı.</string>
@@ -349,7 +349,7 @@
     <string name="nlic_control_auto_title">LIC-Auto · en iyi sunucu</string>
     <string name="nlic_control_auto_desc">Birkaç sunucunun şifreli bağlantısını test ederek çalışanı seçer.</string>
     <string name="nlic_control_bay_title">LIC-Bay · ByeDPI üzerinden</string>
-    <string name="nlic_control_bay_desc">VPN sunucusuna yerel ByeDPI üzerinden isteğe bağlı TCP bağlantısı. Doğrudan bağlantı çalışmazsa açın.</string>
+    <string name="nlic_control_bay_desc">LIC-Bay TCP ve UDP'yi yerel ByeDPI SOCKS5 üzerinden yönlendirir. WireGuard/Hysteria2/TUIC UDP ASSOCIATE kullanır; UDP engellerini aşma garantisi yoktur.</string>
     <string name="nlic_control_more">Daha fazla  ·  tanılama ve ayarlar</string>
     <string name="nlic_control_connect">Bağlan</string>
     <string name="nlic_control_running">VPN çalışıyor</string>
