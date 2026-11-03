@@ -296,4 +296,16 @@
     <string name="nlic_auto_ineligible">This endpoint did not pass both TCP tests or uses UDP. It was not selected.</string>
     <string name="nlic_bay_label">LIC-Bay · VPN connection protection</string>
     <string name="nlic_bay_phase">Planned: route only the VPN outer TCP transport through ByeDPI SOCKS. Not enabled yet; UDP needs a separate design.</string>
+    <string name="nlic_core_preview_warning">LIC-Core PREVIEW: this APK includes experimental sing-box. It uses the existing Android VPN/HEV path. Compatibility issues are possible. LIC-Bay is optional and cannot guarantee censorship bypass.</string>
+    <string name="nlic_core_toggle">LIC-Core · connect via subscription</string>
+    <string name="nlic_core_missing">This standard APK does not include libbox. Install the separate Core Preview APK. Legacy ByeDPI is unchanged.</string>
+    <string name="nlic_core_requires_vpn">Select VPN mode, not Proxy, in the main N-LIC settings.</string>
+    <string name="nlic_core_choose_supported">Select a supported VLESS, VMess, Trojan, Shadowsocks, HY2 or TUIC server first.</string>
+    <string name="nlic_core_reconnect">Changes apply on the next connection. Reconnect VPN manually.</string>
+    <string name="nlic_core_bay_toggle">LIC-Bay · protect VPN uplink with ByeDPI</string>
+    <string name="nlic_core_bay_desc">Uses local ByeDPI SOCKS only for the VPN server uplink TCP transport. Disable LIC-Bay if the connection fails.</string>
+    <string name="nlic_core_bay_udp">ByeDPI TCP packet methods do not apply to Hysteria2/TUIC. Select a TCP server.</string>
+    <string name="nlic_core_profile_check">LIC-Core configuration check</string>
+    <string name="nlic_core_profile_ready">Parameters compile to sing-box JSON. The actual VPN connection has not been validated.</string>
+    <string name="nlic_core_profile_unsupported">No selected server or its settings are unsupported. Connection is disabled.</string>
 </resources>

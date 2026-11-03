@@ -297,4 +297,16 @@
     <string name="nlic_auto_ineligible">Máy chủ này không vượt qua cả hai bài kiểm tra TCP hoặc dùng UDP.</string>
     <string name="nlic_bay_label">LIC-Bay · bảo vệ kết nối VPN</string>
     <string name="nlic_bay_phase">Dự kiến: chuyển TCP ngoài của VPN qua ByeDPI SOCKS. Chưa hoạt động; UDP cần giải pháp riêng.</string>
+    <string name="nlic_core_preview_warning">LIC-Core BẢN THỬ: APK này có sing-box thử nghiệm. Sử dụng Android VPN/HEV hiện tại. Có thể gặp lỗi tương thích. LIC-Bay là tùy chọn, không bảo đảm vượt chặn.</string>
+    <string name="nlic_core_toggle">LIC-Core · kết nối bằng thuê bao</string>
+    <string name="nlic_core_missing">APK thông thường không có libbox. Hãy dùng APK Core Preview riêng. ByeDPI cũ không đổi.</string>
+    <string name="nlic_core_requires_vpn">Chọn chế độ VPN thay vì Proxy trong cài đặt N-LIC.</string>
+    <string name="nlic_core_choose_supported">Trước tiên hãy chọn máy chủ VLESS, VMess, Trojan, Shadowsocks, HY2 hoặc TUIC được hỗ trợ.</string>
+    <string name="nlic_core_reconnect">Thay đổi áp dụng ở lần kết nối tiếp theo. Hãy kết nối lại VPN thủ công.</string>
+    <string name="nlic_core_bay_toggle">LIC-Bay · bảo vệ kết nối VPN bằng ByeDPI</string>
+    <string name="nlic_core_bay_desc">ByeDPI SOCKS chỉ được dùng cho kết nối TCP bên ngoài tới máy chủ VPN. Tắt LIC-Bay nếu kết nối lỗi.</string>
+    <string name="nlic_core_bay_udp">Phương pháp TCP của ByeDPI không dùng được cho Hysteria2/TUIC. Hãy chọn máy chủ TCP.</string>
+    <string name="nlic_core_profile_check">Kiểm tra cấu hình LIC-Core</string>
+    <string name="nlic_core_profile_ready">Thông số đã chuyển thành sing-box JSON. Chưa kiểm tra được VPN thực tế.</string>
+    <string name="nlic_core_profile_unsupported">Chưa chọn máy chủ hoặc thông số chưa được hỗ trợ. Không thể kết nối.</string>
 </resources>

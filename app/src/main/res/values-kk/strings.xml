@@ -296,4 +296,16 @@
     <string name="nlic_auto_ineligible">Бұл сервер екі TCP тексеруінен өтпеді немесе UDP қолданады.</string>
     <string name="nlic_bay_label">LIC-Bay · VPN қосылымын қорғау</string>
     <string name="nlic_bay_phase">Жоспарда: VPN сыртқы TCP трафигін ByeDPI SOCKS арқылы жіберу. Әзірше іске қосылмаған.</string>
+    <string name="nlic_core_preview_warning">LIC-Core СЫНАҚ: бұл APK ішінде тәжірибелік sing-box бар. Android VPN/HEV жолы қолданылады. Үйлесім мәселелері болуы мүмкін. LIC-Bay міндетті емес және бұғаттауды айналып өтуге кепіл бермейді.</string>
+    <string name="nlic_core_toggle">LIC-Core · жазылым арқылы қосылу</string>
+    <string name="nlic_core_missing">Әдеттегі APK-де libbox жоқ. Core Preview APK орнатыңыз. Бұрынғы ByeDPI өзгермейді.</string>
+    <string name="nlic_core_requires_vpn">Негізгі N-LIC параметрлерінде Proxy емес, VPN режимін таңдаңыз.</string>
+    <string name="nlic_core_choose_supported">Алдымен қолдау көрсетілетін VLESS, VMess, Trojan, Shadowsocks, HY2 не TUIC серверін таңдаңыз.</string>
+    <string name="nlic_core_reconnect">Өзгерістер келесі қосылымда қолданылады. VPN-ді қолмен қайта қосыңыз.</string>
+    <string name="nlic_core_bay_toggle">LIC-Bay · VPN қосылымын ByeDPI арқылы қорғау</string>
+    <string name="nlic_core_bay_desc">ByeDPI SOCKS тек VPN серверіне сыртқы TCP қосылымы үшін қолданылады. Байланыс істемесе өшіріңіз.</string>
+    <string name="nlic_core_bay_udp">ByeDPI TCP тәсілдері Hysteria2/TUIC үшін жарамайды. TCP серверін таңдаңыз.</string>
+    <string name="nlic_core_profile_check">LIC-Core конфигурациясын тексеру</string>
+    <string name="nlic_core_profile_ready">Параметрлер sing-box JSON форматына келеді. VPN қосылымы әлі тексерілмеді.</string>
+    <string name="nlic_core_profile_unsupported">Сервер таңдалмады немесе параметрлері қолдау таппайды. Қосылу өшірулі.</string>
 </resources>
