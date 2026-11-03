@@ -16,6 +16,7 @@ internal enum class StreamOutcome {
     HTTP_REJECTED,
     NOT_MEDIA,
     INVALID_TARGET,
+    CONNECTION_RESET_AFTER_DATA,
     NETWORK_FAILURE,
 }
 
@@ -33,6 +34,9 @@ internal object StreamProbeClassifier {
         reachedEof: Boolean,
         transferDurationMs: Long,
     ): StreamOutcome {
+        if (status < 0) {
+            return if (timedOut) StreamOutcome.TIMEOUT_BEFORE_DATA else StreamOutcome.NETWORK_FAILURE
+        }
         if (status in 300..399) return StreamOutcome.REDIRECTED
         if (status !in 200..299) return StreamOutcome.HTTP_REJECTED
         val type = contentType.orEmpty().substringBefore(';').trim().lowercase()
