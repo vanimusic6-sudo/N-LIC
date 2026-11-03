@@ -233,15 +233,24 @@ internal class NativeSession(
                         corePhase = "PREPARE"
                         val bayEnabled = config.args.getOrNull(1) == "--nlic-bay"
                         val autoEnabled = config.args.getOrNull(2) == "--nlic-auto"
-                        val legacyArgs = config.args.drop(3)
-                        val (legacyHostArg, legacyPortArg) = legacyArgs.checkIpAndPortInArgs()
-                        val (defaultHost, defaultPort) = preferences.getProxyIpAndPort()
-                        val legacyHost = legacyHostArg ?: defaultHost
-                        val legacyPort = (legacyPortArg ?: defaultPort).toIntOrNull()
-                            ?: error("Invalid LIC-Bay port")
-                        check(!bayEnabled ||
-                            legacyHost == "127.0.0.1") {
-                            "LIC-Bay must listen on 127.0.0.1"
+                        // LIC-Core DIRECT must not depend on the old ByeDPI
+                        // command or proxy port. Parsing legacy flags even when
+                        // Bay was OFF could reject a perfectly valid VPN node
+                        // before sing-box was ever initialized.
+                        val legacyArgs = if (bayEnabled) config.args.drop(3)
+                            else emptyList()
+                        val (legacyHost, legacyPort) = if (bayEnabled) {
+                            val (flagHost, flagPort) = legacyArgs.checkIpAndPortInArgs()
+                            val (savedHost, savedPort) = preferences.getProxyIpAndPort()
+                            val host = flagHost ?: savedHost
+                            val port = (flagPort ?: savedPort).toIntOrNull()
+                                ?: error("Invalid LIC-Bay port")
+                            check(host == "127.0.0.1") {
+                                "LIC-Bay must listen on 127.0.0.1"
+                            }
+                            host to port
+                        } else {
+                            "127.0.0.1" to 1080 // No ByeDPI listener starts.
                         }
                         val bay = if (bayEnabled) SingBoxConfigCompiler.Bay.ON
                             else SingBoxConfigCompiler.Bay.OFF
