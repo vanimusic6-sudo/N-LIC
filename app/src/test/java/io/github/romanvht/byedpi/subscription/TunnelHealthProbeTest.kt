@@ -68,6 +68,46 @@ class TunnelHealthProbeTest {
         } finally { executor.shutdownNow() }
     }
 
+    @Test fun `SOCKS5 CONNECT encodes IPv4 and IPv6 literal addresses without DNS`() {
+        val examples = listOf(
+            Triple("203.0.113.24", 1, byteArrayOf(203.toByte(), 0, 113, 24)),
+            Triple("2001:db8::1", 4, java.net.InetAddress.getByName("2001:db8::1").address)
+        )
+        for ((host, expectedType, expectedAddress) in examples) {
+            val executor = Executors.newSingleThreadExecutor()
+            try {
+                ServerSocket(0).use { server ->
+                    val request = executor.submit<Boolean> {
+                        server.accept().use { client ->
+                            client.soTimeout = 2_000
+                            val input = DataInputStream(client.getInputStream())
+                            val greeting = ByteArray(3).also(input::readFully)
+                            assertArrayEquals(byteArrayOf(5, 1, 0), greeting)
+                            client.getOutputStream().write(byteArrayOf(5, 0))
+                            val header = ByteArray(4).also(input::readFully)
+                            assertEquals(5, header[0].toInt())
+                            assertEquals(expectedType, header[3].toInt())
+                            val bytes = ByteArray(expectedAddress.size).also(input::readFully)
+                            assertArrayEquals(expectedAddress, bytes)
+                            assertEquals(443, input.readUnsignedShort())
+                            client.getOutputStream().write(byteArrayOf(
+                                5, 0, 0, 1, 127, 0, 0, 1, 0, 1
+                            ))
+                            true
+                        }
+                    }
+                    Socket("127.0.0.1", server.localPort).use { socket ->
+                        socket.soTimeout = 2_000
+                        TunnelHealthProbe.connectDomain(socket, host, 443)
+                    }
+                    assertTrue(request.get(3, TimeUnit.SECONDS))
+                }
+            } finally {
+                executor.shutdownNow()
+            }
+        }
+    }
+
     @Test fun `proxy refusal cannot be reported as a healthy tunnel`() {
         ServerSocket(0).use { server ->
             val port = server.localPort
