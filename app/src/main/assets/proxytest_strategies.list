@@ -1,9 +1,13 @@
 -An
 -r3+s
 -r-5+se
--s1
--s3+s
--d1
--o1
--f-1 -t8
 -o1 -a1 -r-5+se
+-r3+s -T3 -At -o1 -r-5+se
+-o1 -r-5+se -T3 -At -d1 -f-1 -t8
+-r3+s -T3 -As -o1 -r-5+se
+-Kt -r3+s -T3 -At -Kt -o1 -r-5+se
+-r3+s -T3 -At -r-5+se -o1 -At -d1 -f-1 -t8
+-r3+s -s3+s -T3 -At -o1 -r-5+se
+-Kt -r3+s -T2 -At -Kt -o1 -r-5+se
+-d1
+-f-1 -t8
