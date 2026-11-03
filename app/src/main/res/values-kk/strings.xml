@@ -260,4 +260,6 @@
     <string name="nlic_network_health">Мобильді байланыс диагностикасы</string>
     <string name="nlic_network_health_desc">YouTube және Telegram TCP тексеруі, 16/256 КиБ жүктеу салыстыруы. Сұраулар жергілікті VPN-ді айналып өтіп, операторға тікелей жіберіледі. Тек басқан кезде.</string>
     <string name="nlic_network_health_running">Ағымдағы физикалық желі, TCP байланысы және жүктеу тексерілуде...</string>
+    <string name="nlic_restart_on_network_change">Wi-Fi ↔ мобильді желі ауысқанда қайта қосылу</string>
+    <string name="nlic_restart_on_network_change_desc">Қосымша: физикалық желі ауысқанда дұрыс параметрлерді қолдану үшін N-LIC VPN-ді қайта қосады. Белсенді қосылымдар үзіледі. Proxy режиміне әсер етпейді.</string>
 </resources>

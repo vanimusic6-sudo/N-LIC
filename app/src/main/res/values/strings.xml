@@ -260,4 +260,6 @@
     <string name="nlic_network_health">Диагностика мобильной сети</string>
     <string name="nlic_network_health_desc">Проверить TCP до YouTube и Telegram и загрузку 16/256 КБ. Тест отправляет запросы напрямую через оператора, в обход локального VPN, без передачи личных данных. Только по нажатию.</string>
     <string name="nlic_network_health_running">Проверяем доступность TCP и передачу данных в текущей сети. Результат позволит отличить блокировку IP от проблем с потоками.</string>
+    <string name="nlic_restart_on_network_change">Переподключаться при смене Wi-Fi ↔ мобильной сети</string>
+    <string name="nlic_restart_on_network_change_desc">Необязательно: при подтверждённой смене сети автоматически перезапускать N-LIC VPN, чтобы применить подходящие настройки. Текущие соединения прервутся. В режиме Proxy не применяется.</string>
 </resources>

@@ -261,4 +261,6 @@
     <string name="nlic_network_health">Chẩn đoán kết nối di động</string>
     <string name="nlic_network_health_desc">Kiểm tra TCP tới YouTube và Telegram, so sánh tải xuống 16/256 KiB. Yêu cầu đi trực tiếp qua nhà mạng, ngoài VPN cục bộ. Chỉ chạy khi bạn nhấn.</string>
     <string name="nlic_network_health_running">Đang kiểm tra mạng vật lý, kết nối TCP và tải xuống...</string>
+    <string name="nlic_restart_on_network_change">Kết nối lại khi chuyển Wi-Fi ↔ dữ liệu di động</string>
+    <string name="nlic_restart_on_network_change_desc">Tùy chọn: khởi động lại VPN N-LIC khi mạng vật lý thay đổi để áp dụng cài đặt phù hợp. Các kết nối hiện tại sẽ bị ngắt. Không ảnh hưởng chế độ Proxy.</string>
 </resources>
