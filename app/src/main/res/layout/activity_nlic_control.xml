@@ -322,6 +322,23 @@
                 android:orientation="vertical">
 
                 <com.google.android.material.button.MaterialButton
+                    android:id="@+id/nlic_privacy"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:text="@string/nlic_privacy_title"
+                    android:textAllCaps="false" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="12dp"
+                    android:textSize="12sp"
+                    android:lineSpacingExtra="2dp"
+                    android:text="@string/nlic_privacy_description"
+                    android:textColor="@color/nlic_muted" />
+
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/nlic_help"
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     android:layout_width="match_parent"
