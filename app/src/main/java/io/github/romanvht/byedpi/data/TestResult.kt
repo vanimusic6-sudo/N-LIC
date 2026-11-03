@@ -7,6 +7,7 @@ data class StrategyResult(
     var currentProgress: Int = 0,
     var isCompleted: Boolean = false,
     val siteResults: MutableList<SiteResult> = mutableListOf(),
+    var streamProbe: StreamProbeResult? = null,
     var isExpanded: Boolean = false
 ) {
     val successPercentage: Int
