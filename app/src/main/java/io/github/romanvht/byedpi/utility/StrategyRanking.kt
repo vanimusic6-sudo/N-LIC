@@ -12,8 +12,20 @@ internal object StrategyRanking {
         compareByDescending<StrategyResult> { it.isCompleted }
             .thenByDescending { it.successPercentage }
             .thenByDescending { it.successCount }
+            // A genuine 256 KiB completed stream matters more than a tiny
+            // homepage success when the user explicitly enabled media testing.
+            .thenByDescending { mediaRank(it) }
+            .thenByDescending { it.streamProbe?.transferBytesPerSecond ?: 0L }
             .thenBy { estimatedPacketCost(it.command) }
             .thenBy { medianSuccessLatencyMs(it) ?: Long.MAX_VALUE }
+
+    fun mediaRank(result: StrategyResult): Int = when (result.streamProbe?.outcome) {
+        "COMPLETE" -> 3
+        "SLOW_TRANSFER" -> 2
+        "STALLED_AFTER_DATA", "PREMATURE_EOF" -> 0
+        "SHORT_OBJECT" -> 1
+        else -> 0
+    }
 
     fun estimatedPacketCost(command: String): Int {
         var cost = 0
