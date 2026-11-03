@@ -14,7 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.materialswitch.MaterialSwitch
+import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import io.github.romanvht.byedpi.BuildConfig
 import io.github.romanvht.byedpi.R
@@ -391,7 +391,7 @@ class SubscriptionLabActivity : BaseActivity() {
             else -> getString(R.string.nlic_control_unsupported)
         }
 
-        val autoSwitch = findViewById<MaterialSwitch>(R.id.nlic_auto_switch)
+        val autoSwitch = findViewById<SwitchMaterial>(R.id.nlic_auto_switch)
         autoSwitch.setOnCheckedChangeListener(null)
         autoSwitch.isChecked = auto
         autoSwitch.isEnabled = !busy && BuildConfig.NLIC_LIBBOX_INCLUDED && all.isNotEmpty()
@@ -407,7 +407,7 @@ class SubscriptionLabActivity : BaseActivity() {
             SingBoxConfigCompiler.compile(it, SingBoxConfigCompiler.Bay.ON) is
                 SingBoxConfigCompiler.Result.Compiled
         } == true
-        val baySwitch = findViewById<MaterialSwitch>(R.id.nlic_bay_switch)
+        val baySwitch = findViewById<SwitchMaterial>(R.id.nlic_bay_switch)
         baySwitch.setOnCheckedChangeListener(null)
         baySwitch.isChecked = bay
         baySwitch.isEnabled = !busy && BuildConfig.NLIC_LIBBOX_INCLUDED && (bay || bayEligible)
