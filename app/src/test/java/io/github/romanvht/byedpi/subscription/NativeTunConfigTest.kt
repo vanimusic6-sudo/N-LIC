@@ -32,6 +32,17 @@ class NativeTunConfigTest {
         }
     }
 
+    @Test fun `LIC Auto DNS uses live URLTest outbound and never nonexistent tag`() {
+        val auto = SingBoxConfigCompiler.compileAuto(listOf(node))
+            as SingBoxConfigCompiler.Result.Compiled
+        val config = JsonParser.parseString(NativeTunConfig.compile(auto.config, 1400))
+            .asJsonObject
+        val dnsServers = config.getAsJsonObject("dns").getAsJsonArray("servers")
+        val doh = dnsServers[dnsServers.size() - 1].asJsonObject
+        assertEquals("lic-auto", doh.get("detour").asString)
+        assertEquals("lic-auto", config.getAsJsonObject("route").get("final").asString)
+    }
+
     @Test fun `valid native TUN accepts UDP upstream and refuses unsafe MTU`() {
         val node2 = requireNotNull(SubscriptionImport.parseNode(
             "hysteria2://dummy@udp.invalid:443?sni=udp.invalid"
