@@ -372,4 +372,5 @@
     <string name="nlic_control_unsupported">Cấu hình máy chủ không được hỗ trợ. Hãy chọn máy chủ khác.</string>
     <string name="nlic_control_apply">Áp dụng và kết nối lại</string>
     <string name="nlic_control_generic_failure">Thao tác thất bại. Cài đặt được giữ nguyên; hãy kiểm tra kết nối.</string>
+    <string name="nlic_control_bay_risk">⚠ SOCKS ByeDPI cục bộ không có mật khẩu và ứng dụng khác có thể truy cập. LIC-Bay chỉ dành cho thử nghiệm.</string>
 </resources>
