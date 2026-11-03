@@ -177,7 +177,8 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
             }
         }
 
-        private fun currentInterfaceName(context: Context): String? = try {
+        private fun currentInterfaceName(context: Context): String? {
+            return try {
             val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
                 as? ConnectivityManager ?: return null
             val network = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -186,9 +187,10 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
             if (network == null) return null
             val caps = manager.getNetworkCapabilities(network) ?: return null
             if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return null
-            manager.getLinkProperties(network)?.interfaceName
-        } catch (_: Exception) {
-            null
+                manager.getLinkProperties(network)?.interfaceName
+            } catch (_: Exception) {
+                null
+            }
         }
     }
 }
