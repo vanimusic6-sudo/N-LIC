@@ -211,7 +211,7 @@ class TestService : Service() {
                     saveResults(strategies)
                     stopEngine()
                     currentStrategy = null
-                    delay(options.delaySec * 500L)
+                    delay(options.delaySec * 1000L)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -265,7 +265,7 @@ class TestService : Service() {
             supervisorScope {
                 val engineExit = async { current.awaitExit() }
                 val check = async {
-                    delay(settings.delaySec * 500L)
+                    delay(settings.delaySec * 1000L)
                     val host = when (configuration.host) {
                         "0.0.0.0" -> "127.0.0.1"
                         "::", "[::]" -> "::1"
@@ -318,17 +318,18 @@ class TestService : Service() {
     private suspend fun stopEngine() = withContext(NonCancellable) {
         engineMutex.withLock {
             val current = engine ?: return@withLock
-            var stopFailed = false
-            while (true) {
+            try {
+                // A broken native worker must not freeze all strategy tests forever.
+                withTimeout(8_000L) { current.stop() }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to stop proxy test engine; forcing shutdown", e)
                 try {
-                    current.stop()
-                    engine = null
-                    break
-                } catch (e: Exception) {
-                    if (!stopFailed) Log.e(TAG, "Failed to stop proxy test engine", e)
-                    stopFailed = true
-                    delay(500)
+                    current.abort()
+                } catch (abortError: Exception) {
+                    Log.e(TAG, "Forced native engine shutdown failed", abortError)
                 }
+            } finally {
+                engine = null
             }
         }
     }
@@ -339,13 +340,15 @@ class TestService : Service() {
         val sniValue = prefs.getStringNotNull("byedpi_proxytest_sni", "google.com")
         val content = if (userCommands) prefs.getStringNotNull("byedpi_proxytest_commands", "")
         else assets.open("proxytest_strategies.list").bufferedReader().use { it.readText() }
-        val commands = content.replace("{sni}", "\"${sniValue}\"").lines().map { it.trim() }.filter { it.isNotEmpty() }
+        // Escape quote delimiters before substituting imported SNI into strategy templates.
+        val escapedSni = sniValue.replace("\\", "\\\\").replace("\"", "\\\"")
+        val commands = content.replace("{sni}", "\"${escapedSni}\"").lines().map { it.trim() }.filter { it.isNotEmpty() }.take(200)
         val host = prefs.getStringNotNull("byedpi_proxy_ip", "127.0.0.1")
         val port = prefs.getIntStringNotNull("byedpi_proxy_port", 1080)
-        val delaySec = prefs.getIntStringNotNull("byedpi_proxytest_delay", 1).coerceAtLeast(0)
-        val requestsCount = prefs.getIntStringNotNull("byedpi_proxytest_requests", 1).coerceAtLeast(1)
-        val requestTimeout = prefs.getLongStringNotNull("byedpi_proxytest_timeout", 5).coerceAtLeast(1)
-        val requestLimit = prefs.getIntStringNotNull("byedpi_proxytest_limit", 20).coerceAtLeast(1)
+        val delaySec = prefs.getIntStringNotNull("byedpi_proxytest_delay", 1).coerceIn(0, 10)
+        val requestsCount = prefs.getIntStringNotNull("byedpi_proxytest_requests", 1).coerceIn(1, 20)
+        val requestTimeout = prefs.getLongStringNotNull("byedpi_proxytest_timeout", 5).coerceIn(1L, 15L)
+        val requestLimit = prefs.getIntStringNotNull("byedpi_proxytest_limit", 20).coerceIn(1, 50)
         DomainListUtils.syncLists(this)
         return TestSettings(DomainListUtils.getActiveDomains(this).toList(), commands, host, port,
             delaySec, requestsCount, requestTimeout, requestLimit)
