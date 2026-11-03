@@ -263,7 +263,7 @@
     <string name="nlic_restart_on_network_change">Wi-Fi ↔ мобильді желі ауысқанда қайта қосылу</string>
     <string name="nlic_restart_on_network_change_desc">Қосымша: физикалық желі ауысқанда дұрыс параметрлерді қолдану үшін N-LIC VPN-ді қайта қосады. Белсенді қосылымдар үзіледі. Proxy режиміне әсер етпейді.</string>
     <string name="nlic_network_health_paused_title">Android физикалық желіні жасырды</string>
-    <string name="nlic_network_health_paused_warning">N-LIC VPN болып жұмыс істеп тұр, бірақ Android тексеруге физикалық желіні көрсетпейді. N-LIC уақытша өшіріліп, желі тікелей тексеріліп, содан кейін VPN қалпына келтірілсін бе? Қосылымдар қысқа уақытқа үзіледі, сынақ сұраулары VPN арқылы өтпейді. Басқа VPN қолданбалары өзгермейді.</string>
+    <string name="nlic_network_health_paused_warning">N-LIC VPN болып жұмыс істеп тұр, бірақ Android тексеруге физикалық желіні көрсетпейді. N-LIC уақытша өшіріліп, желі тікелей тексеріліп, содан кейін VPN қалпына келтірілсін бе? Тексеру кезінде N-LIC өшеді: басқа қолданбалар да интернетке оның сүзгісінсіз шыға алады, ал ағымдағы қосылымдар үзіледі. Басқа VPN қолданбалары өзгермейді.</string>
     <string name="nlic_network_health_paused_confirm">Өшіру, тексеру, қалпына келтіру</string>
     <string name="nlic_network_health_timeout">Желіні тексеру уақыты аяқталды. Мобильді интернетті тексеріп, қайта көріңіз.</string>
     <string name="nlic_network_health_restored">Тексеруден кейін N-LIC VPN қалпына келтірілді.</string>

@@ -263,7 +263,7 @@
     <string name="nlic_restart_on_network_change">Reconnect when switching Wi-Fi ↔ cellular</string>
     <string name="nlic_restart_on_network_change_desc">Optional: restart the N-LIC VPN when the physical network changes so the correct settings apply. Existing connections will be interrupted. Does not affect Proxy mode.</string>
     <string name="nlic_network_health_paused_title">Android hides the physical network</string>
-    <string name="nlic_network_health_paused_warning">N-LIC is currently running as a VPN, but Android does not expose a physical connection for diagnostics. Temporarily disconnect N-LIC, test the network directly, then restore the VPN? Connections will briefly drop, and test requests will bypass the VPN. Other VPN apps will not be changed.</string>
+    <string name="nlic_network_health_paused_warning">N-LIC is currently running as a VPN, but Android does not expose a physical connection for diagnostics. Temporarily disconnect N-LIC, test the network directly, then restore the VPN? During the test N-LIC will be disconnected: other apps may also access the internet without its filtering, and existing connections will be interrupted. Other VPN apps will not be changed.</string>
     <string name="nlic_network_health_paused_confirm">Disconnect, test, restore</string>
     <string name="nlic_network_health_timeout">The network test timed out. Check mobile data and try again.</string>
     <string name="nlic_network_health_restored">N-LIC VPN was restored after diagnostics.</string>

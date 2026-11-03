@@ -263,7 +263,7 @@
     <string name="nlic_restart_on_network_change">Wi-Fi ↔ mobil ağ değiştiğinde yeniden bağlan</string>
     <string name="nlic_restart_on_network_change_desc">İsteğe bağlı: fiziksel ağ değişince doğru ayarları uygulamak için N-LIC VPN bağlantısını yeniden başlatır. Mevcut bağlantılar kesilir. Proxy modunu etkilemez.</string>
     <string name="nlic_network_health_paused_title">Android fiziksel ağı gizliyor</string>
-    <string name="nlic_network_health_paused_warning">N-LIC VPN olarak çalışıyor ancak Android tanılama için fiziksel ağı göstermiyor. N-LIC geçici olarak kapatılıp ağ doğrudan test edilsin ve VPN tekrar açılsın mı? Bağlantılar kısa süre kesilir ve test trafiği VPN dışına çıkar. Diğer VPN uygulamaları etkilenmez.</string>
+    <string name="nlic_network_health_paused_warning">N-LIC VPN olarak çalışıyor ancak Android tanılama için fiziksel ağı göstermiyor. N-LIC geçici olarak kapatılıp ağ doğrudan test edilsin ve VPN tekrar açılsın mı? Test sırasında N-LIC kapalı kalacak: diğer uygulamalar da internete filtresiz erişebilir ve mevcut bağlantılar kesilir. Diğer VPN uygulamaları etkilenmez.</string>
     <string name="nlic_network_health_paused_confirm">Kapat, test et, geri yükle</string>
     <string name="nlic_network_health_timeout">Ağ testi zaman aşımına uğradı. Mobil veriyi kontrol edip tekrar deneyin.</string>
     <string name="nlic_network_health_restored">Tanılamadan sonra N-LIC VPN yeniden açıldı.</string>

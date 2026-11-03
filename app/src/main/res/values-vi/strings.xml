@@ -264,7 +264,7 @@
     <string name="nlic_restart_on_network_change">Kết nối lại khi chuyển Wi-Fi ↔ dữ liệu di động</string>
     <string name="nlic_restart_on_network_change_desc">Tùy chọn: khởi động lại VPN N-LIC khi mạng vật lý thay đổi để áp dụng cài đặt phù hợp. Các kết nối hiện tại sẽ bị ngắt. Không ảnh hưởng chế độ Proxy.</string>
     <string name="nlic_network_health_paused_title">Android ẩn mạng vật lý</string>
-    <string name="nlic_network_health_paused_warning">N-LIC đang chạy dưới dạng VPN nhưng Android không hiển thị mạng vật lý để chẩn đoán. Tạm ngắt N-LIC, kiểm tra mạng trực tiếp rồi kết nối lại VPN? Các kết nối sẽ gián đoạn trong chốc lát và lưu lượng thử nghiệm sẽ đi ngoài VPN. Các ứng dụng VPN khác không bị thay đổi.</string>
+    <string name="nlic_network_health_paused_warning">N-LIC đang chạy dưới dạng VPN nhưng Android không hiển thị mạng vật lý để chẩn đoán. Tạm ngắt N-LIC, kiểm tra mạng trực tiếp rồi kết nối lại VPN? Trong lúc thử nghiệm N-LIC sẽ ngắt: các ứng dụng khác cũng có thể truy cập mạng mà không qua bộ lọc và các kết nối hiện tại sẽ bị gián đoạn. Các ứng dụng VPN khác không bị thay đổi.</string>
     <string name="nlic_network_health_paused_confirm">Ngắt, kiểm tra, khôi phục</string>
     <string name="nlic_network_health_timeout">Kiểm tra mạng đã hết thời gian. Hãy kiểm tra dữ liệu di động và thử lại.</string>
     <string name="nlic_network_health_restored">Đã khôi phục VPN N-LIC sau khi chẩn đoán.</string>
