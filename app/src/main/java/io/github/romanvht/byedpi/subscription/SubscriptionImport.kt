@@ -49,15 +49,19 @@ internal object SubscriptionImport {
     fun parse(content: String, group: String = "Imported"): List<SubscriptionNode> {
         require(content.length <= MAX_TEXT_LENGTH) { "Import exceeds 512 KiB" }
         val cleaned = content.trim()
-        val expanded = if (cleaned.startsWith("vless://", true) ||
-            cleaned.startsWith("vmess://", true) ||
-            cleaned.startsWith("trojan://", true) ||
-            cleaned.startsWith("ss://", true) ||
-            cleaned.startsWith("hysteria2://", true) ||
-            cleaned.startsWith("hy2://", true) ||
-            cleaned.startsWith("tuic://", true) ||
-            '\n' in cleaned
-        ) cleaned else decodeBase64Text(cleaned) ?: cleaned
+        // Some subscription providers wrap an entire Base64 payload over
+        // multiple lines; a newline alone does NOT imply plain URI lines.
+        val anyUriLine = cleaned.lines().any { candidate ->
+            listOf("vless://", "vmess://", "trojan://", "ss://",
+                "hysteria2://", "hy2://", "tuic://").any {
+                candidate.trim().startsWith(it, true)
+            }
+        }
+        val expanded = if (anyUriLine) cleaned else {
+            decodeBase64Text(cleaned)?.takeIf { decoded ->
+                decoded.contains("://")
+            } ?: cleaned
+        }
 
         return expanded.lines().asSequence()
             .map(String::trim)
