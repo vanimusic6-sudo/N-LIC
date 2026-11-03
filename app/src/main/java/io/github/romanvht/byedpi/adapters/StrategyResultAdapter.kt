@@ -158,6 +158,7 @@ class StrategyResultAdapter(
             "COMPLETE" -> "видео получено"
             "SLOW_TRANSFER" -> "очень медленный поток"
             "STALLED_AFTER_DATA" -> "поток завис после первых байтов"
+            "CONNECTION_RESET_AFTER_DATA" -> "соединение оборвалось после начала"
             "TIMEOUT_BEFORE_DATA" -> "нет первых байтов"
             "PREMATURE_EOF" -> "обрыв до конца видеофрагмента"
             "SHORT_OBJECT" -> "недостаточно данных для оценки"
