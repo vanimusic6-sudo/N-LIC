@@ -246,4 +246,8 @@
     <string name="nlic_shortcut_confirm_title">Xác nhận thao tác N-LIC</string>
     <string name="nlic_shortcut_confirm_message">Thực hiện thao tác từ lối tắt? Cần xác nhận để điều khiển kết nối mạng.</string>
     <string name="nlic_upstream_credits">ByeByeDPI gốc · romanvht, hufrea, heiher</string>
+    <string name="stream_probe_enable">Kiểm tra luồng video (256 KiB)</string>
+    <string name="stream_probe_enable_desc">Kiểm tra tải xuống qua SOCKS5 (tùy chọn), phát hiện tốc độ thấp hoặc luồng bị ngắt sau một số kilobyte đầu tiên.</string>
+    <string name="stream_probe_url">Liên kết HTTPS của video để kiểm tra</string>
+    <string name="stream_probe_url_desc">Dán liên kết googlevideo.com/videoplayback còn hiệu lực hoặc https://speed.cloudflare.com/__down?bytes=262144. URL được xóa khi bắt đầu kiểm tra và không được lưu trong kết quả.</string>
 </resources>
