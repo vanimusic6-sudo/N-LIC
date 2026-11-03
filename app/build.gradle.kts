@@ -5,7 +5,10 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val abis = setOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+val includeNativeLibbox = System.getenv("NLIC_INCLUDE_LIBBOX") == "true"
+val abis = if (includeNativeLibbox && System.getenv("NLIC_ARM64_ONLY") == "true") {
+    setOf("arm64-v8a")
+} else setOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
 
 // Dev signing values are injected by GitHub Actions; no signing secrets live in the repo.
 val devKeystorePath = System.getenv("NLIC_DEV_KEYSTORE_PATH")
@@ -40,11 +43,15 @@ android {
 
     defaultConfig {
         applicationId = "io.github.vanimusic6sudo.nlic"
-        minSdk = 21
+        // The pinned third-party libbox AAR declares minSdk 24.
+        // Legacy ByeDPI builds keep Android 5 support.
+        minSdk = if (includeNativeLibbox) 24 else 21
         //noinspection OldTargetApi
         targetSdk = 34
-        versionCode = 1827
-        versionName = "1.9.0"
+        versionCode = 1828
+        versionName = "1.9.1"
+        buildConfigField("boolean", "NLIC_LIBBOX_INCLUDED",
+            if (includeNativeLibbox) "true" else "false")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -138,6 +145,16 @@ android {
 }
 
 dependencies {
+    // Native sing-box is isolated to experimental Core Preview builds.
+    // CI pins SHA-256 of the AAR. Ordinary DEV APK never fetches it and
+    // remains the original small, fully functional ByeDPI build.
+    if (includeNativeLibbox) {
+        val pinnedAar = file("libs/libbox.aar")
+        require(pinnedAar.isFile) {
+            "NLIC_INCLUDE_LIBBOX=true requires pinned app/libs/libbox.aar"
+        }
+        implementation(files(pinnedAar))
+    }
     //noinspection GradleDependency
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.fragment:fragment-ktx:1.8.9")

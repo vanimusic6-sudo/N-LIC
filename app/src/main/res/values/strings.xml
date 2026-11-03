@@ -296,4 +296,18 @@
     <string name="nlic_auto_ineligible">Этот сервер не прошёл оба TCP-теста или использует UDP. Подключение не выбрано.</string>
     <string name="nlic_bay_label">LIC-Bay · защита VPN-соединения</string>
     <string name="nlic_bay_phase">Проектируется: пропускать только внешний TCP-транспорт VPN через ByeDPI SOCKS. Пока не включено; UDP-протоколы требуют отдельного решения.</string>
+    <string name="nlic_core_preview_warning">LIC-Core PREVIEW: в этой сборке есть настоящий экспериментальный sing-box. Подключение работает через существующий Android VPN/HEV. Возможны ошибки совместимости. LIC-Bay опционален и не гарантирует обход блокировок.</string>
+    <string name="nlic_core_toggle">LIC-Core · подключаться через подписку</string>
+    <string name="nlic_core_missing">В обычной сборке libbox не включён. Для настоящего VPN скачай отдельную Core Preview APK. Старый ByeDPI сохранён.</string>
+    <string name="nlic_core_requires_vpn">В основных настройках N-LIC выбери режим VPN, а не Proxy.</string>
+    <string name="nlic_core_choose_supported">Сначала выбери сервер VLESS, VMess, Trojan, Shadowsocks, HY2 или TUIC с поддерживаемыми параметрами.</string>
+    <string name="nlic_core_reconnect">Выбранная конфигурация применяется при следующем подключении. Переподключи VPN вручную.</string>
+    <string name="nlic_core_bay_toggle">LIC-Bay · защищать подключение к серверу через ByeDPI</string>
+    <string name="nlic_core_bay_desc">Дополнительный локальный ByeDPI SOCKS используется только для внешнего TCP-соединения к VPN-серверу. Если комбинация не работает, отключи LIC-Bay.</string>
+    <string name="nlic_core_bay_udp">Для Hysteria2 и TUIC обработка TCP-пакетов ByeDPI не подходит. Выбери TCP-сервер.</string>
+    <string name="nlic_core_profile_check">Проверка конфигурации для LIC-Core</string>
+    <string name="nlic_core_profile_ready">Параметры совместимы с генератором конфигурации sing-box. Сам VPN ещё не проверялся.</string>
+    <string name="nlic_core_profile_unsupported">Выбранный сервер отсутствует или его параметры пока не поддерживаются. Подключение запрещено.</string>
+    <string name="nlic_core_auto_toggle">LIC-Auto · реальный автовыбор VPN-сервера</string>
+    <string name="nlic_core_auto_desc">В режиме LIC-Core sing-box проверяет до 12 серверов через зашифрованные VPN-туннели (HTTPS), выбирает доступный с меньшей задержкой и повторяет тест каждые 10 минут. Рабочие соединения не обрывает. Требует Core Preview.</string>
 </resources>

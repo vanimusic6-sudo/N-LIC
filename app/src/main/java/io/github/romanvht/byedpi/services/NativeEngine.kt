@@ -28,6 +28,10 @@ import io.github.romanvht.byedpi.data.Mode
 import io.github.romanvht.byedpi.data.PrivateDnsState
 import io.github.romanvht.byedpi.data.START_ACTION
 import io.github.romanvht.byedpi.utility.*
+import io.github.romanvht.byedpi.BuildConfig
+import io.github.romanvht.byedpi.subscription.SubscriptionVault
+import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
+
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
@@ -68,7 +72,7 @@ internal class NativeEngine(
             require(resolvedPort != null && resolvedPort in 1..65535) {
                 "Invalid local proxy port (expected 1..65535)"
             }
-            return Configuration(
+            val legacy = Configuration(
                 args.toList(), host ?: defaultHost, resolvedPort,
                 dns = preferences.getStringNotNull("dns_ip", "1.1.1.1").let { userDns ->
                     val link = NetworkEnvironment.capture(context)
@@ -86,6 +90,47 @@ internal class NativeEngine(
                 ipv6 = preferences.getBoolean("ipv6_enable", false),
                 appListType = preferences.getStringNotNull("applist_type", "disable"),
                 apps = preferences.getSelectedApps(),
+            )
+            // This is an OPT-IN mode, never enabled in the ordinary 3 MiB APK.
+            // The existing ByeDPI/HEV flow remains the default and rollback.
+            if (!preferences.getBoolean("nlic_core_mode", false) ||
+                preferences.getStringNotNull("byedpi_mode", "vpn") != "vpn") {
+                return legacy
+            }
+            check(BuildConfig.NLIC_LIBBOX_INCLUDED) {
+                "This N-LIC APK has no integrated libbox engine. Install Core Preview or disable LIC-Core."
+            }
+            val saved = SubscriptionVault.read(context)
+            val autoEnabled = preferences.getBoolean("nlic_core_auto", false)
+            val bayEnabled = preferences.getBoolean("nlic_core_bay", false)
+            val bayHost = host ?: defaultHost
+            check(!bayEnabled || bayHost in listOf("127.0.0.1", "::1", "[::1]", "localhost")) {
+                "LIC-Bay requires ByeDPI to listen on loopback"
+            }
+            check(!bayEnabled || resolvedPort != SingBoxConfigCompiler.PROXY_PORT) {
+                "LIC-Bay port conflicts with LIC-Core"
+            }
+            val bay = if (bayEnabled) SingBoxConfigCompiler.Bay.ON
+                else SingBoxConfigCompiler.Bay.OFF
+            val compiled = if (autoEnabled) {
+                SingBoxConfigCompiler.compileAuto(saved.allNodes, bay, resolvedPort)
+            } else {
+                val node = saved.allNodes.firstOrNull { it.id == saved.selectedNodeId }
+                    ?: error("Select a subscription server before starting LIC-Core")
+                SingBoxConfigCompiler.compile(node, bay, resolvedPort)
+            }
+            check(compiled is SingBoxConfigCompiler.Result.Compiled) {
+                "Selected server uses unsupported or insecure transport"
+            }
+            return legacy.copy(
+                // Carry the explicit Bay choice through the native process IPC.
+                args = listOf("--nlic-libbox",
+                    if (bayEnabled) "--nlic-bay" else "--nlic-direct",
+                    if (autoEnabled) "--nlic-auto" else "--nlic-fixed") + legacy.args,
+                host = "127.0.0.1",
+                port = SingBoxConfigCompiler.PROXY_PORT,
+                // Avoid leaving mobile IPv6 outside the encrypted VPN tunnel.
+                ipv6 = true,
             )
         }
 

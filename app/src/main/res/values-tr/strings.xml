@@ -296,4 +296,18 @@
     <string name="nlic_auto_ineligible">Bu sunucu iki TCP testini geçemedi veya UDP kullanıyor.</string>
     <string name="nlic_bay_label">LIC-Bay · VPN bağlantısı koruması</string>
     <string name="nlic_bay_phase">Planlanıyor: VPN dış TCP trafiğini ByeDPI SOCKS üzerinden yönlendirme. Henüz etkin değil.</string>
+    <string name="nlic_core_preview_warning">LIC-Core ÖNİZLEME: bu APK deneysel sing-box içerir. Mevcut Android VPN/HEV yolunu kullanır. Uyumluluk sorunları olabilir. LIC-Bay isteğe bağlıdır ve engelleri aşmayı garanti etmez.</string>
+    <string name="nlic_core_toggle">LIC-Core · abonelikle bağlan</string>
+    <string name="nlic_core_missing">Standart APK libbox içermez. Core Preview APK yükleyin. Eski ByeDPI aynı kalır.</string>
+    <string name="nlic_core_requires_vpn">Ana N-LIC ayarlarında Proxy yerine VPN modunu seçin.</string>
+    <string name="nlic_core_choose_supported">Önce desteklenen VLESS, VMess, Trojan, Shadowsocks, HY2 veya TUIC sunucusu seçin.</string>
+    <string name="nlic_core_reconnect">Değişiklikler sonraki bağlantıda uygulanır. VPN bağlantısını yeniden kurun.</string>
+    <string name="nlic_core_bay_toggle">LIC-Bay · VPN üst bağlantısını ByeDPI ile koru</string>
+    <string name="nlic_core_bay_desc">ByeDPI SOCKS yalnızca VPN sunucusuna dış TCP bağlantısı için kullanılır. Bağlantı başarısızsa kapatın.</string>
+    <string name="nlic_core_bay_udp">ByeDPI TCP yöntemleri Hysteria2/TUIC için uygun değil. TCP sunucusu seçin.</string>
+    <string name="nlic_core_profile_check">LIC-Core yapılandırma kontrolü</string>
+    <string name="nlic_core_profile_ready">Parametreler sing-box yapılandırmasına çevrilebiliyor. VPN bağlantısı henüz doğrulanmadı.</string>
+    <string name="nlic_core_profile_unsupported">Sunucu seçilmedi veya ayarları desteklenmiyor. Bağlantı kapalı.</string>
+    <string name="nlic_core_auto_toggle">LIC-Auto · çalışan VPN sunucusunu otomatik seç</string>
+    <string name="nlic_core_auto_desc">LIC-Core modunda sing-box en fazla 12 şifreli VPN sunucusunu HTTPS ile test eder ve en az gecikmeli çalışan sunucuyu seçer. 10 dakikada bir kontrol eder; mevcut bağlantıları kesmez. Core Preview gerektirir.</string>
 </resources>

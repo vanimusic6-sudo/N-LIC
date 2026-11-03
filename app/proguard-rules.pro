@@ -32,3 +32,8 @@
 -adaptclassstrings
 -adaptresourcefilecontents **.xml,**.json
 -adaptresourcefilenames **.xml,**.json
+# The experimental libbox adapter is intentionally reflective. Core Preview
+# must keep gomobile classes and interfaces (including method names).
+-keep class io.nekohasekai.libbox.** { *; }
+-keep class go.** { *; }
+-keep class io.github.romanvht.byedpi.subscription.LibboxRuntime { *; }
