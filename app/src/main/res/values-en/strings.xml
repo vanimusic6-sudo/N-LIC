@@ -379,4 +379,25 @@
     <string name="nlic_core_advice_config">The native engine rejected the server settings. Check protocol, TLS/REALITY and supported transport.</string>
     <string name="nlic_core_advice_catalog">Could not read settings or the encrypted subscription vault. Do not uninstall before checking your subscription data.</string>
     <string name="nlic_core_advice_engine">Core startup failed. The safe stage code below identifies where; a redacted log is needed for the exact cause.</string>
+    <string name="nlic_home_eyebrow">NETWORK PROTECTION / N-LIC</string>
+    <string name="nlic_home_heading">Your internet, one place</string>
+    <string name="nlic_home_intro">One screen for VPN, ByeDPI and diagnostics.</string>
+    <string name="nlic_home_tunnel">TUNNEL STATUS</string>
+    <string name="nlic_home_power">Connect or disconnect VPN</string>
+    <string name="nlic_home_open_servers">Servers and connection</string>
+    <string name="nlic_home_connection">Current network</string>
+    <string name="nlic_home_shortcuts">Quick access</string>
+    <string name="nlic_home_servers">Servers</string>
+    <string name="nlic_home_check_network">Check network</string>
+    <string name="nlic_home_rules">Filters</string>
+    <string name="nlic_home_disclaimer">A VPN connection does not guarantee anonymity. Providers may see metadata.</string>
+    <string name="nlic_home_file_import">Import file</string>
+    <string name="nlic_home_refresh_subscriptions">Refresh subscriptions</string>
+    <string name="nlic_home_file_imported">Imported profiles: %1$d</string>
+    <string name="nlic_home_file_rejected">Unsupported file format or insecure profile.</string>
+    <string name="nlic_home_policy_description">Network-adaptive strategy: based on actual tests for this access type, not on carrier names.</string>
+    <string name="nlic_home_policy_label">Adapt to network</string>
+    <string name="nlic_home_auto_network">Auto strategy</string>
+    <string name="nlic_home_auto_network_details">Verified choices for Wi-Fi, mobile or Ethernet. If no test result exists, use a conservative profile. Carrier names alone do not guarantee bypass.</string>
+    <string name="nlic_home_supported_protocols">Subscriptions: VLESS, VMess, Trojan, Shadowsocks, AnyTLS, Hysteria2, TUIC. Files: WireGuard .conf and curated sing-box JSON.</string>
 </resources>
