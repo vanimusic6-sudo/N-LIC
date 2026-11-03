@@ -400,4 +400,5 @@
     <string name="nlic_home_auto_network">Авто-стратегия</string>
     <string name="nlic_home_auto_network_details">Проверенные стратегии выбираются для Wi-Fi, мобильной сети или Ethernet. Без результатов используется консервативный профиль. Смена оператора сама по себе не гарантирует работу.</string>
     <string name="nlic_home_supported_protocols">Подписки: VLESS, VMess, Trojan, Shadowsocks, AnyTLS, Hysteria2, TUIC. Файлы: WireGuard .conf и безопасные серверы sing-box .json.</string>
+    <string name="nlic_home_refresh_partial">Обновлено серверов: %1$d · не удалось обновить подписок: %2$d. Старые данные сохранены.</string>
 </resources>
