@@ -442,7 +442,33 @@ internal object SingBoxConfigCompiler {
                 })
                 return true
             }
-            else -> return false // Do not silently drop XHTTP/H2/KCP.
+            "httpupgrade" -> {
+                out.add("transport", JsonObject().apply {
+                    addProperty("type", "httpupgrade")
+                    addProperty("path", query["path"]?.ifBlank { "/" } ?: "/")
+                    query["host"]?.takeIf { it.isNotBlank() }?.let {
+                        addProperty("host", it)
+                    }
+                })
+                return true
+            }
+            "h2", "http" -> {
+                out.add("transport", JsonObject().apply {
+                    addProperty("type", "http")
+                    addProperty("path", query["path"]?.ifBlank { "/" } ?: "/")
+                    query["host"]?.takeIf { it.isNotBlank() }?.let {
+                        add("host", JsonArray().apply { add(it) })
+                    }
+                })
+                return true
+            }
+            "quic" -> {
+                out.add("transport", JsonObject().apply {
+                    addProperty("type", "quic")
+                })
+                return true
+            }
+            else -> return false // XHTTP and mKCP are not in pinned sing-box.
         }
     }
 
