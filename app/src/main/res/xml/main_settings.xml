@@ -143,6 +143,12 @@
             app:fragment="io.github.romanvht.byedpi.fragments.ByeDpiCMDSettingsFragment" />
 
         <Preference
+            android:key="nlic_network_health"
+            android:icon="@drawable/ic_network"
+            android:title="@string/nlic_network_health"
+            android:summary="@string/nlic_network_health_desc" />
+
+        <Preference
             android:key="proxy_test"
             android:icon="@drawable/ic_speed"
             android:title="@string/title_test"
