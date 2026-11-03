@@ -42,6 +42,26 @@ internal object TunnelHealthProbe {
         false // TLS, credentials and provider errors never escape into logs.
     }
 
+    /**
+     * Checks only the locally selected VPN endpoint through LIC-Bay.
+     * No unrelated public target, no subscription credentials and no DNS
+     * requests outside the SOCKS5 connection.
+     */
+    fun checkBay(proxyPort: Int, endpointHost: String, endpointPort: Int): Boolean {
+        if (proxyPort !in 1..65535 || endpointPort !in 1..65535 ||
+            endpointHost.isBlank() || endpointHost.length > 253) return false
+        return try {
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress("127.0.0.1", proxyPort), 2500)
+                socket.soTimeout = 2500
+                connectDomain(socket, endpointHost, endpointPort)
+                true
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     internal fun connectDomain(socket: Socket, host: String, port: Int) {
         val domain = host.toByteArray(Charsets.US_ASCII)
         require(domain.size in 1..255 && port in 1..65535)
