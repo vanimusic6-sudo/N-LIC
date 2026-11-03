@@ -308,4 +308,6 @@
     <string name="nlic_core_profile_check">LIC-Core конфигурациясын тексеру</string>
     <string name="nlic_core_profile_ready">Параметрлер sing-box JSON форматына келеді. VPN қосылымы әлі тексерілмеді.</string>
     <string name="nlic_core_profile_unsupported">Сервер таңдалмады немесе параметрлері қолдау таппайды. Қосылу өшірулі.</string>
+    <string name="nlic_core_auto_toggle">LIC-Auto · жұмыс істейтін VPN серверін автоматты таңдау</string>
+    <string name="nlic_core_auto_desc">LIC-Core режимінде sing-box 12-ге дейін шифрланған VPN серверін HTTPS арқылы тексеріп, кідірісі аз серверді таңдайды. 10 минут сайын қайта тексереді және белсенді қосылымдарды үзбейді. Core Preview қажет.</string>
 </resources>

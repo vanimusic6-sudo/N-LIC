@@ -308,4 +308,6 @@
     <string name="nlic_core_profile_check">Проверка конфигурации для LIC-Core</string>
     <string name="nlic_core_profile_ready">Параметры совместимы с генератором конфигурации sing-box. Сам VPN ещё не проверялся.</string>
     <string name="nlic_core_profile_unsupported">Выбранный сервер отсутствует или его параметры пока не поддерживаются. Подключение запрещено.</string>
+    <string name="nlic_core_auto_toggle">LIC-Auto · реальный автовыбор VPN-сервера</string>
+    <string name="nlic_core_auto_desc">В режиме LIC-Core sing-box проверяет до 12 серверов через зашифрованные VPN-туннели (HTTPS), выбирает доступный с меньшей задержкой и повторяет тест каждые 10 минут. Рабочие соединения не обрывает. Требует Core Preview.</string>
 </resources>

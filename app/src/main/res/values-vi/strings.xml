@@ -309,4 +309,6 @@
     <string name="nlic_core_profile_check">Kiểm tra cấu hình LIC-Core</string>
     <string name="nlic_core_profile_ready">Thông số đã chuyển thành sing-box JSON. Chưa kiểm tra được VPN thực tế.</string>
     <string name="nlic_core_profile_unsupported">Chưa chọn máy chủ hoặc thông số chưa được hỗ trợ. Không thể kết nối.</string>
+    <string name="nlic_core_auto_toggle">LIC-Auto · tự chọn máy chủ VPN hoạt động</string>
+    <string name="nlic_core_auto_desc">Trong LIC-Core, sing-box kiểm tra tối đa 12 máy chủ VPN mã hóa qua HTTPS, chọn máy chủ khả dụng có độ trễ thấp hơn và thử lại sau mỗi 10 phút. Không ngắt kết nối hiện tại. Cần Core Preview.</string>
 </resources>

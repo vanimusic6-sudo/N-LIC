@@ -308,4 +308,6 @@
     <string name="nlic_core_profile_check">LIC-Core yapılandırma kontrolü</string>
     <string name="nlic_core_profile_ready">Parametreler sing-box yapılandırmasına çevrilebiliyor. VPN bağlantısı henüz doğrulanmadı.</string>
     <string name="nlic_core_profile_unsupported">Sunucu seçilmedi veya ayarları desteklenmiyor. Bağlantı kapalı.</string>
+    <string name="nlic_core_auto_toggle">LIC-Auto · çalışan VPN sunucusunu otomatik seç</string>
+    <string name="nlic_core_auto_desc">LIC-Core modunda sing-box en fazla 12 şifreli VPN sunucusunu HTTPS ile test eder ve en az gecikmeli çalışan sunucuyu seçer. 10 dakikada bir kontrol eder; mevcut bağlantıları kesmez. Core Preview gerektirir.</string>
 </resources>

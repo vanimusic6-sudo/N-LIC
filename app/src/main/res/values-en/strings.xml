@@ -308,4 +308,6 @@
     <string name="nlic_core_profile_check">LIC-Core configuration check</string>
     <string name="nlic_core_profile_ready">Parameters compile to sing-box JSON. The actual VPN connection has not been validated.</string>
     <string name="nlic_core_profile_unsupported">No selected server or its settings are unsupported. Connection is disabled.</string>
+    <string name="nlic_core_auto_toggle">LIC-Auto · automatically select working VPN</string>
+    <string name="nlic_core_auto_desc">In LIC-Core mode, sing-box tests up to 12 encrypted VPN outbounds using HTTPS, selects a lower-latency working server and checks again every 10 minutes without interrupting existing connections. Requires Core Preview.</string>
 </resources>
