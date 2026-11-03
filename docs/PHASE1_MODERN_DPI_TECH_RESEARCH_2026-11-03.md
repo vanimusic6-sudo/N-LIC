@@ -216,7 +216,7 @@ The new `spoof` / `spoof_method` fields can send a forged whitelisted-SNI Client
 
 ## G. Final ranked list for N-LIC (feasibility AND longer-term usefulness)
 
-*Scale: integration 5=small change, 1=major rearchitecture; future value 5=portable, maintainable capability, 1=highly fragile. These are qualitative engineering judgements, NOT bypass success percentages. Ranking is tailored to N-LIC's current Android C/SOCKS architecture; changing to a general-purpose integrated VPN core changes the order.*
+*Scale: integration 5=small change, 1=major rearchitecture; future value 5=portable, maintainable capability, 1=highly fragile. These are qualitative engineering judgements, NOT bypass success percentages. Order is the practical implementation priority for N-LIC today, taking feasibility, long-term usefulness, safety, dependencies and observed weakness into account; it is not a mathematical sort by two ratings alone. Changing to a general-purpose integrated VPN core changes the order.*
 
 | Rank | Solution | Integration /5 | Future /5 | Strong point | Limitation / cost | Decision |
 | ---: | --- | :---: | :---: | --- | --- | --- |
@@ -238,15 +238,15 @@ The new `spoof` / `spoof_method` fields can send a forged whitelisted-SNI Client
 | 16 | ShadowTLS v3 / AnyTLS | 3 | 4 | TLS-shaped transport with maintained sing-box support | Server support and behavioral signature risks | Later integrated profiles |
 | 17 | AmneziaWG 3.1 matched client/server adapter | 2 | 4 | Modernized WG-compatible encrypted transport semantics | Complex UDP native integration; no generic SOCKS patch | Phase 2 dedicated adapter |
 | 18 | MASQUE CONNECT-UDP/CONNECT-IP | 2 | 5 | IETF standards, general HTTP-based tunnel semantics | Server/client ecosystem and footprint | Strategic R&D |
-| 18a | Xray FinalMask layered post-encryption masks | 2 | 4 | Modern transport-aware TCP/UDP/QUIC camouflage layers | Requires core/server compatibility, some modes fragile | Design reference; not direct ByeDPI port |
-| 19 | zapret2 portable policy concepts (not NFQUEUE engine) | 2 | 4 | Lua-driven filters/profiles and deep packet research | Root/privilege portability of packet layer | Mine ideas; port selectively |
-| 20 | QUIC Initial/version-specific adaptive research | 2 | 3 | Addresses observed QUIC-v1 censor behavior | Moving target, protocol-compliance/security pitfalls | Lab-only experiments |
-| 21 | Tor WebTunnel / obfs4 optional client transport | 2 | 4 | Diversifies transport and resists some probes | Distribution, latency and different security model | Separate optional integration |
-| 22 | TUIC transport | 3 | 3 | Modern QUIC proxy/UDP relay | UDP block, server support and transport fingerprints | Through integrated core only |
-| 23 | Snowflake / ephemeral volunteer proxy transport | 1 | 4 | Diverse bridge addresses and WebRTC-based reachability | Broker/volunteer availability, overhead and latency | Optional ecosystem, not Core |
-| 24 | Geneva-style automatic strategy generation | 1 | 3 | Potential novel discoveries without static presets | Linux/root hooks, noisy experiments and reproducibility | Controlled research lab only |
-| 25 | meek-style CDN domain fronting | 1 | 2 | Can exploit supported fronting where possible | Many clouds restrict fronting, costly/slow and brittle | Do not build core around it |
-| 26 | Random fake packets everywhere / permanent traffic flooding | 1 | 1 | Easy to prototype as a visual gimmick | Fingerprintable, potentially harmful to performance and bandwidth | Reject |
+| 19 | Xray FinalMask layered post-encryption masks | 2 | 4 | Modern transport-aware TCP/UDP/QUIC camouflage layers | Requires core/server compatibility, some modes fragile | Design reference; not direct ByeDPI port |
+| 20 | zapret2 portable policy concepts (not NFQUEUE engine) | 2 | 4 | Lua-driven filters/profiles and deep packet research | Root/privilege portability of packet layer | Mine ideas; port selectively |
+| 21 | QUIC Initial/version-specific adaptive research | 2 | 3 | Addresses observed QUIC-v1 censor behavior | Moving target, protocol-compliance/security pitfalls | Lab-only experiments |
+| 22 | Tor WebTunnel / obfs4 optional client transport | 2 | 4 | Diversifies transport and resists some probes | Distribution, latency and different security model | Separate optional integration |
+| 23 | TUIC transport | 3 | 3 | Modern QUIC proxy/UDP relay | UDP block, server support and transport fingerprints | Through integrated core only |
+| 24 | Snowflake / ephemeral volunteer proxy transport | 1 | 4 | Diverse bridge addresses and WebRTC-based reachability | Broker/volunteer availability, overhead and latency | Optional ecosystem, not Core |
+| 25 | Geneva-style automatic strategy generation | 1 | 3 | Potential novel discoveries without static presets | Linux/root hooks, noisy experiments and reproducibility | Controlled research lab only |
+| 26 | meek-style CDN domain fronting | 1 | 2 | Can exploit supported fronting where possible | Many clouds restrict fronting, costly/slow and brittle | Do not build core around it |
+| 27 | Random fake packets everywhere / permanent traffic flooding | 1 | 1 | Easy to prototype as a visual gimmick | Fingerprintable, potentially harmful to performance and bandwidth | Reject |
 
 ### Narrow recommendation
 
