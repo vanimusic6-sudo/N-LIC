@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.util.Log
+import java.io.File
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
@@ -38,6 +39,7 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
 
     private val closed = AtomicBoolean(false)
     private var server: Any? = null
+    private var workspaceDir: File? = null
     private var serverClass: Class<*>? = null
 
     @Synchronized
@@ -48,7 +50,12 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
             val setupClass = Class.forName(LIBBOX + "SetupOptions")
             val setup = setupClass.getConstructor().newInstance()
             val workspace = context.getDir("lic-core", Context.MODE_PRIVATE).apply { mkdirs() }
-            set(setup, "basePath", context.filesDir.absolutePath)
+            workspaceDir = workspace
+            // Upstream libbox writes a plaintext configuration.json snapshot
+            // into basePath when starting. Isolate it into app-private storage,
+            // then remove it immediately after start or on every failure.
+            snapshotFile().delete()
+            set(setup, "basePath", workspace.absolutePath)
             set(setup, "workingPath", workspace.absolutePath)
             set(setup, "tempPath", context.cacheDir.absolutePath)
             set(setup, "debug", false)
@@ -76,8 +83,12 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
             cls.getMethod("start").invoke(instance)
             val override = Class.forName(LIBBOX + "OverrideOptions")
                 .getConstructor().newInstance()
-            cls.getMethod("startOrReloadService", String::class.java, override.javaClass)
-                .invoke(instance, config, override)
+            try {
+                cls.getMethod("startOrReloadService", String::class.java, override.javaClass)
+                    .invoke(instance, config, override)
+            } finally {
+                snapshotFile().delete()
+            }
         } catch (_: Throwable) {
             Log.e(TAG, "Pinned libbox native engine failed to start; no credentials are logged")
             close()
@@ -99,10 +110,16 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
         } catch (_: Throwable) {
             Log.w(TAG, "LIC-Core close was unsuccessful")
         } finally {
+            snapshotFile().delete()
             server = null
             serverClass = null
         }
     }
+
+    private fun snapshotFile() = File(
+        requireNotNull(workspaceDir ?: context.getDir("lic-core", Context.MODE_PRIVATE)),
+        "configuration.json",
+    )
 
     private fun set(target: Any, name: String, value: Any) {
         val setter = "set" + name.replaceFirstChar { it.uppercase() }
