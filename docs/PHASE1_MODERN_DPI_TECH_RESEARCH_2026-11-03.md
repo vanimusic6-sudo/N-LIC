@@ -104,6 +104,22 @@ The quality gate and CodeQL on the merged research+security baseline completed, 
 **Strengths:** mature configurable transport core, TLS/REALITY/HTTP-based camouflage, VLESS/Trojan/SS, WebSocket/gRPC, native Android wrappers such as libXray. REALITY emphasizes server-authentication and fallback-to-real-site semantics; XHTTP offers server-supported HTTP-shaped transport. Good **Helping integrated** candidate.
 **Weaknesses:** requires compatible server and exact endpoint profile; client and server stacks can be fingerprinted, and a server's public IP can still be blocked. REALITY fallback may create unintended open forwarder behavior if deployed incorrectly. Official project issues include real XHTTP resource/hang concerns: validate version and mobile stability. [REALITY documentation](https://xtls.github.io/en/config/transports/reality.html) · [transport compatibility](https://xtls.github.io/en/config/transport.html) · [core](https://github.com/XTLS/Xray-core) · [libXray](https://github.com/XTLS/libXray)
 
+### 4b. Xray FinalMask (late-2026 transport post-processing)
+
+**What it is:** the current Xray transport architecture includes `FinalMask`, a last-stage TCP/UDP camouflage layer that runs *after* TLS/REALITY processing, with TCP `fragment` and `header-custom` capabilities, configurable UDP obfuscation (including `salamander`/`gecko`), and QUIC tuning. This is **more relevant than adopting a single new command-line trick**, because the layer where a transform is applied is explicit.
+
+**Strength:** convenient architecture for composing transport-specific camouflage with the same authenticated proxy core, while keeping semantics aware of direction and transport. **Weakness:** some FinalMask transforms require matching server logic or can violate TLS/QUIC semantics; not every option is supported rootlessly, and combining layers can create recognisable traffic instead of removing signatures. An Xray `fragment` transport setting is not the same thing as kernel IP fragmentation. Some `xdns` modes tunnel through DNS at very small effective MTU and poor efficiency; these are research-grade fallbacks, not a mobile-performance default.
+
+**Porting idea:** borrow the layering and explicit capability description for N-LIC's **profile planner**, do not transplant arbitrary masks or assume all FinalMask features run on top of ByeDPI SOCKS.
+
+[Official FinalMask docs](https://xtls.github.io/en/config/transports/finalmask.html) · [Source documentation](https://github.com/XTLS/Xray-docs-next/blob/main/docs/en/config/transports/finalmask.md)
+
+### 4c. sing-box TLS spoof (requires OS privileges)
+
+The new `spoof` / `spoof_method` fields can send a forged whitelisted-SNI ClientHello before the real one. The sing-box documentation explicitly restricts this method to Linux/macOS/Windows with elevated privileges. **It is not a direct Android rootless option**; copying the field into N-LIC config would not make the capability available.
+
+[Official sing-box TLS](https://sing-box.sagernet.org/configuration/shared/tls/)
+
 ### 5. NaiveProxy (Chromium network stack)
 
 **Strengths:** unusually good browser-like behavior from reusing Chromium's real TLS/HTTP stack, HTTP/2 multiplexing, padding, plausible server fronting. More principled than mimicking just JA3/ClientHello. Android support exists.
@@ -222,6 +238,7 @@ The quality gate and CodeQL on the merged research+security baseline completed, 
 | 16 | ShadowTLS v3 / AnyTLS | 3 | 4 | TLS-shaped transport with maintained sing-box support | Server support and behavioral signature risks | Later integrated profiles |
 | 17 | AmneziaWG 3.1 matched client/server adapter | 2 | 4 | Modernized WG-compatible encrypted transport semantics | Complex UDP native integration; no generic SOCKS patch | Phase 2 dedicated adapter |
 | 18 | MASQUE CONNECT-UDP/CONNECT-IP | 2 | 5 | IETF standards, general HTTP-based tunnel semantics | Server/client ecosystem and footprint | Strategic R&D |
+| 18a | Xray FinalMask layered post-encryption masks | 2 | 4 | Modern transport-aware TCP/UDP/QUIC camouflage layers | Requires core/server compatibility, some modes fragile | Design reference; not direct ByeDPI port |
 | 19 | zapret2 portable policy concepts (not NFQUEUE engine) | 2 | 4 | Lua-driven filters/profiles and deep packet research | Root/privilege portability of packet layer | Mine ideas; port selectively |
 | 20 | QUIC Initial/version-specific adaptive research | 2 | 3 | Addresses observed QUIC-v1 censor behavior | Moving target, protocol-compliance/security pitfalls | Lab-only experiments |
 | 21 | Tor WebTunnel / obfs4 optional client transport | 2 | 4 | Diversifies transport and resists some probes | Distribution, latency and different security model | Separate optional integration |
@@ -241,6 +258,7 @@ The quality gate and CodeQL on the merged research+security baseline completed, 
 - [zapret2 releases v1.0.6 (2026-10-21)](https://github.com/bol-van/zapret2/releases), [zapret2 Lua](https://github.com/bol-van/zapret2/blob/master/lua/zapret-lib.lua)
 - [hev-socks5-tunnel 2.19.3 (2026-10-25)](https://github.com/heiher/hev-socks5-tunnel/releases)
 - [sing-box releases 1.14.4 (2026-10-24)](https://github.com/SagerNet/sing-box/releases), [TLS](https://sing-box.sagernet.org/configuration/shared/tls/), [TUN](https://sing-box.sagernet.org/configuration/inbound/tun/), [Hysteria2](https://sing-box.sagernet.org/configuration/outbound/hysteria2/)
+- [Xray FinalMask reference](https://github.com/XTLS/Xray-docs-next/blob/main/docs/en/config/transports/finalmask.md) and [sing-box privileged TLS spoof](https://sing-box.sagernet.org/configuration/shared/tls/)
 - [Xray-core releases](https://github.com/XTLS/Xray-core/releases), [Xray transport compatibility](https://xtls.github.io/en/config/transport.html)
 - [NaiveProxy Chromium reference](https://github.com/klzgrad/naiveproxy)
 - [AmneziaWG 3.1 notes](https://docs.amnezia.org/documentation/amnezia-wg/)
