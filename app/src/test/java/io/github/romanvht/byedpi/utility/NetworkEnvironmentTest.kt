@@ -9,7 +9,7 @@ class NetworkEnvironmentTest {
     @Test fun `prefer validated WiFi otherwise choose usable mobile`() {
         val wifi = AccessCandidate(AccessType.WIFI, true, 1500, true, true)
         val cellular = AccessCandidate(AccessType.CELLULAR, true, 1500, true, true)
-        assertEquals(AccessType.WIFI, AccessPolicy.select(listOf(cellular, wifi)).type)
+        assertEquals(AccessType.WIFI, AccessPolicy.select(listOf(cellular, wifi), wifi).type)
         val offlineWifi = wifi.copy(validated = false)
         assertEquals(AccessType.CELLULAR, AccessPolicy.select(listOf(offlineWifi, cellular)).type)
     }
