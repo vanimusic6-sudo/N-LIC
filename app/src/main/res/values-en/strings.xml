@@ -335,4 +335,5 @@
     <string name="nlic_ui_legacy_action">Return to legacy ByeDPI</string>
     <string name="nlic_ui_legacy_desc">Disconnect VPN and disable LIC-Core. Subscriptions are kept.</string>
     <string name="nlic_ui_legacy_confirm">Disconnect the current VPN and return to legacy ByeDPI? Internet access outside the VPN may briefly be possible.</string>
+    <string name="nlic_ui_open_center">LIC-Core · Servers and VPN</string>
 </resources>
