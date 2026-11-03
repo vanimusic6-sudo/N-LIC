@@ -49,6 +49,24 @@
         app:fragment="io.github.romanvht.byedpi.fragments.DomainListsFragment"
         app:iconSpaceReserved="false" />
 
+    <!-- Explicit opt-in: tests a real video range, not a homepage or thumbnail. -->
+    <SwitchPreference
+        android:key="byedpi_stream_probe_enable"
+        android:title="@string/stream_probe_enable"
+        android:summary="@string/stream_probe_enable_desc"
+        android:defaultValue="false"
+        app:iconSpaceReserved="false" />
+
+    <!-- This potentially secret signed URL is removed once a test starts. -->
+    <EditTextPreference
+        android:key="byedpi_stream_probe_url"
+        android:title="@string/stream_probe_url"
+        android:dialogTitle="@string/stream_probe_url"
+        android:summary="@string/stream_probe_url_desc"
+        android:dependency="byedpi_stream_probe_enable"
+        android:inputType="textUri"
+        app:iconSpaceReserved="false" />
+
     <SwitchPreference
         android:key="byedpi_proxytest_usercommands"
         android:title="@string/test_settings_usercommands"
