@@ -249,4 +249,12 @@
     <string name="stream_probe_enable_desc">İsteğe bağlı SOCKS5 indirme testi. Görsel kontrollerinden farklı olarak yavaş akışları ve ilk kilobaytlardan sonraki kesilmeleri tespit eder.</string>
     <string name="stream_probe_url">Test için HTTPS video akışı bağlantısı</string>
     <string name="stream_probe_url_desc">Geçerli bir googlevideo.com/videoplayback adresi veya https://speed.cloudflare.com/__down?bytes=262144 bağlantısı girin. Test başlayınca bağlantı silinir, sonuçlara kaydedilmez.</string>
+    <string name="nlic_mobile_safe_mtu">Mobil ağ: güvenli MTU (deneysel)</string>
+    <string name="nlic_mobile_safe_mtu_desc">Mobil ağda sanal paketleri 1280–1400 baytla sınırlar. Wi-Fi değişmez. Bağlantı kötüleşirse kapatıp N-LIC'i yeniden bağlayın.</string>
+    <string name="nlic_mobile_ipv6_auto">Mobil ağ: IPv6 trafiğini N-LIC üzerinden yönlendir</string>
+    <string name="nlic_mobile_ipv6_auto_desc">Genel IPv6 ayarı kapalı olsa bile IPv6 destekli mobil ağlarda VPN üzerinden IPv6 yönlendirmesini açar. Wi-Fi değişmez. Sorun olursa kapatabilirsiniz.</string>
+    <string name="nlic_network_profiles">Wi-Fi ve mobil ağ için ayrı stratejiler</string>
+    <string name="nlic_network_profiles_desc">İsteğe bağlı: her ağ türü için seçtiğiniz son komutu saklar ve sonraki bağlantıda uygular. Video sırasında otomatik geçiş yapmaz. Bilinmeyen ağlarda normal komut kullanılır.</string>
+    <string name="nlic_mobile_dns64_auto">Mobil ağ: DNS64/NAT64</string>
+    <string name="nlic_mobile_dns64_auto_desc">Özel DNS seçilmediyse IPv6/NAT64 mobil ağlarda operatör DNS çözümleyicisini kullanır. Wi-Fi ve özel DNS değişmez. Kapatılabilir.</string>
 </resources>

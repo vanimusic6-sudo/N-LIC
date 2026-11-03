@@ -249,4 +249,12 @@
     <string name="stream_probe_enable_desc">SOCKS5 арқылы қосымша жүктеу сынағы. Баяу жүктеуді және алғашқы килобайттардан кейінгі үзілістерді анықтайды.</string>
     <string name="stream_probe_url">Тексеруге арналған HTTPS бейне сілтемесі</string>
     <string name="stream_probe_url_desc">Жарамды googlevideo.com/videoplayback сілтемесін немесе https://speed.cloudflare.com/__down?bytes=262144 мекенжайын енгізіңіз. Тексеру басталғанда сілтеме өшіріледі және нәтижелерге сақталмайды.</string>
+    <string name="nlic_mobile_safe_mtu">Мобильді желі: қауіпсіз MTU (тәжірибелік)</string>
+    <string name="nlic_mobile_safe_mtu_desc">Мобильді желіде виртуалды пакеттерді 1280–1400 байтпен шектейді. Wi-Fi өзгермейді. Байланыс нашарласа, өшіріп N-LIC-ті қайта қосыңыз.</string>
+    <string name="nlic_mobile_ipv6_auto">Мобильді желі: IPv6 трафигін N-LIC арқылы өткізу</string>
+    <string name="nlic_mobile_ipv6_auto_desc">Жалпы IPv6 параметрі өшірулі болса да, IPv6 қолдайтын мобильді желіде VPN арқылы IPv6 маршрутын қосады. Wi-Fi өзгермейді. Қиындық болса, өшіріңіз.</string>
+    <string name="nlic_network_profiles">Wi-Fi және мобильді желі үшін бөлек стратегиялар</string>
+    <string name="nlic_network_profiles_desc">Міндетті емес: әр желі түрі үшін қолмен таңдалған соңғы пәрменді сақтап, келесі қосылуда қолданады. Бейне кезінде ауыстырмайды. Белгісіз желіде әдеттегі пәрмен қолданылады.</string>
+    <string name="nlic_mobile_dns64_auto">Мобильді желі: DNS64/NAT64</string>
+    <string name="nlic_mobile_dns64_auto_desc">Жеке DNS таңдалмаса, IPv6/NAT64 мобильді желісінде оператор DNS серверін пайдаланады. Wi-Fi және жеке DNS өзгермейді. Өшіруге болады.</string>
 </resources>
