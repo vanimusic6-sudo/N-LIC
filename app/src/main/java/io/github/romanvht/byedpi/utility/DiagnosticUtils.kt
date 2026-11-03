@@ -38,6 +38,16 @@ object DiagnosticUtils {
             appendLine(value(context, R.string.diagnostic_kernel_version, Os.uname().release))
             appendLine(value(context, R.string.diagnostic_app_version, BuildConfig.VERSION_NAME))
 
+            val network = NetworkEnvironment.capture(context)
+            appendLine("Underlying transport: ${network.type.name}")
+            appendLine("Underlying IPv4 present: ${network.hasIpv4}, IPv6 present: ${network.hasIpv6}")
+            appendLine("Carrier NAT64: ${network.hasNat64}")
+            appendLine("Carrier DNS64 auto: ${preferences.getBoolean("nlic_mobile_dns64_auto", true)}")
+            appendLine("Link-specific profiles: ${preferences.getBoolean(NetworkProfileStore.ENABLED_KEY, false)}")
+            appendLine("Reported link MTU: ${network.physicalMtu}")
+            appendLine("N-LIC TUN MTU policy: ${AccessPolicy.tunMtu(network, preferences.getBoolean("nlic_mobile_safe_mtu", true))}")
+            appendLine("Cellular IPv6 auto-capture: ${preferences.getBoolean("nlic_mobile_ipv6_auto", true)}")
+
             appendLine()
             appendLine(context.getString(R.string.diagnostic_app_settings))
             appendLine(value(context, R.string.diagnostic_command_line, state(context, cmdEnabled)))
@@ -93,12 +103,12 @@ object DiagnosticUtils {
             appendLine(value(
                 context,
                 R.string.test_requests,
-                preferences.getIntStringNotNull("byedpi_proxytest_requests", 1).toString()
+                preferences.getIntStringNotNull("byedpi_proxytest_requests", 2).toString()
             ))
             appendLine(value(
                 context,
                 R.string.test_requests_limit,
-                preferences.getIntStringNotNull("byedpi_proxytest_limit", 20).toString()
+                preferences.getIntStringNotNull("byedpi_proxytest_limit", 6).toString()
             ))
             appendLine(value(
                 context,

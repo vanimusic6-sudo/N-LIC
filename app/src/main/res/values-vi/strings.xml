@@ -250,4 +250,12 @@
     <string name="stream_probe_enable_desc">Kiểm tra tải xuống qua SOCKS5 (tùy chọn), phát hiện tốc độ thấp hoặc luồng bị ngắt sau một số kilobyte đầu tiên.</string>
     <string name="stream_probe_url">Liên kết HTTPS của video để kiểm tra</string>
     <string name="stream_probe_url_desc">Dán liên kết googlevideo.com/videoplayback còn hiệu lực hoặc https://speed.cloudflare.com/__down?bytes=262144. URL được xóa khi bắt đầu kiểm tra và không được lưu trong kết quả.</string>
+    <string name="nlic_mobile_safe_mtu">Mạng di động: MTU an toàn (thử nghiệm)</string>
+    <string name="nlic_mobile_safe_mtu_desc">Giới hạn gói tin ảo ở mức 1280–1400 byte trên mạng di động. Wi-Fi không thay đổi. Nếu kết nối kém đi, hãy tắt và kết nối lại N-LIC.</string>
+    <string name="nlic_mobile_ipv6_auto">Mạng di động: định tuyến IPv6 qua N-LIC</string>
+    <string name="nlic_mobile_ipv6_auto_desc">Bật tuyến IPv6 qua VPN trên mạng di động có IPv6 ngay cả khi tùy chọn IPv6 chung đang tắt. Wi-Fi không thay đổi. Có thể tắt nếu gặp sự cố.</string>
+    <string name="nlic_network_profiles">Chiến lược riêng cho Wi-Fi và mạng di động</string>
+    <string name="nlic_network_profiles_desc">Tùy chọn: ghi nhớ lệnh đã chọn thủ công gần nhất cho từng loại mạng và áp dụng ở lần kết nối sau. Không đổi chiến lược khi đang xem video. Mạng không xác định dùng lệnh mặc định.</string>
+    <string name="nlic_mobile_dns64_auto">Mạng di động: DNS64/NAT64</string>
+    <string name="nlic_mobile_dns64_auto_desc">Trên mạng di động IPv6/NAT64, sử dụng DNS của nhà mạng nếu bạn chưa chọn DNS riêng để giữ khả năng chuyển đổi DNS64. Wi-Fi và DNS tùy chỉnh không thay đổi. Có thể tắt.</string>
 </resources>

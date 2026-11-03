@@ -28,6 +28,8 @@ import io.github.romanvht.byedpi.services.ServiceManager
 import io.github.romanvht.byedpi.services.TestService
 import io.github.romanvht.byedpi.services.appStatus
 import io.github.romanvht.byedpi.utility.HistoryUtils
+import io.github.romanvht.byedpi.utility.NetworkEnvironment
+import io.github.romanvht.byedpi.utility.NetworkProfileStore
 import io.github.romanvht.byedpi.utility.getPreferences
 import io.github.romanvht.byedpi.utility.mode
 import kotlinx.coroutines.Dispatchers
@@ -109,6 +111,13 @@ class TestActivity : BaseActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (!TestService.isRunning) {
+            lifecycleScope.launch { TestService.loadResults(applicationContext) }
+        }
+    }
+
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         menuInflater.inflate(R.menu.menu_test, menu)
         return true
@@ -143,18 +152,27 @@ class TestActivity : BaseActivity() {
         if (state.isRunning) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        progressTextView.text = when {
+        val networkLabel = when (state.networkType) {
+            "CELLULAR" -> "Мобильная сеть"
+            "WIFI" -> "Wi-Fi"
+            "ETHERNET" -> "Ethernet"
+            else -> "Сеть не определена"
+        }
+        val progressLabel = when {
             state.isRunning && state.currentStrategy > 0 -> getString(R.string.test_process, state.currentStrategy, state.strategies.size)
             state.isRunning -> ""
             state.failed || state.wasInterrupted -> getString(R.string.test_proxy_error)
             state.strategies.isNotEmpty() -> getString(R.string.test_complete)
             else -> ""
         }
+        progressTextView.text = if (progressLabel.isBlank()) networkLabel else "$networkLabel · $progressLabel"
         disclaimerTextView.visibility = if (state.wasInterrupted || (!state.isRunning && state.strategies.isEmpty())) View.VISIBLE else View.GONE
         disclaimerTextView.text = getString(if (state.wasInterrupted) R.string.test_crash else R.string.test_disclaimer)
 
         strategyAdapter.setTestingState(state.isRunning)
-        val replace = renderedRunId != state.runId || strategies.map { it.command } != state.strategies.map { it.command }
+        val replace = renderedRunId != state.runId ||
+            strategies.map { it.command } != state.strategies.map { it.command } ||
+            strategies.map { it.networkType } != state.strategies.map { it.networkType }
         val reorder = replace || strategies.indices.any { strategies[it].isCompleted != state.strategies[it].isCompleted }
         if (replace) {
             strategies.clear()
@@ -181,7 +199,11 @@ class TestActivity : BaseActivity() {
     private fun addToHistory(command: String) {
         if (isTesting) return
 
-        prefs.edit(commit = true) { putString("byedpi_cmd_args", command) }
+        val profileKey = NetworkProfileStore.key(NetworkEnvironment.capture(this).type)
+        prefs.edit(commit = true) {
+            putString("byedpi_cmd_args", command)
+            if (profileKey != null) putString(profileKey, command)
+        }
         lifecycleScope.launch(Dispatchers.IO) {
             cmdHistoryUtils.addCommand(command)
 
@@ -214,6 +236,7 @@ class TestActivity : BaseActivity() {
         val sb = StringBuilder()
 
         completeStrategies.forEach { strategy ->
+            sb.appendLine("Network: ${strategy.networkType}")
             sb.appendLine("${strategy.command}\n")
 
             strategy.siteResults.forEach { site ->

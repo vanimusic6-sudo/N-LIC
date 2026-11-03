@@ -44,6 +44,20 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
                 true
             }
 
+        findPreferenceNotNull<SwitchPreference>(NetworkProfileStore.ENABLED_KEY)
+            .setOnPreferenceChangeListener { _, enabled ->
+                if (enabled == true) {
+                    // When first enabled, remember the current command for
+                    // this link type, without touching the other network.
+                    val prefs = requireContext().getPreferences()
+                    val key = NetworkProfileStore.key(NetworkEnvironment.capture(requireContext()).type)
+                    if (key != null && prefs.getString(key, null).isNullOrBlank()) {
+                        prefs.edit { putString(key, prefs.getCmdArgs()) }
+                    }
+                }
+                true
+            }
+
         findPreferenceNotNull<Preference>("proxy_test")
             .setOnPreferenceClickListener {
                 val intent = Intent(context, TestActivity::class.java)

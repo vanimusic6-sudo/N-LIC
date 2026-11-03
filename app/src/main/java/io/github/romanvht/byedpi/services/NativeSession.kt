@@ -13,6 +13,10 @@ import android.util.Log
 import io.github.romanvht.byedpi.core.ByeDpiProxy
 import io.github.romanvht.byedpi.core.TProxyService
 import io.github.romanvht.byedpi.data.Configuration
+import io.github.romanvht.byedpi.utility.AccessPolicy
+import io.github.romanvht.byedpi.utility.AccessSnapshot
+import io.github.romanvht.byedpi.utility.NetworkEnvironment
+import io.github.romanvht.byedpi.utility.getPreferences
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,7 +35,7 @@ import kotlin.concurrent.thread
 
 internal class NativeSession(
     private val service: Service,
-    private val createTunnel: ((Configuration) -> ParcelFileDescriptor)? = null,
+    private val createTunnel: ((Configuration, AccessSnapshot, Int) -> ParcelFileDescriptor)? = null,
 ) {
     companion object {
         private const val TAG = "NativeSession"
@@ -206,11 +210,14 @@ internal class NativeSession(
                 proxyThread = runNative("ByeDPI") { engine.startProxy(config.args.toTypedArray()) }
                 withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port) }
                 createTunnel?.let { create ->
-                    val fd = create(config)
+                    val underlyingLink = NetworkEnvironment.capture(service)
+                    val tuneMobile = service.getPreferences().getBoolean("nlic_mobile_safe_mtu", true)
+                    val mtu = AccessPolicy.tunMtu(underlyingLink, tuneMobile)
+                    val fd = create(config, underlyingLink, mtu)
                     tunFd = fd
                     val tunnelConfig = buildString {
                         appendLine("tunnel:")
-                        appendLine("  mtu: 8500")
+                        appendLine("  mtu: $mtu")
                         appendLine("misc:")
                         appendLine("  task-stack-size: 81920")
                         appendLine("socks5:")

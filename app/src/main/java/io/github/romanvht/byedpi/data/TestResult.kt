@@ -2,6 +2,7 @@ package io.github.romanvht.byedpi.data
 
 data class StrategyResult(
     val command: String,
+    val networkType: String = "UNKNOWN",
     var successCount: Int = 0,
     var totalRequests: Int = 0,
     var currentProgress: Int = 0,

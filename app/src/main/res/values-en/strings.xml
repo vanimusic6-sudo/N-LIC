@@ -249,4 +249,12 @@
     <string name="stream_probe_enable_desc">Optional SOCKS5 download test. Unlike image checks, it detects slow transfers and stalls after the first kilobytes.</string>
     <string name="stream_probe_url">HTTPS video stream URL for testing</string>
     <string name="stream_probe_url_desc">Paste a valid googlevideo.com/videoplayback URL or https://speed.cloudflare.com/__down?bytes=262144. The URL is cleared when testing starts and never stored in results.</string>
+    <string name="nlic_mobile_safe_mtu">Mobile: safe MTU (experimental)</string>
+    <string name="nlic_mobile_safe_mtu_desc">Limit virtual packets to 1280–1400 bytes on cellular. Wi-Fi is unchanged. Disable and reconnect N-LIC if connectivity gets worse.</string>
+    <string name="nlic_mobile_ipv6_auto">Mobile: route IPv6 through N-LIC</string>
+    <string name="nlic_mobile_ipv6_auto_desc">Include IPv6 in VPN routing on IPv6-enabled mobile networks even when the global IPv6 setting is off. Does not change Wi-Fi. Disable if it causes problems.</string>
+    <string name="nlic_network_profiles">Separate Wi-Fi and mobile strategies</string>
+    <string name="nlic_network_profiles_desc">Optional: remember the last manually chosen command for each network type and apply it on the next connection. Never switches during a video. Unknown networks use the standard command.</string>
+    <string name="nlic_mobile_dns64_auto">Mobile: DNS64/NAT64</string>
+    <string name="nlic_mobile_dns64_auto_desc">On IPv6/NAT64 mobile links, use the carrier resolver when no custom DNS was selected. This preserves DNS64 translation. Wi-Fi and custom DNS are unchanged. Can be disabled.</string>
 </resources>

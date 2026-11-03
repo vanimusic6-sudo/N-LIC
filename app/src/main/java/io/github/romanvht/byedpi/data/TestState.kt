@@ -2,6 +2,7 @@ package io.github.romanvht.byedpi.data
 
 data class TestState(
     val runId: Long = 0,
+    val networkType: String = "UNKNOWN",
     val isLoaded: Boolean = false,
     val isRunning: Boolean = false,
     val isStopping: Boolean = false,

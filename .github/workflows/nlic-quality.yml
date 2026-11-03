@@ -1,6 +1,8 @@
 name: N-LIC Quality Gate
 
 on:
+  push:
+    branches: [feature/nlic-cellular-profiles-20261103]
   pull_request:
     branches: [master]
   workflow_dispatch:

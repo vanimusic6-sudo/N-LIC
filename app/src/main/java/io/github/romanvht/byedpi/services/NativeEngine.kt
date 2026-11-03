@@ -45,7 +45,19 @@ internal class NativeEngine(
 
         fun configuration(context: Context): Configuration {
             val preferences = context.getPreferences()
-            val proxy = ByeDpiProxyPreferences.fromSharedPreferences(preferences, context)
+            val manual = preferences.getCmdArgs()
+            val selected = NetworkProfileStore.choose(
+                preferences.getBoolean(NetworkProfileStore.ENABLED_KEY, false),
+                NetworkEnvironment.capture(context).type,
+                manual,
+            ) { key -> preferences.getString(key, null) }
+            val proxy = if (preferences.getCmdEnable() && selected != manual) {
+                // Apply only on engine startup; never interrupt an existing flow.
+                val host = preferences.getStringNotNull("byedpi_proxy_ip", "127.0.0.1")
+                val port = preferences.getIntStringNotNull("byedpi_proxy_port", 1080)
+                    .coerceIn(1, 65535)
+                ByeDpiProxyCmdPreferences(context, selected, host, port)
+            } else ByeDpiProxyPreferences.fromSharedPreferences(preferences, context)
             val args = when (proxy) {
                 is ByeDpiProxyCmdPreferences -> proxy.args
                 is ByeDpiProxyUIPreferences -> proxy.uiargs
@@ -58,8 +70,19 @@ internal class NativeEngine(
             }
             return Configuration(
                 args.toList(), host ?: defaultHost, resolvedPort,
-                dns = if (PrivateDnsUtils.getState(context) is PrivateDnsState.Configured) ""
-                    else preferences.getStringNotNull("dns_ip", "1.1.1.1"),
+                dns = preferences.getStringNotNull("dns_ip", "1.1.1.1").let { userDns ->
+                    val link = NetworkEnvironment.capture(context)
+                    val carrierDns = AccessPolicy.preferCarrierDnsOnNat64(
+                        link,
+                        preferences.getBoolean("nlic_mobile_dns64_auto", true),
+                        userDns,
+                    )
+                    if (PrivateDnsUtils.getState(context) is PrivateDnsState.Configured || carrierDns) {
+                        // No VPN DNS override: Android inherits the underlying
+                        // resolver (including DNS64 on IPv6-only mobile paths).
+                        ""
+                    } else userDns
+                },
                 ipv6 = preferences.getBoolean("ipv6_enable", false),
                 appListType = preferences.getStringNotNull("applist_type", "disable"),
                 apps = preferences.getSelectedApps(),
