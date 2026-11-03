@@ -27,7 +27,15 @@ class SiteResultAdapter : RecyclerView.Adapter<SiteResultAdapter.SiteViewHolder>
     override fun onBindViewHolder(holder: SiteViewHolder, position: Int) {
         val site = sites[position]
         holder.siteTextView.text = site.site
-        holder.resultTextView.text = "${site.successCount}/${site.totalCount}"
+        val main = "${site.successCount}/${site.totalCount}"
+        val mostCommonFailure = site.verdictCounts.orEmpty()
+            .filterKeys { it != "REACHABLE" }
+            .maxByOrNull { it.value }
+        val reason = mostCommonFailure?.let { (name, count) ->
+            " · ${name.replace('_', ' ').lowercase()} ×${count}"
+        }.orEmpty()
+        val latency = site.medianSuccessLatencyMs?.let { " · ${it}ms" }.orEmpty()
+        holder.resultTextView.text = main + reason + latency
     }
 
     override fun getItemCount(): Int {

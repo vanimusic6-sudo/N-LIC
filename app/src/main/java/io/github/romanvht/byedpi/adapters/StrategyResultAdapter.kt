@@ -17,6 +17,7 @@ import io.github.romanvht.byedpi.data.StrategyResult
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import io.github.romanvht.byedpi.utility.ClipboardUtils
+import io.github.romanvht.byedpi.utility.StrategyRanking
 
 class StrategyResultAdapter(
     private val context: Context,
@@ -164,9 +165,7 @@ class StrategyResultAdapter(
     fun updateStrategies(newStrategies: List<StrategyResult>) {
         strategies.clear()
 
-        val sorted = newStrategies.sortedWith(compareByDescending<StrategyResult> { it.isCompleted }
-            .thenByDescending { it.successPercentage }
-            .thenByDescending { it.successCount })
+        val sorted = newStrategies.sortedWith(StrategyRanking.comparator)
 
         strategies.addAll(sorted)
         notifyDataSetChanged()

@@ -16,5 +16,8 @@ data class StrategyResult(
 data class SiteResult(
     val site: String,
     val successCount: Int,
-    val totalCount: Int
+    val totalCount: Int,
+    // Backward-compatible optional fields. Old results.json files may lack them.
+    val verdictCounts: Map<String, Int> = emptyMap(),
+    val medianSuccessLatencyMs: Long? = null,
 )

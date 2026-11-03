@@ -52,8 +52,12 @@ internal class NativeEngine(
             }
             val (defaultHost, defaultPort) = preferences.getProxyIpAndPort()
             val (host, port) = args.toList().checkIpAndPortInArgs()
+            val resolvedPort = (port ?: defaultPort).toIntOrNull()
+            require(resolvedPort != null && resolvedPort in 1..65535) {
+                "Invalid local proxy port (expected 1..65535)"
+            }
             return Configuration(
-                args.toList(), host ?: defaultHost, (port ?: defaultPort).toInt(),
+                args.toList(), host ?: defaultHost, resolvedPort,
                 dns = if (PrivateDnsUtils.getState(context) is PrivateDnsState.Configured) ""
                     else preferences.getStringNotNull("dns_ip", "1.1.1.1"),
                 ipv6 = preferences.getBoolean("ipv6_enable", false),

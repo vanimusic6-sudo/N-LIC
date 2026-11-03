@@ -277,11 +277,19 @@ class TestService : Service() {
                         requestTimeout = settings.requestTimeout,
                         concurrentRequests = settings.requestLimit,
                         fullLog = true,
-                        onSiteChecked = { site, successCount, countRequests ->
+                        onSiteDiagnostics = { site, summary ->
                             withContext(Dispatchers.Main.immediate) {
-                                strategy.currentProgress += countRequests
-                                strategy.successCount += successCount
-                                strategy.siteResults.add(SiteResult(site, successCount, countRequests))
+                                strategy.currentProgress += settings.requestsCount
+                                strategy.successCount += summary.successCount
+                                strategy.siteResults.add(
+                                    SiteResult(
+                                        site = site,
+                                        successCount = summary.successCount,
+                                        totalCount = settings.requestsCount,
+                                        verdictCounts = summary.verdictCounts.mapKeys { it.key.name },
+                                        medianSuccessLatencyMs = summary.medianSuccessLatencyMs,
+                                    )
+                                )
                                 publish(strategies)
                             }
                         }
@@ -341,14 +349,17 @@ class TestService : Service() {
         val content = if (userCommands) prefs.getStringNotNull("byedpi_proxytest_commands", "")
         else assets.open("proxytest_strategies.list").bufferedReader().use { it.readText() }
         // Escape quote delimiters before substituting imported SNI into strategy templates.
-        val escapedSni = sniValue.replace("\\", "\\\\").replace("\"", "\\\"")
+        val safeSni = sniValue.trim().take(253).takeIf {
+            it.matches(Regex("[A-Za-z0-9.-]{1,253}")) && !it.startsWith(".") && !it.endsWith(".")
+        } ?: "www.iana.org"
+        val escapedSni = safeSni.replace("\\", "\\\\").replace("\"", "\\\"")
         val commands = content.replace("{sni}", "\"${escapedSni}\"").lines().map { it.trim() }.filter { it.isNotEmpty() }.take(200)
         val host = prefs.getStringNotNull("byedpi_proxy_ip", "127.0.0.1")
         val port = prefs.getIntStringNotNull("byedpi_proxy_port", 1080)
         val delaySec = prefs.getIntStringNotNull("byedpi_proxytest_delay", 1).coerceIn(0, 10)
-        val requestsCount = prefs.getIntStringNotNull("byedpi_proxytest_requests", 1).coerceIn(1, 20)
+        val requestsCount = prefs.getIntStringNotNull("byedpi_proxytest_requests", 2).coerceIn(1, 20)
         val requestTimeout = prefs.getLongStringNotNull("byedpi_proxytest_timeout", 5).coerceIn(1L, 15L)
-        val requestLimit = prefs.getIntStringNotNull("byedpi_proxytest_limit", 20).coerceIn(1, 50)
+        val requestLimit = prefs.getIntStringNotNull("byedpi_proxytest_limit", 6).coerceIn(1, 50)
         DomainListUtils.syncLists(this)
         return TestSettings(DomainListUtils.getActiveDomains(this).toList(), commands, host, port,
             delaySec, requestsCount, requestTimeout, requestLimit)
