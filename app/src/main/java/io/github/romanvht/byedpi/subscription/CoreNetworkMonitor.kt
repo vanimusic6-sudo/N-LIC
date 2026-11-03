@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Build
 import java.lang.reflect.Proxy
 import java.net.NetworkInterface
@@ -16,6 +17,13 @@ internal class CoreNetworkMonitor(context: Context) : AutoCloseable {
     private var listener: Any? = null
     private var registered = false
     private var lastUpdate: String? = null
+    // A default-network callback switches to the VPN interface once Android
+    // installs our TUN. Observe PHYSICAL transports instead so Wi-Fi/cellular
+    // handovers continue reaching libbox even while the VPN is connected.
+    private val physicalRequest = NetworkRequest.Builder()
+        .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+        .build()
     private val callback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) = update()
         override fun onLost(network: Network) = update(network)
@@ -27,8 +35,8 @@ internal class CoreNetworkMonitor(context: Context) : AutoCloseable {
         synchronized(lock) {
             listener = value
             lastUpdate = null
-            if (!registered && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                manager.registerDefaultNetworkCallback(callback)
+            if (!registered) {
+                manager.registerNetworkCallback(physicalRequest, callback)
                 registered = true
             }
         }
@@ -40,6 +48,7 @@ internal class CoreNetworkMonitor(context: Context) : AutoCloseable {
             val caps = manager.getNetworkCapabilities(network)
             network != exclude && caps != null &&
                 caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN) &&
                 !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
         }
 
