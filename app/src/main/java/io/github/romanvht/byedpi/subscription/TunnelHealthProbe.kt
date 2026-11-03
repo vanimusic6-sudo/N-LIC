@@ -11,7 +11,7 @@ internal data class LocalSocksAuth(val username: String, val password: String)
 
 internal object TunnelHealthProbe {
     private const val TARGET = "www.gstatic.com"
-    private const val TIMEOUT = 1_500
+    private const val TIMEOUT = 4_000
 
     fun check(host: String, port: Int, auth: LocalSocksAuth? = null): Boolean = try {
         Socket().use { socket ->
@@ -54,8 +54,8 @@ internal object TunnelHealthProbe {
             endpointHost.isBlank() || endpointHost.length > 253) return false
         return try {
             Socket().use { socket ->
-                socket.connect(InetSocketAddress("127.0.0.1", proxyPort), 2500)
-                socket.soTimeout = 2500
+                socket.connect(InetSocketAddress("127.0.0.1", proxyPort), 4_000)
+                socket.soTimeout = 4_000
                 connectDomain(socket, endpointHost, endpointPort)
                 true
             }
@@ -104,13 +104,38 @@ internal object TunnelHealthProbe {
     }
 
     internal fun connectDomain(socket: Socket, host: String, port: Int, auth: LocalSocksAuth? = null) {
-        val domain = host.toByteArray(Charsets.US_ASCII)
-        require(domain.size in 1..255 && port in 1..65535)
+        require(port in 1..65535)
+        val cleanHost = host.removeSurrounding("[", "]")
+        val address = when {
+            // IPv6 literals must use SOCKS5 ATYP=4. Treating them as a
+            // hostname makes some ByeDPI SOCKS builds try to DNS-resolve
+            // the colon-separated address and reject it.
+            cleanHost.contains(':') -> {
+                val literal = java.net.InetAddress.getByName(cleanHost)
+                require(literal is java.net.Inet6Address) { "Invalid IPv6 endpoint" }
+                byteArrayOf(4) + literal.address
+            }
+            cleanHost.all { it.isDigit() || it == '.' } -> {
+                val parts = cleanHost.split('.')
+                require(parts.size == 4 && parts.all {
+                    it.isNotEmpty() && it.length <= 3 &&
+                        (it.toIntOrNull() ?: -1) in 0..255
+                }) { "Invalid IPv4 endpoint" }
+                byteArrayOf(1) + parts.map { it.toInt().toByte() }
+                    .toByteArray()
+            }
+            else -> {
+                val hostBytes = java.net.IDN.toASCII(cleanHost)
+                    .toByteArray(Charsets.US_ASCII)
+                require(hostBytes.size in 1..255) { "Invalid SOCKS hostname" }
+                byteArrayOf(3, hostBytes.size.toByte()) + hostBytes
+            }
+        }
         val output = socket.getOutputStream()
         val input = DataInputStream(socket.getInputStream())
         negotiate(socket, auth)
-        output.write(byteArrayOf(5, 1, 0, 3, domain.size.toByte()))
-        output.write(domain)
+        output.write(byteArrayOf(5, 1, 0))
+        output.write(address)
         output.write(byteArrayOf((port ushr 8).toByte(), port.toByte()))
         output.flush()
         check(input.readUnsignedByte() == 5 && input.readUnsignedByte() == 0 &&
