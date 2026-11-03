@@ -87,10 +87,14 @@ internal class NativeEngine(
             }
 
             val manual = preferences.getCmdArgs()
+            // Pick from recent, locally measured link-type outcomes.
+            // Do not make up carrier-specific universal bypass flags.
+            val adaptive = AdaptiveDpiPolicy.decide(context,
+                preferences.getBoolean(AdaptiveDpiPolicy.KEY, true), manual)
             val selected = NetworkProfileStore.choose(
                 preferences.getBoolean(NetworkProfileStore.ENABLED_KEY, false),
                 NetworkEnvironment.capture(context).type,
-                manual,
+                adaptive?.command ?: manual,
             ) { key -> preferences.getString(key, null) }
             val proxy = if (preferences.getCmdEnable() && selected != manual) {
                 // Apply only on engine startup; never interrupt an existing flow.
