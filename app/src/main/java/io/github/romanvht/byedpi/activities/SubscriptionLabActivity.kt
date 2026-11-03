@@ -108,7 +108,7 @@ class SubscriptionLabActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (::class.java != null) render()
+        render()
     }
 
     override fun onSupportNavigateUp(): Boolean {
