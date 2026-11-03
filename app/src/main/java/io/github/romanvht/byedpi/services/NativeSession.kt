@@ -26,6 +26,7 @@ import io.github.romanvht.byedpi.subscription.CoreStartException
 import io.github.romanvht.byedpi.subscription.LocalSocksAuth
 import java.security.SecureRandom
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -216,6 +217,10 @@ internal class NativeSession(
         }
         nativeStarted = true
         startJob = scope.launch {
+            // Only fixed phase identifiers appear in logs and UI: neither
+            // outbound JSON nor VPN credentials may leave the native process.
+            var corePhase = "PREPARE"
+            val coreMode = config.args.firstOrNull() == "--nlic-libbox"
             try {
                 withTimeout(50_000) {
                     if (config.args.firstOrNull() == "--nlic-libbox") {
@@ -223,7 +228,9 @@ internal class NativeSession(
                             "LIC-Core requires VPN mode; proxy-only service is unsupported"
                         }
                         val preferences = service.getPreferences()
+                        corePhase = "CATALOG"
                         val saved = withContext(Dispatchers.IO) { SubscriptionVault.read(service) }
+                        corePhase = "PREPARE"
                         val bayEnabled = config.args.getOrNull(1) == "--nlic-bay"
                         val autoEnabled = config.args.getOrNull(2) == "--nlic-auto"
                         val legacyArgs = config.args.drop(3)
@@ -244,6 +251,7 @@ internal class NativeSession(
                             .joinToString("") { "%02x".format(it.toInt() and 255) }
                         val auth = LocalSocksAuth("nlic", password)
                         localAuth = auth
+                        corePhase = "CONFIG_COMPILE"
                         val compiled = if (autoEnabled) {
                             SingBoxConfigCompiler.compileAuto(saved.allNodes, bay, legacyPort, auth.password)
                         } else {
@@ -254,6 +262,7 @@ internal class NativeSession(
                         val plan = compiled as? SingBoxConfigCompiler.Result.Compiled
                             ?: error("Selected LIC-Core configuration cannot be used")
                         if (bayEnabled) {
+                            corePhase = "BAY_PROXY"
                             check(legacyArgs.isNotEmpty()) { "Missing LIC-Bay command" }
                             val engine = withContext(Dispatchers.IO) { ByeDpiProxy() }
                             proxy = engine
@@ -265,28 +274,42 @@ internal class NativeSession(
                             // reach the selected server BEFORE sing-box uses it.
                             // In URLTest mode let the core test candidates itself.
                             if (!autoEnabled) {
+                                corePhase = "BAY_UPSTREAM"
                                 val selected = saved.allNodes.firstOrNull {
                                     it.id == saved.selectedNodeId
                                 } ?: error("LIC-Core / NO_SERVER")
-                                val bayWorking = withContext(Dispatchers.IO) {
-                                    TunnelHealthProbe.checkBay(
-                                        legacyPort, selected.host, selected.port
-                                    )
+                                // DPI evasion may add latency; a single 2.5 s
+                                // SYN timeout is not evidence of a broken Bay
+                                // route. Retry without sending private keys.
+                                var bayWorking = false
+                                repeat(3) { attempt ->
+                                    if (!bayWorking) {
+                                        bayWorking = withContext(Dispatchers.IO) {
+                                            TunnelHealthProbe.checkBay(
+                                                legacyPort, selected.host, selected.port
+                                            )
+                                        }
+                                    }
+                                    if (!bayWorking && attempt < 2) delay(450)
                                 }
                                 check(bayWorking) { "LIC-Core / BAY_UNREACHABLE" }
                             }
                         }
+                        corePhase = "CORE_START"
                         val box = LibboxRuntime(service)
                         boxEngine = box
                         withContext(Dispatchers.IO) { box.start(plan.config) }
+                        corePhase = "CORE_SOCKS"
                         withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port, auth) }
-                        withTimeout(20_000) { awaitRemoteReadiness(config.host, config.port, auth) }
+                        corePhase = "REMOTE_TEST"
+                        withTimeout(28_000) { awaitRemoteReadiness(config.host, config.port, auth) }
                     } else {
                         val engine = withContext(Dispatchers.IO) { ByeDpiProxy() }
                         proxy = engine
                         proxyThread = runNative("ByeDPI") { engine.startProxy(config.args.toTypedArray()) }
                         withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port) }
                     }
+                    corePhase = "TUN"
                     createTunnel?.let { create ->
                         val underlyingLink = NetworkEnvironment.capture(service)
                         val tuneMobile = service.getPreferences().getBoolean("nlic_mobile_safe_mtu", true)
@@ -309,6 +332,7 @@ internal class NativeSession(
                                 appendLine("  password: ${it.password}")
                             }
                         }
+                        corePhase = "HEV"
                         tunnelThread = runNative("HEV") { TProxyService.startTunnel(tunnelConfig, fd.fd) }
                         // Do not publish RUNNING when the native tunnel exited immediately.
                         delay(100)
@@ -320,24 +344,27 @@ internal class NativeSession(
                     }
                 }
             } catch (e: CancellationException) {
-                if (state != EngineProtocol.STATE_STOPPING) fail("Engine startup timed out")
+                if (state != EngineProtocol.STATE_STOPPING) {
+                    if (coreMode && e is TimeoutCancellationException) {
+                        fail("LIC-Core / ${corePhase}_TIMEOUT")
+                    } else if (coreMode) {
+                        fail("LIC-Core / ${corePhase}")
+                    } else fail("Engine startup timed out")
+                }
                 throw e
             } catch (e: Throwable) {
-                if (config.args.firstOrNull() == "--nlic-libbox") {
-                    // Libbox exceptions may include credentials and server URI.
-                    // Surface an explicit SAFE stage code, never exception text.
-                    val stage = when (e) {
-                        is CoreStartException -> e.stage
-                        is IllegalStateException -> when (e.message) {
-                            "LIC-Core / BAY_UNREACHABLE" -> "BAY_UNREACHABLE"
-                            "LIC-Core / NO_SERVER" -> "NO_SERVER"
-                            "LIC-Core could not validate HTTPS through the selected server" -> "TUNNEL_TEST"
-                            else -> "ENGINE"
-                        }
-                        else -> "ENGINE"
+                if (coreMode) {
+                    // Some previous builds collapsed all start failures into
+                    // ENGINE. Preserve the exact *safe phase*, but never the
+                    // nested libbox/Go exception (may contain server URI).
+                    val safeCode = when {
+                        e is CoreStartException -> e.stage
+                        e.message == "LIC-Core / BAY_UNREACHABLE" -> "BAY_UNREACHABLE"
+                        e.message == "LIC-Core / NO_SERVER" -> "NO_SERVER"
+                        else -> corePhase
                     }
-                    Log.e(TAG, "LIC-Core failed at stage $stage (details withheld)")
-                    fail("LIC-Core / $stage")
+                    Log.e(TAG, "LIC-Core failed at stage $safeCode (details withheld)")
+                    fail("LIC-Core / $safeCode")
                 } else {
                     Log.e(TAG, "Failed to start engine", e)
                     fail(e.message ?: "Failed to start engine")
@@ -359,7 +386,18 @@ internal class NativeSession(
                 "$name: ${e.message ?: "native engine failed"}"
             }
         }
-        handler.post { if (state != EngineProtocol.STATE_STOPPING) fail(error) }
+        handler.post {
+            if (state != EngineProtocol.STATE_STOPPING) {
+                if (configuration?.args?.firstOrNull() == "--nlic-libbox") {
+                    val code = when (name) {
+                        "ByeDPI-Bay" -> "BAY_PROXY_EXIT"
+                        "HEV" -> "HEV_EXIT"
+                        else -> "ENGINE_EXIT"
+                    }
+                    fail("LIC-Core / $code")
+                } else fail(error)
+            }
+        }
     }
 
     private suspend fun awaitProxy(host: String, port: Int, auth: LocalSocksAuth? = null) {
