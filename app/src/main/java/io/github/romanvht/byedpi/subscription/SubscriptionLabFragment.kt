@@ -282,18 +282,28 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
         connecting = true
         render()
         lifecycleScope.launch {
+            var connected = false
+            var cancelled = false
             try {
                 ServiceManager.waitStop()
-                val connected = ServiceManager.waitStart(app, Mode.VPN)
+                connected = ServiceManager.waitStart(app, Mode.VPN)
                 if (isAdded) Toast.makeText(requireContext(),
                     if (connected) R.string.nlic_core_connected else R.string.nlic_core_connect_failed,
                     Toast.LENGTH_LONG).show()
             } catch (e: kotlinx.coroutines.CancellationException) {
+                cancelled = true
                 throw e
             } catch (_: Exception) {
                 if (isAdded) Toast.makeText(requireContext(),
                     R.string.nlic_core_connect_failed, Toast.LENGTH_LONG).show()
             } finally {
+                // A failed start must not leave a persistent "Core enabled"
+                // preference that breaks every subsequent legacy VPN startup.
+                // On lifecycle cancellation, connection state is uncertain:
+                // leave the engine in charge rather than toggling under it.
+                if (!connected && !cancelled) {
+                    app.getPreferences().edit().putBoolean("nlic_core_mode", false).commit()
+                }
                 connecting = false
                 if (isAdded) render()
             }
