@@ -49,6 +49,43 @@ internal class NativeEngine(
 
         fun configuration(context: Context): Configuration {
             val preferences = context.getPreferences()
+
+            // Direct sing-box is a standalone VPN runtime, not a ByeDPI
+            // wrapper. Avoid parsing stale or malformed ByeDPI flags/ports
+            // when LIC-Bay is explicitly disabled.
+            val directCore = preferences.getBoolean("nlic_core_mode", false) &&
+                preferences.getStringNotNull("byedpi_mode", "vpn") == "vpn" &&
+                !preferences.getBoolean("nlic_core_bay", false)
+            if (directCore) {
+                check(BuildConfig.NLIC_LIBBOX_INCLUDED) {
+                    "Selected APK does not contain the LIC-Core runtime"
+                }
+                val catalog = SubscriptionVault.read(context)
+                val auto = preferences.getBoolean("nlic_core_auto", false)
+                val supported = if (auto) {
+                    SingBoxConfigCompiler.compileAuto(catalog.allNodes)
+                } else {
+                    val node = catalog.allNodes.firstOrNull {
+                        it.id == catalog.selectedNodeId
+                    } ?: error("Select a VPN server before connecting")
+                    SingBoxConfigCompiler.compile(node)
+                }
+                check(supported is SingBoxConfigCompiler.Result.Compiled) {
+                    "Selected VPN server configuration is unsupported"
+                }
+                return Configuration(
+                    args = listOf("--nlic-libbox", "--nlic-direct",
+                        if (auto) "--nlic-auto" else "--nlic-fixed"),
+                    host = "127.0.0.1",
+                    port = SingBoxConfigCompiler.PROXY_PORT,
+                    dns = preferences.getStringNotNull("dns_ip", "1.1.1.1")
+                        .ifBlank { "1.1.1.1" },
+                    ipv6 = true,
+                    appListType = preferences.getStringNotNull("applist_type", "disable"),
+                    apps = preferences.getSelectedApps(),
+                )
+            }
+
             val manual = preferences.getCmdArgs()
             val selected = NetworkProfileStore.choose(
                 preferences.getBoolean(NetworkProfileStore.ENABLED_KEY, false),
