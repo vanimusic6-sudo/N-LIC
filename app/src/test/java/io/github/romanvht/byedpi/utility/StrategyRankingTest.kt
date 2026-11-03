@@ -2,6 +2,7 @@ package io.github.romanvht.byedpi.utility
 
 import io.github.romanvht.byedpi.data.SiteResult
 import io.github.romanvht.byedpi.data.StrategyResult
+import io.github.romanvht.byedpi.data.StreamProbeResult
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -21,6 +22,23 @@ class StrategyRankingTest {
         assertEquals(working, listOf(broken, working).sortedWith(StrategyRanking.comparator).first())
         val unfinished = entry("-An", 5, 5).copy(isCompleted = false)
         assertEquals(working, listOf(unfinished, working).sortedWith(StrategyRanking.comparator).first())
+    }
+
+    @Test fun `genuine media throughput wins successful tie against tiny web response`() {
+        val lowCostButStalled = entry("-r3+s", 5, 5).also {
+            it.streamProbe = StreamProbeResult(
+                "STALLED_AFTER_DATA", "googlevideo.com", 20_480, 262_144, 5000L, 100L, 4096L
+            )
+        }
+        val workingVideo = entry("-r3+s -T3 -At -o1", 5, 5).also {
+            it.streamProbe = StreamProbeResult(
+                "COMPLETE", "googlevideo.com", 262_144, 262_144, 500L, 100L, 655360L
+            )
+        }
+        assertEquals(
+            workingVideo,
+            listOf(lowCostButStalled, workingVideo).sortedWith(StrategyRanking.comparator).first()
+        )
     }
 
     @Test fun `latency breaks ties after proven successful low-cost strategies`() {
