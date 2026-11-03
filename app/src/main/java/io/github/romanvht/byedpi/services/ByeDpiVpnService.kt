@@ -112,7 +112,12 @@ class ByeDpiVpnService : VpnService() {
             .addRoute("0.0.0.0", 0)
 
         val mobileIpv6 = getPreferences().getBoolean("nlic_mobile_ipv6_auto", true)
-        if (AccessPolicy.shouldCaptureIpv6(configuration.ipv6, underlyingLink, mobileIpv6)) {
+        // An encrypted LIC-Core session must never accidentally let IPv6
+        // escape when the mobile link advertises a dual-stack network.
+        // Legacy ByeDPI keeps its existing per-carrier IPv6 policy.
+        val coreActive = configuration.args.firstOrNull() == "--nlic-libbox"
+        if (coreActive ||
+            AccessPolicy.shouldCaptureIpv6(configuration.ipv6, underlyingLink, mobileIpv6)) {
             builder.addAddress("fd00::1", 128)
                 .addRoute("::", 0)
         }
