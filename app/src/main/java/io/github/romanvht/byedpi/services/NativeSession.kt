@@ -223,8 +223,8 @@ internal class NativeSession(
                     val saved = withContext(Dispatchers.IO) { SubscriptionVault.read(service) }
                     val node = saved.allNodes.firstOrNull { it.id == saved.selectedNodeId }
                         ?: error("Selected LIC-Core server is not available")
-                    val bayEnabled = preferences.getBoolean("nlic_core_bay", false)
-                    val legacyArgs = config.args.drop(1)
+                    val bayEnabled = config.args.getOrNull(1) == "--nlic-bay"
+                    val legacyArgs = config.args.drop(2)
                     val (legacyHostArg, legacyPortArg) = legacyArgs.checkIpAndPortInArgs()
                     val (defaultHost, defaultPort) = preferences.getProxyIpAndPort()
                     val legacyHost = legacyHostArg ?: defaultHost
