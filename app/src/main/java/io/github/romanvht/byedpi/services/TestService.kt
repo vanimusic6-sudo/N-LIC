@@ -211,7 +211,7 @@ class TestService : Service() {
                     saveResults(strategies)
                     stopEngine()
                     currentStrategy = null
-                    delay(options.delaySec * 1000L)
+                    delay(options.delaySec * 500L)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -265,7 +265,7 @@ class TestService : Service() {
             supervisorScope {
                 val engineExit = async { current.awaitExit() }
                 val check = async {
-                    delay(settings.delaySec * 1000L)
+                    delay(settings.delaySec * 500L)
                     val host = when (configuration.host) {
                         "0.0.0.0" -> "127.0.0.1"
                         "::", "[::]" -> "::1"
