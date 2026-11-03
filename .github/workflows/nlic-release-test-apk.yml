@@ -2,7 +2,7 @@ name: N-LIC Release TEST APK (DEV certificate)
 
 on:
   push:
-    branches: [feature/nlic-identity-security-20261103, feature/nlic-engine-refresh-20261103, feature/nlic-video-ip-diagnostics-20261103, feature/nlic-cellular-profiles-20261103, feature/nlic-relay-network-diagnostics-20261103, fix/nlic-physical-diagnostics-20261103, fix/nlic-diagnostics-default-route-20261103]
+    branches: [feature/nlic-identity-security-20261103, feature/nlic-engine-refresh-20261103, feature/nlic-video-ip-diagnostics-20261103, feature/nlic-cellular-profiles-20261103, feature/nlic-relay-network-diagnostics-20261103, fix/nlic-physical-diagnostics-20261103, fix/nlic-diagnostics-default-route-20261103, fix/nlic-carrier-connectivity-gate-20261103]
     paths:
       - app/**
       - .github/workflows/nlic-release-test-apk.yml

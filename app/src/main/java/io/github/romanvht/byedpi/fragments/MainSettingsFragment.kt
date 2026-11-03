@@ -310,6 +310,12 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
                     )
                     Toast.makeText(requireContext(), R.string.toast_copied, Toast.LENGTH_SHORT).show()
                 }
+                .setNeutralButton(R.string.nlic_network_health_app_access) { _, _ ->
+                    startActivity(Intent(
+                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.fromParts("package", requireContext().packageName, null),
+                    ))
+                }
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
         }

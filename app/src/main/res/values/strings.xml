@@ -268,4 +268,5 @@
     <string name="nlic_network_health_timeout">Проверка превысила лимит времени. Проверь мобильные данные и попробуй снова.</string>
     <string name="nlic_network_health_restored">N-LIC VPN восстановлен после диагностики.</string>
     <string name="nlic_network_health_restore_failed">Не удалось автоматически восстановить N-LIC VPN. Переподключись вручную в приложении.</string>
+    <string name="nlic_network_health_app_access">Доступ к сети приложения</string>
 </resources>

@@ -268,4 +268,5 @@
     <string name="nlic_network_health_timeout">Ağ testi zaman aşımına uğradı. Mobil veriyi kontrol edip tekrar deneyin.</string>
     <string name="nlic_network_health_restored">Tanılamadan sonra N-LIC VPN yeniden açıldı.</string>
     <string name="nlic_network_health_restore_failed">N-LIC VPN otomatik yeniden açılamadı. Uygulamadan elle bağlanın.</string>
+    <string name="nlic_network_health_app_access">Uygulamanın ağ erişimi</string>
 </resources>
