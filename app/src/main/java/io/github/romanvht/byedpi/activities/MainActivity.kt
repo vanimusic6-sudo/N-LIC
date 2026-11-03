@@ -447,10 +447,10 @@ class MainActivity : BaseActivity() {
 
         when (status) {
             AppStatus.Halted -> {
-                val typedValue = android.util.TypedValue()
-                theme.resolveAttribute(android.R.attr.colorPrimary, typedValue,true)
-                binding.statusButtonCard.setCardBackgroundColor(typedValue.data)
-                binding.statusButtonIcon.clearColorFilter()
+                binding.statusButtonCard.setCardBackgroundColor(
+                    ContextCompat.getColor(this, R.color.nlic_surface_raised))
+                binding.statusButtonIcon.setColorFilter(
+                    ContextCompat.getColor(this, R.color.nlic_accent))
 
                 when (preferences.mode()) {
                     Mode.VPN -> {
@@ -464,8 +464,10 @@ class MainActivity : BaseActivity() {
             }
 
             AppStatus.Running -> {
-                binding.statusButtonCard.setCardBackgroundColor(ContextCompat.getColor(this, R.color.green_active))
-                binding.statusButtonIcon.setColorFilter(ContextCompat.getColor(this, android.R.color.white))
+                binding.statusButtonCard.setCardBackgroundColor(
+                    ContextCompat.getColor(this, R.color.nlic_success))
+                binding.statusButtonIcon.setColorFilter(
+                    ContextCompat.getColor(this, R.color.nlic_canvas))
 
                 when (mode) {
                     Mode.VPN -> {
