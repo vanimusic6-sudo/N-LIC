@@ -245,4 +245,8 @@
     <string name="nlic_shortcut_confirm_title">N-LIC әрекетін растау</string>
     <string name="nlic_shortcut_confirm_message">Төте жол әрекетін орындау керек пе? Желі параметрлерін өзгерту үшін растау қажет.</string>
     <string name="nlic_upstream_credits">Бастапқы ByeByeDPI · romanvht, hufrea, heiher</string>
+    <string name="stream_probe_enable">Бейне ағынын тексеру (256 КиБ)</string>
+    <string name="stream_probe_enable_desc">SOCKS5 арқылы қосымша жүктеу сынағы. Баяу жүктеуді және алғашқы килобайттардан кейінгі үзілістерді анықтайды.</string>
+    <string name="stream_probe_url">Тексеруге арналған HTTPS бейне сілтемесі</string>
+    <string name="stream_probe_url_desc">Жарамды googlevideo.com/videoplayback сілтемесін немесе https://speed.cloudflare.com/__down?bytes=262144 мекенжайын енгізіңіз. Тексеру басталғанда сілтеме өшіріледі және нәтижелерге сақталмайды.</string>
 </resources>
