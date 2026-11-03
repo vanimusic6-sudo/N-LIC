@@ -59,7 +59,7 @@ internal object NetworkHealthUtils {
             return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
                 !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
         }
-        val active = manager.activeNetwork
+        val active = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) manager.activeNetwork else null
         if (active != null && eligible(active)) return active
         val physical = manager.allNetworks.filter(::eligible)
         val validated = physical.filter { network ->
