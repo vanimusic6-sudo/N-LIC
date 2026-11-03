@@ -1,11 +1,6 @@
 package io.github.romanvht.byedpi.fragments
 
 import android.content.Intent
-import android.content.ActivityNotFoundException
-import android.text.InputType
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.Toast
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.Log
@@ -53,12 +48,6 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
             .setOnPreferenceClickListener {
                 val intent = Intent(context, TestActivity::class.java)
                 startActivity(intent)
-                true
-            }
-
-        findPreferenceNotNull<Preference>("nlic_telegram_mtproxy")
-            .setOnPreferenceClickListener {
-                showTelegramProxyDialog()
                 true
             }
 
@@ -214,71 +203,6 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
-    }
-
-    private fun showTelegramProxyDialog() {
-        val ctx = requireContext()
-        val padding = (20 * resources.displayMetrics.density).toInt()
-        val container = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(padding, 0, padding, 0)
-        }
-        val server = EditText(ctx).apply {
-            hint = getString(R.string.telegram_proxy_server)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-            isSingleLine = true
-        }
-        val port = EditText(ctx).apply {
-            hint = getString(R.string.telegram_proxy_port)
-            inputType = InputType.TYPE_CLASS_NUMBER
-            setText("443")
-            isSingleLine = true
-        }
-        val secret = EditText(ctx).apply {
-            hint = getString(R.string.telegram_proxy_secret)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            isSingleLine = true
-        }
-        container.addView(server)
-        container.addView(port)
-        container.addView(secret)
-        val dialog = AlertDialog.Builder(ctx)
-            .setTitle(R.string.telegram_proxy_title)
-            .setMessage(R.string.telegram_proxy_description)
-            .setView(container)
-            .setPositiveButton(R.string.telegram_proxy_connect, null)
-            .setNegativeButton(android.R.string.cancel, null)
-            .create()
-        dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val link = try {
-                    TelegramProxyLinkBuilder.build(
-                        server.text.toString(),
-                        port.text.toString().toIntOrNull() ?: -1,
-                        secret.text.toString()
-                    )
-                } catch (_: IllegalArgumentException) {
-                    Toast.makeText(ctx, R.string.telegram_proxy_invalid, Toast.LENGTH_LONG).show()
-                    return@setOnClickListener
-                }
-                // Explicit packages avoid exposing the MTProxy secret to any
-                // third-party URL handler. Telegram owns these two variants.
-                val uri = link.toUri()
-                var opened = false
-                for (telegramPackage in listOf("org.telegram.messenger", "org.telegram.messenger.web")) {
-                    try {
-                        startActivity(Intent(Intent.ACTION_VIEW, uri).setPackage(telegramPackage))
-                        opened = true
-                        break
-                    } catch (_: ActivityNotFoundException) {
-                        // Try next trusted Telegram variant.
-                    }
-                }
-                if (opened) dialog.dismiss()
-                else Toast.makeText(ctx, R.string.telegram_proxy_install, Toast.LENGTH_LONG).show()
-            }
-        }
-        dialog.show()
     }
 
     private fun showDonateDialog() {
