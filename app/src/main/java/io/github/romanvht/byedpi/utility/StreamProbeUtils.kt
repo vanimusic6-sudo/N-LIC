@@ -67,7 +67,7 @@ internal class StreamProbeUtils(
             connection.setRequestProperty("Connection", "close")
             status = connection.responseCode
             contentType = connection.contentType
-            declaredLength = connection.contentLengthLong
+            declaredLength = connection.getHeaderField("Content-Length")?.toLongOrNull() ?: -1L
 
             if (status in 200..299) {
                 val stream = connection.inputStream
