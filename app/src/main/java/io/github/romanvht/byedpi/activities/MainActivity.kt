@@ -32,6 +32,9 @@ import io.github.romanvht.byedpi.services.ServiceManager
 import io.github.romanvht.byedpi.services.TestService
 import io.github.romanvht.byedpi.services.appStatus
 import io.github.romanvht.byedpi.subscription.SubscriptionVault
+import io.github.romanvht.byedpi.utility.AdaptiveDpiPolicy
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import io.github.romanvht.byedpi.utility.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -41,6 +44,7 @@ import kotlin.system.exitProcess
 class MainActivity : BaseActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var historyUtils: HistoryUtils
+    private var policyLabelJob: Job? = null
 
     companion object {
         private val TAG: String = MainActivity::class.java.simpleName
@@ -323,6 +327,7 @@ class MainActivity : BaseActivity() {
     }
 
     override fun onDestroy() {
+        policyLabelJob?.cancel()
         super.onDestroy()
         unregisterReceiver(receiver)
     }
@@ -495,8 +500,22 @@ class MainActivity : BaseActivity() {
                     AccessType.ETHERNET -> "Ethernet"
                     else -> getString(R.string.nlic_home_connection)
                 }
-            binding.strategyButtonText.text =
-                getString(R.string.nlic_home_policy_description)
+            binding.strategyButtonText.setText(R.string.nlic_home_policy_loading)
+            policyLabelJob?.cancel()
+            policyLabelJob = lifecycleScope.launch {
+                val decision = withContext(Dispatchers.IO) {
+                    val prefs = getPreferences()
+                    AdaptiveDpiPolicy.decide(this@MainActivity,
+                        prefs.getBoolean(AdaptiveDpiPolicy.KEY, true), prefs.getCmdArgs())
+                }
+                if (!isFinishing && !isDestroyed) {
+                    binding.strategyButtonText.setText(when {
+                        decision == null -> R.string.nlic_home_policy_off
+                        decision.measured -> R.string.nlic_home_policy_measured
+                        else -> R.string.nlic_home_policy_baseline
+                    })
+                }
+            }
             return
         }
         val useCmdSettings = getPreferences().getCmdEnable()
