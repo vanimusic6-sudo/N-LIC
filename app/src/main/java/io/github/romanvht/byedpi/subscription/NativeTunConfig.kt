@@ -53,7 +53,15 @@ internal object NativeTunConfig {
             addProperty("server", "1.1.1.1")
             addProperty("server_port", 443)
             addProperty("path", "/dns-query")
-            addProperty("detour", SingBoxConfigCompiler.PROXY_TAG)
+            // LIC-Auto compiles to the "lic-auto" URLTest tag;
+            // single-node and WireGuard compile to "lic-vpn". A static
+            // detour breaks EVERY auto-select config in native libbox.
+            val encryptedOutbound = root.getAsJsonObject("route")
+                ?.get("final")?.asString
+                ?: error("Encrypted VPN outbound missing")
+            require(encryptedOutbound == "lic-auto" ||
+                encryptedOutbound == SingBoxConfigCompiler.PROXY_TAG)
+            addProperty("detour", encryptedOutbound)
             add("tls", JsonObject().apply {
                 addProperty("enabled", true)
                 addProperty("server_name", "cloudflare-dns.com")
