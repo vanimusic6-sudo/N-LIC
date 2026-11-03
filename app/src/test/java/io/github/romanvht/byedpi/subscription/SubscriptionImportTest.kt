@@ -30,8 +30,8 @@ class SubscriptionImportTest {
 
     @Test fun `wrapped base64 text is decoded as a single subscription`() {
         val line = "trojan://password@vpn.example.org:443#London"
-        val encoded = Base64.getMimeEncoder(20, "\\n".toByteArray())
-            .encodeToString(line.toByteArray()).replace("\\n", "\n")
+        val encoded = Base64.getMimeEncoder(20, "\n".toByteArray())
+            .encodeToString(line.toByteArray())
         assertEquals(1, SubscriptionImport.parse(encoded).size)
     }
 
