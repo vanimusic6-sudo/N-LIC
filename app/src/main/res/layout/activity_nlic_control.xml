@@ -168,6 +168,42 @@
                     app:cornerRadius="17dp" />
             </LinearLayout>
 
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal"
+                android:baselineAligned="false">
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/nlic_add_file"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="50dp"
+                    android:text="@string/nlic_home_file_import"
+                    android:textAllCaps="false"
+                    app:cornerRadius="17dp" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/nlic_refresh_now"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="50dp"
+                    android:layout_marginStart="10dp"
+                    android:text="@string/nlic_home_refresh_subscriptions"
+                    android:textAllCaps="false"
+                    app:cornerRadius="17dp" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:lineSpacingExtra="2dp"
+                android:text="@string/nlic_home_supported_protocols"
+                android:textSize="12sp"
+                android:textColor="@color/nlic_muted" />
+
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -235,6 +271,36 @@
                         android:lineSpacingExtra="2dp"
                         android:textColor="@color/nlic_muted"
                         android:textSize="13sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                app:cardCornerRadius="22dp"
+                app:cardElevation="0dp"
+                app:cardBackgroundColor="@color/nlic_surface">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/nlic_adaptive_switch"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/nlic_home_auto_network"
+                        android:textSize="15sp"
+                        android:textColor="@color/nlic_text" />
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="5dp"
+                        android:text="@string/nlic_home_auto_network_details"
+                        android:lineSpacingExtra="2dp"
+                        android:textSize="12sp"
+                        android:textColor="@color/nlic_muted" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
