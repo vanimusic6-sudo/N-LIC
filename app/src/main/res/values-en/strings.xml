@@ -400,4 +400,5 @@
     <string name="nlic_home_auto_network">Auto strategy</string>
     <string name="nlic_home_auto_network_details">Verified choices for Wi-Fi, mobile or Ethernet. If no test result exists, use a conservative profile. Carrier names alone do not guarantee bypass.</string>
     <string name="nlic_home_supported_protocols">Subscriptions: VLESS, VMess, Trojan, Shadowsocks, AnyTLS, Hysteria2, TUIC. Files: WireGuard .conf and curated sing-box JSON.</string>
+    <string name="nlic_home_refresh_partial">Refreshed nodes: %1$d · subscriptions failed: %2$d. Cached data preserved.</string>
 </resources>
