@@ -1,0 +1,19 @@
+# N-LIC mobile network candidate catalog. No shared secrets or forced IPv4.
+# Stage 1: TLS-only modifications, no TTL assumptions.
+-An
+-r3+s
+-Kt -r3+s
+-r-5+se
+-s1
+-s3+s
+-Kt -r3+s -T2 -At -Kt -r-5+se
+-r3+s -T2 -At -o1 -r-5+se
+-r3+s -T3 -As -o1 -r-5+se
+-Kt -s1 -T3 -At -Kt -r3+s
+-Kt -r3+s -T3 -At -Kt -o1 -r-5+se
+-r3+s -s3+s -T3 -At -o1 -r-5+se
+# Last-resort candidates; fake TTL is route-dependent and may break on mobile.
+-d1
+-o1
+-d1 -f-1 -t4
+-o1 -r-5+se -T3 -At -d1 -f-1 -t8

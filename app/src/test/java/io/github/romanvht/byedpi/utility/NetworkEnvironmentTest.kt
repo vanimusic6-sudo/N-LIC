@@ -1,0 +1,34 @@
+package io.github.romanvht.byedpi.utility
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class NetworkEnvironmentTest {
+    @Test fun `prefer validated WiFi if active; otherwise choose usable mobile`() {
+        val wifi = AccessCandidate(AccessType.WIFI, true, 1500, true, true)
+        val cellular = AccessCandidate(AccessType.CELLULAR, true, 1500, true, true)
+        assertEquals(AccessType.WIFI, AccessPolicy.select(listOf(cellular, wifi)).type)
+        val offlineWifi = wifi.copy(validated = false)
+        assertEquals(AccessType.CELLULAR, AccessPolicy.select(listOf(offlineWifi, cellular)).type)
+    }
+
+    @Test fun `mobile frames use bounded mtu while wifi retains known good baseline`() {
+        assertEquals(8500, AccessPolicy.tunMtu(AccessSnapshot(AccessType.WIFI, 1500)))
+        assertEquals(1400, AccessPolicy.tunMtu(AccessSnapshot(AccessType.CELLULAR, 1500)))
+        assertEquals(1280, AccessPolicy.tunMtu(AccessSnapshot(AccessType.CELLULAR, 1320)))
+        assertEquals(1400, AccessPolicy.tunMtu(AccessSnapshot(AccessType.CELLULAR, 0)))
+    }
+
+    @Test fun `never guess IPv4 support on IPv6 only mobile link`() {
+        val link = AccessPolicy.select(listOf(AccessCandidate(AccessType.CELLULAR, true, 1500, false, true)))
+        assertFalse(link.hasIpv4)
+        assertTrue(link.hasIpv6)
+    }
+
+    @Test fun `different radios use separate results files without identifiers`() {
+        assertEquals("proxy_test_results_wifi.json", AccessPolicy.resultsFileName(AccessType.WIFI))
+        assertEquals("proxy_test_results_cellular.json", AccessPolicy.resultsFileName(AccessType.CELLULAR))
+    }
+}
