@@ -109,8 +109,9 @@ internal class StreamProbeUtils(
 
         val elapsedMs = ((System.nanoTime() - start) / 1_000_000L).coerceAtLeast(1L)
         val transferMs = (elapsedMs - (firstByteMs ?: 0L)).coerceAtLeast(1L)
-        val verdict = if (failed || status == -1 && !timedOut) {
-            StreamOutcome.NETWORK_FAILURE
+        val verdict = if (failed) {
+            if (bytesRead > 0) StreamOutcome.CONNECTION_RESET_AFTER_DATA
+            else StreamOutcome.NETWORK_FAILURE
         } else {
             StreamProbeClassifier.classify(
                 status, contentType, declaredLength, bytesRead,
