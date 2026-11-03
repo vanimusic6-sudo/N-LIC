@@ -67,6 +67,17 @@
             android:textColor="?android:textColorSecondary"
             tools:text="127.0.0.1:1080" />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/nlic_core_button"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginTop="16dp"
+            android:text="@string/nlic_ui_open_center"
+            android:textAllCaps="false"
+            android:visibility="gone"
+            app:cornerRadius="18dp" />
+
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/strategy_button"
             android:layout_width="wrap_content"
