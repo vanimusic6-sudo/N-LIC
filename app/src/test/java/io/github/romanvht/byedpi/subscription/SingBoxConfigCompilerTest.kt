@@ -99,6 +99,41 @@ class SingBoxConfigCompilerTest {
             SingBoxConfigCompiler.Result.Unsupported)
     }
 
+    @Test fun `LIC Auto creates a real URLTest group without direct fallback`() {
+        val nodes = listOf(
+            "vless://$uuid@one.example:443?security=tls&sni=one.example",
+            "trojan://secret@two.example:443?security=tls&sni=two.example",
+            "hysteria2://key@three.example:443?sni=three.example",
+        ).mapNotNull(SubscriptionImport::parseNode)
+        val r = SingBoxConfigCompiler.compileAuto(nodes)
+        assertTrue(r is SingBoxConfigCompiler.Result.Compiled)
+        val json = JsonParser.parseString((r as SingBoxConfigCompiler.Result.Compiled).config)
+            .asJsonObject
+        val outbounds = json.getAsJsonArray("outbounds")
+        assertEquals(4, outbounds.size())
+        assertEquals("urltest", outbounds[3].asJsonObject.get("type").asString)
+        assertEquals("lic-auto", json.getAsJsonObject("route").get("final").asString)
+        assertFalse(outbounds[3].asJsonObject.get("interrupt_exist_connections").asBoolean)
+        assertTrue(json.getAsJsonObject("route").has("default_domain_resolver"))
+    }
+
+    @Test fun `LIC Bay URLTest excludes UDP first nodes and shares one local SOCKS`() {
+        val nodes = listOf(
+            "hysteria2://key@one.example:443?sni=one.example",
+            "vless://$uuid@two.example:443?security=tls&sni=two.example",
+            "trojan://pass@three.example:443?security=tls&sni=three.example",
+        ).mapNotNull(SubscriptionImport::parseNode)
+        val r = SingBoxConfigCompiler.compileAuto(nodes, SingBoxConfigCompiler.Bay.ON, 12080)
+            as SingBoxConfigCompiler.Result.Compiled
+        val json = JsonParser.parseString(r.config).asJsonObject
+        val outbounds = json.getAsJsonArray("outbounds")
+        assertEquals(4, outbounds.size())
+        assertEquals("socks", outbounds[2].asJsonObject.get("type").asString)
+        assertEquals(12080, outbounds[2].asJsonObject.get("server_port").asInt)
+        assertEquals(2, outbounds[3].asJsonObject.getAsJsonArray("outbounds").size())
+        assertEquals("lic-bay-local-socks", outbounds[0].asJsonObject.get("detour").asString)
+    }
+
     @Test fun `errors never leak the pasted secret`() {
         val result = compile("trojan://VERY_PRIVATE_PASSWORD@vpn.example:443?security=none")
         assertTrue(result is SingBoxConfigCompiler.Result.Unsupported)
