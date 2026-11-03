@@ -66,7 +66,7 @@ class SiteCheckUtils(
                 require(it.protocol == "http" || it.protocol == "https")
             }
         } catch (_: Exception) {
-            Log.e("SiteChecker", "Invalid URL: $formattedUrl")
+            Log.e("SiteChecker", "Invalid proxy test URL")
             return@withContext 0
         }
 
@@ -75,7 +75,7 @@ class SiteCheckUtils(
 
         repeat(requestsCount.coerceIn(1, 20)) { attempt ->
             coroutineContext.ensureActive()
-            Log.i("SiteChecker", "Attempt ${attempt + 1}/$requestsCount for $site")
+            Log.i("SiteChecker", "Attempt ${attempt + 1}/$requestsCount for ${url.host}")
 
             var connection: HttpURLConnection? = null
             try {
@@ -109,12 +109,12 @@ class SiteCheckUtils(
                 }
                 Log.i(
                     "SiteChecker",
-                    "Probe $site: HTTP $status, bytes=$sampledBytes, verdict=$verdict"
+                    "Probe ${url.host}: HTTP $status, bytes=$sampledBytes, verdict=$verdict"
                 )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.e("SiteChecker", "Error accessing $site: ${e.message}")
+                Log.e("SiteChecker", "Error accessing ${url.host}: ${e.javaClass.simpleName}")
             } finally {
                 connection?.disconnect()
             }
