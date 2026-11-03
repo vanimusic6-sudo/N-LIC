@@ -163,6 +163,41 @@ class SingBoxConfigCompilerTest {
             SingBoxConfigCompiler.Result.Unsupported)
     }
 
+    @Test fun `VLESS requires authenticated TLS or Reality to protect tunnel contents`() {
+        assertTrue(compile("vless://$uuid@vpn.example:443") is
+            SingBoxConfigCompiler.Result.Unsupported)
+        assertTrue(compile("vless://$uuid@vpn.example:443?security=none&type=ws") is
+            SingBoxConfigCompiler.Result.Unsupported)
+        assertTrue(compile("vless://$uuid@vpn.example:443?security=tls&sni=cdn.example") is
+            SingBoxConfigCompiler.Result.Compiled)
+    }
+
+    @Test fun `alternate insecure TLS flags cannot bypass strict verification`() {
+        assertTrue(compile("vless://$uuid@vpn.example:443?security=tls&allowInsecure=true") is
+            SingBoxConfigCompiler.Result.Unsupported)
+        assertTrue(compile("trojan://secret@vpn.example:443?security=tls&insecure=yes") is
+            SingBoxConfigCompiler.Result.Unsupported)
+        assertTrue(compile("hysteria2://secret@vpn.example:443?skip-cert-verify=on") is
+            SingBoxConfigCompiler.Result.Unsupported)
+        assertTrue(compile("tuic://$uuid:secret@vpn.example:443?insecure=true") is
+            SingBoxConfigCompiler.Result.Unsupported)
+        assertTrue(compile("trojan://secret@vpn.example:443?security=tls&insecure=0") is
+            SingBoxConfigCompiler.Result.Compiled)
+    }
+
+    @Test fun `VMess unknown TLS mode cannot silently downgrade to cleartext`() {
+        val base = """{"add":"vpn.example","port":"443","id":"$uuid",
+            "aid":"0","scy":"auto","net":"tcp","tls":"legacy"}""".trimIndent()
+        val url = "vmess://" + Base64.getEncoder().encodeToString(base.toByteArray())
+        assertTrue(compile(url) is SingBoxConfigCompiler.Result.Unsupported)
+
+        val insecure = base.replace("legacy", "tls")
+            .replace("\"tls\":\"tls\"", "\"tls\":\"tls\",\"allowInsecure\":true")
+        val insecureUrl = "vmess://" +
+            Base64.getEncoder().encodeToString(insecure.toByteArray())
+        assertTrue(compile(insecureUrl) is SingBoxConfigCompiler.Result.Unsupported)
+    }
+
     @Test fun `errors never leak the pasted secret`() {
         val result = compile("trojan://VERY_PRIVATE_PASSWORD@vpn.example:443?security=none")
         assertTrue(result is SingBoxConfigCompiler.Result.Unsupported)
