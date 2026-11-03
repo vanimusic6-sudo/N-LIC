@@ -45,6 +45,15 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace
 
+      - name: Upload internal debug APKs
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nlic-phase1-debug-apks
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 5
+
       - name: Publish test results
         if: always()
         uses: actions/upload-artifact@v4
