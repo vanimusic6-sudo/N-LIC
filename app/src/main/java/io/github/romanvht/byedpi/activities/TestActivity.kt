@@ -170,7 +170,9 @@ class TestActivity : BaseActivity() {
         disclaimerTextView.text = getString(if (state.wasInterrupted) R.string.test_crash else R.string.test_disclaimer)
 
         strategyAdapter.setTestingState(state.isRunning)
-        val replace = renderedRunId != state.runId || strategies.map { it.command } != state.strategies.map { it.command }
+        val replace = renderedRunId != state.runId ||
+            strategies.map { it.command } != state.strategies.map { it.command } ||
+            strategies.map { it.networkType } != state.strategies.map { it.networkType }
         val reorder = replace || strategies.indices.any { strategies[it].isCompleted != state.strategies[it].isCompleted }
         if (replace) {
             strategies.clear()
