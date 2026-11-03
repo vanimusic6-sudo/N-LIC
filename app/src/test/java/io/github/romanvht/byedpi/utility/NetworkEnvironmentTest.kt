@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NetworkEnvironmentTest {
-    @Test fun `prefer validated WiFi if active; otherwise choose usable mobile`() {
+    @Test fun `prefer validated WiFi otherwise choose usable mobile`() {
         val wifi = AccessCandidate(AccessType.WIFI, true, 1500, true, true)
         val cellular = AccessCandidate(AccessType.CELLULAR, true, 1500, true, true)
         assertEquals(AccessType.WIFI, AccessPolicy.select(listOf(cellular, wifi)).type)
