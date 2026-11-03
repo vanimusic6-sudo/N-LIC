@@ -377,9 +377,11 @@ internal class NativeSession(
         val error = try {
             "$name stopped with code ${run()}"
         } catch (e: Throwable) {
-            if (name == "ByeDPI-Bay") {
-                // Native ByeDPI arguments can include private upstream details.
-                Log.e(TAG, "LIC-Bay stopped unexpectedly (${e.javaClass.simpleName})")
+            if (name == "ByeDPI-Bay" ||
+                configuration?.args?.firstOrNull() == "--nlic-libbox") {
+                // Core may carry an ephemeral SOCKS password in the private
+                // HEV YAML. Never log nested native exception strings.
+                Log.e(TAG, "LIC-Core native task $name exited (${e.javaClass.simpleName}, redacted)")
                 "$name: native engine failed"
             } else {
                 Log.e(TAG, "$name failed", e)
