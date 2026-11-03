@@ -45,7 +45,19 @@ internal class NativeEngine(
 
         fun configuration(context: Context): Configuration {
             val preferences = context.getPreferences()
-            val proxy = ByeDpiProxyPreferences.fromSharedPreferences(preferences, context)
+            val manual = preferences.getCmdArgs()
+            val selected = NetworkProfileStore.choose(
+                preferences.getBoolean(NetworkProfileStore.ENABLED_KEY, false),
+                NetworkEnvironment.capture(context).type,
+                manual,
+            ) { key -> preferences.getString(key, null) }
+            val proxy = if (preferences.getCmdEnable() && selected != manual) {
+                // Apply only on engine startup; never interrupt an existing flow.
+                val host = preferences.getStringNotNull("byedpi_proxy_ip", "127.0.0.1")
+                val port = preferences.getIntStringNotNull("byedpi_proxy_port", 1080)
+                    .coerceIn(1, 65535)
+                ByeDpiProxyCmdPreferences(context, selected, host, port)
+            } else ByeDpiProxyPreferences.fromSharedPreferences(preferences, context)
             val args = when (proxy) {
                 is ByeDpiProxyCmdPreferences -> proxy.args
                 is ByeDpiProxyUIPreferences -> proxy.uiargs

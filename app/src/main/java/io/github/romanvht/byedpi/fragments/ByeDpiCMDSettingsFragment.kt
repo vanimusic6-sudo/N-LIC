@@ -1,6 +1,9 @@
 package io.github.romanvht.byedpi.fragments
 
 import android.net.VpnService
+import androidx.core.content.edit
+import io.github.romanvht.byedpi.utility.NetworkEnvironment
+import io.github.romanvht.byedpi.utility.NetworkProfileStore
 import android.os.Bundle
 import android.view.View
 import android.widget.EditText
@@ -44,6 +47,9 @@ class ByeDpiCMDSettingsFragment : PreferenceFragmentCompat() {
 
             if (newCommand.isNotBlank()) {
                 cmdHistoryUtils.addCommand(newCommand)
+                NetworkProfileStore.key(NetworkEnvironment.capture(requireContext()).type)?.let { key ->
+                    requireContext().getPreferences().edit { putString(key, newCommand) }
+                }
                 restartService()
             }
 

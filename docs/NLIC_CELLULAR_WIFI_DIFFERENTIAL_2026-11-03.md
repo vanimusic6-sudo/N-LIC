@@ -36,6 +36,10 @@ Neither an aggressive fake TTL nor more split flags can solve all of these.
    change a user's active command or reconnect ongoing streams.
 7. If transport switches during a scan, stop early rather than blend Wi-Fi
    success and mobile failures into a misleading ranking.
+8. Offer a **default-off** separate profile per transport. Explicitly
+   applying a command or editing it saves the slot for the current link.
+   Only a newly started VPN uses the saved slot; no live flow is restarted.
+   Unknown links fall back to the ordinary user command.
 
 ## Technical boundaries
 

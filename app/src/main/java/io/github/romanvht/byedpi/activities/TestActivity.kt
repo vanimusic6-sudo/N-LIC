@@ -28,6 +28,8 @@ import io.github.romanvht.byedpi.services.ServiceManager
 import io.github.romanvht.byedpi.services.TestService
 import io.github.romanvht.byedpi.services.appStatus
 import io.github.romanvht.byedpi.utility.HistoryUtils
+import io.github.romanvht.byedpi.utility.NetworkEnvironment
+import io.github.romanvht.byedpi.utility.NetworkProfileStore
 import io.github.romanvht.byedpi.utility.getPreferences
 import io.github.romanvht.byedpi.utility.mode
 import kotlinx.coroutines.Dispatchers
@@ -195,7 +197,11 @@ class TestActivity : BaseActivity() {
     private fun addToHistory(command: String) {
         if (isTesting) return
 
-        prefs.edit(commit = true) { putString("byedpi_cmd_args", command) }
+        val profileKey = NetworkProfileStore.key(NetworkEnvironment.capture(this).type)
+        prefs.edit(commit = true) {
+            putString("byedpi_cmd_args", command)
+            if (profileKey != null) putString(profileKey, command)
+        }
         lifecycleScope.launch(Dispatchers.IO) {
             cmdHistoryUtils.addCommand(command)
 

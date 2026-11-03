@@ -52,6 +52,13 @@
             android:defaultValue="1.1.1.1" />
 
         <SwitchPreference
+            android:key="nlic_network_profiles"
+            android:icon="@drawable/ic_tune"
+            android:title="@string/nlic_network_profiles"
+            android:summary="@string/nlic_network_profiles_desc"
+            android:defaultValue="false" />
+
+        <SwitchPreference
             android:key="nlic_mobile_ipv6_auto"
             android:icon="@drawable/ic_network"
             android:title="@string/nlic_mobile_ipv6_auto"
