@@ -296,4 +296,8 @@
     <string name="nlic_auto_ineligible">Бұл сервер екі TCP тексеруінен өтпеді немесе UDP қолданады.</string>
     <string name="nlic_bay_label">LIC-Bay · VPN қосылымын қорғау</string>
     <string name="nlic_bay_phase">Жоспарда: VPN сыртқы TCP трафигін ByeDPI SOCKS арқылы жіберу. Әзірше іске қосылмаған.</string>
+    <string name="nlic_outbound_check">VPN профилін тексеру</string>
+    <string name="nlic_outbound_check_summary">VLESS/REALITY, Trojan және LIC-Bay параметрлерін құпияны жібермей тексеру.</string>
+    <string name="nlic_outbound_supported">TCP/TLS профилі мен LIC-Bay сызбасы жасалады. Бірақ libbox әлі қосылмағандықтан VPN жұмыс істемейді.</string>
+    <string name="nlic_outbound_unsupported">Қолдау көрсетілмейтін параметрлер не қауіпсіздік тексеруі өтпеді. VPN қосылған жоқ.</string>
 </resources>

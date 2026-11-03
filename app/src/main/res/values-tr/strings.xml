@@ -296,4 +296,8 @@
     <string name="nlic_auto_ineligible">Bu sunucu iki TCP testini geçemedi veya UDP kullanıyor.</string>
     <string name="nlic_bay_label">LIC-Bay · VPN bağlantısı koruması</string>
     <string name="nlic_bay_phase">Planlanıyor: VPN dış TCP trafiğini ByeDPI SOCKS üzerinden yönlendirme. Henüz etkin değil.</string>
+    <string name="nlic_outbound_check">VPN profili uyumluluğunu doğrula</string>
+    <string name="nlic_outbound_check_summary">VLESS/REALITY veya Trojan ve LIC-Bay parametrelerini sır göndermeden kontrol et.</string>
+    <string name="nlic_outbound_supported">TCP/TLS profili ve LIC-Bay yapılandırması oluşturulabilir. VPN bağlanamaz: libbox henüz entegre edilmedi.</string>
+    <string name="nlic_outbound_unsupported">Desteklenmeyen aktarım veya güvenlik parametreleri. VPN bağlantısı denenmedi.</string>
 </resources>
