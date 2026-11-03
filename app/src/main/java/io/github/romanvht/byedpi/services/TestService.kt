@@ -271,6 +271,16 @@ class TestService : Service() {
                         "::", "[::]" -> "::1"
                         else -> configuration.host
                     }
+                    // Opt-in: a real 256 KiB media range, not a tiny homepage.
+                    // URL is never copied into results or logs.
+                    settings.mediaTestUrl?.let { mediaUrl ->
+                        val mediaResult = StreamProbeUtils(host, configuration.port)
+                            .test(mediaUrl, settings.requestTimeout)
+                        withContext(Dispatchers.Main.immediate) {
+                            strategy.streamProbe = mediaResult
+                            publish(strategies)
+                        }
+                    }
                     SiteCheckUtils(host, configuration.port).checkSitesAsync(
                         sites = settings.sites,
                         requestsCount = settings.requestsCount,
@@ -294,16 +304,6 @@ class TestService : Service() {
                             }
                         }
                     )
-                    // Opt-in: a real 256 KiB media range, not a tiny homepage.
-                    // URL is never copied into results or logs.
-                    settings.mediaTestUrl?.let { mediaUrl ->
-                        val mediaResult = StreamProbeUtils(host, configuration.port)
-                            .test(mediaUrl, settings.requestTimeout)
-                        withContext(Dispatchers.Main.immediate) {
-                            strategy.streamProbe = mediaResult
-                            publish(strategies)
-                        }
-                    }
                     true
                 }
                 try {
