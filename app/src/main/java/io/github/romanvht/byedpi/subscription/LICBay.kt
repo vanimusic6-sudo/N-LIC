@@ -20,11 +20,34 @@ internal data class LICBayPlan(
 }
 
 internal object LICBay {
+    private fun isQuicTransport(node: SubscriptionNode): Boolean = runCatching {
+        when {
+            node.originalUri.startsWith("nlicjson://") ->
+                VPNFileImport.parseSecureJson(node)
+                    ?.getAsJsonObject("transport")?.get("type")?.asString == "quic"
+            node.protocol == "VMESS" -> {
+                val body = SubscriptionImport.decodeBase64Text(
+                    node.originalUri.substringAfter("://").substringBefore("#")
+                ).orEmpty()
+                com.google.gson.JsonParser.parseString(body).asJsonObject
+                    .get("net")?.asString == "quic"
+            }
+            else -> {
+                val query = java.net.URI(node.originalUri).rawQuery.orEmpty()
+                query.split("&").any {
+                    it.substringBefore("=") == "type" &&
+                        it.substringAfter("=") == "quic"
+                }
+            }
+        }
+    }.getOrDefault(false)
+
     fun plan(node: SubscriptionNode): LICBayPlan {
         val proto = node.protocol.uppercase()
         val transport = when (proto) {
             "VLESS", "VMESS", "TROJAN", "SHADOWSOCKS", "ANYTLS" ->
-                BayTransport.TCP_CONNECT
+                if (isQuicTransport(node)) BayTransport.UDP_ASSOCIATE
+                else BayTransport.TCP_CONNECT
             "HYSTERIA2", "HY2", "TUIC", "WIREGUARD" ->
                 BayTransport.UDP_ASSOCIATE
             else -> return LICBayPlan(false, null,
