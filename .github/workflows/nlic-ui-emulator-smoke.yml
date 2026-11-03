@@ -18,7 +18,10 @@ concurrency:
 jobs:
   activity-smoke:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 55
+    env:
+      NLIC_INCLUDE_LIBBOX: "true"
+      NLIC_EMULATOR_X86_ONLY: "true"
     steps:
       - name: Checkout native submodules
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -45,7 +48,18 @@ jobs:
           sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1" "ndk;27.2.12479018"
           chmod +x ./gradlew
 
-      - name: Launch emulator and exercise VPN server list
+      - name: Download verified sing-box native AAR for x86_64 emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p app/libs
+          curl --fail --location --retry 3 --connect-timeout 15 --max-time 240 \
+            -o app/libs/libbox.aar \
+            https://github.com/singbox-android/libbox/releases/download/1.14.3/libbox.aar
+          echo "6f1f295b1d988d4875546a48cb90a90e2b5f70ca10432f1a8d95e757a76f01d9  app/libs/libbox.aar" | sha256sum -c
+          unzip -tqq app/libs/libbox.aar
+
+      - name: Launch emulator and exercise REAL libbox config + UI server list
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: 35
@@ -60,7 +74,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: nlic-ui-emulator-diagnostics
+          name: nlic-native-emulator-diagnostics
           path: |
             app/build/outputs/androidTest-results/connected/
             app/build/reports/androidTests/connected/
