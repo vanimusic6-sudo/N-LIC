@@ -245,4 +245,8 @@
     <string name="nlic_shortcut_confirm_title">N-LIC işlemini onayla</string>
     <string name="nlic_shortcut_confirm_message">Kısayol işlemi çalıştırılsın mı? Ağ yönetimi için onay gerekiyor.</string>
     <string name="nlic_upstream_credits">Orijinal ByeByeDPI · romanvht, hufrea, heiher</string>
+    <string name="stream_probe_enable">Video akışı testi (256 KiB)</string>
+    <string name="stream_probe_enable_desc">İsteğe bağlı SOCKS5 indirme testi. Görsel kontrollerinden farklı olarak yavaş akışları ve ilk kilobaytlardan sonraki kesilmeleri tespit eder.</string>
+    <string name="stream_probe_url">Test için HTTPS video akışı bağlantısı</string>
+    <string name="stream_probe_url_desc">Geçerli bir googlevideo.com/videoplayback adresi veya https://speed.cloudflare.com/__down?bytes=262144 bağlantısı girin. Test başlayınca bağlantı silinir, sonuçlara kaydedilmez.</string>
 </resources>
