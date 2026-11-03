@@ -6,9 +6,13 @@ plugins {
 }
 
 val includeNativeLibbox = System.getenv("NLIC_INCLUDE_LIBBOX") == "true"
-val abis = if (includeNativeLibbox && System.getenv("NLIC_ARM64_ONLY") == "true") {
-    setOf("arm64-v8a")
-} else setOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+// The emulator test exercises the EXACT pinned libbox Go library on x86_64,
+// without changing the arm64-only consumer Release DEV artifact.
+val abis = when {
+    System.getenv("NLIC_EMULATOR_X86_ONLY") == "true" -> setOf("x86_64")
+    includeNativeLibbox && System.getenv("NLIC_ARM64_ONLY") == "true" -> setOf("arm64-v8a")
+    else -> setOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+}
 
 // Dev signing values are injected by GitHub Actions; no signing secrets live in the repo.
 val devKeystorePath = System.getenv("NLIC_DEV_KEYSTORE_PATH")
