@@ -371,4 +371,5 @@
     <string name="nlic_control_unsupported">Unsupported server configuration. Try another server.</string>
     <string name="nlic_control_apply">Apply and reconnect</string>
     <string name="nlic_control_generic_failure">Action failed. Your settings were kept; check the connection and try again.</string>
+    <string name="nlic_control_bay_risk">⚠ Local ByeDPI SOCKS has no password and can be accessed by other apps. LIC-Bay is experimental only.</string>
 </resources>
