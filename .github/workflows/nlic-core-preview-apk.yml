@@ -1,0 +1,152 @@
+name: N-LIC 1.9.1 Core Preview APK (pinned libbox)
+
+on:
+  push:
+    branches: [feature/nlic-libbox-config-20261103]
+    paths:
+      - app/**
+      - .github/workflows/nlic-core-preview-apk.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nlic-libbox-core-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core_preview:
+    name: Experimental ARM64 sing-box + HEV + optional ByeDPI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    env:
+      NLIC_INCLUDE_LIBBOX: "true"
+      NLIC_ARM64_ONLY: "true"
+      NLIC_DEV_SIGN_RELEASE_TEST: "true"
+      NLIC_DEV_STORE_PASSWORD: ${{ secrets.NLIC_DEV_STORE_PASSWORD }}
+      NLIC_DEV_KEY_PASSWORD: ${{ secrets.NLIC_DEV_KEY_PASSWORD }}
+      NLIC_DEV_KEY_ALIAS: ${{ secrets.NLIC_DEV_KEY_ALIAS }}
+      NLIC_DEV_KEYSTORE_BASE64: ${{ secrets.NLIC_DEV_KEYSTORE_BASE64 }}
+      NLIC_DEV_KEYSTORE_PATH: ${{ github.workspace }}/.signing/nlic-dev.p12
+
+    steps:
+      - name: Checkout source and native submodules
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        with:
+          packages: platform-tools
+
+      - name: Install native SDK toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1" "ndk;27.2.12479018"
+
+      - name: Download exact pinned libbox AAR with SHA256 verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p app/libs
+          curl --fail --location --retry 3 --connect-timeout 15 --max-time 240 \
+            --output app/libs/libbox.aar \
+            "https://github.com/singbox-android/libbox/releases/download/1.14.3/libbox.aar"
+          echo "6f1f295b1d988d4875546a48cb90a90e2b5f70ca10432f1a8d95e757a76f01d9  app/libs/libbox.aar" | sha256sum --check
+          unzip -tqq app/libs/libbox.aar
+          echo "Upstream: singbox-android/libbox 1.14.3. The signed APK is EXPLICITLY experimental."
+          echo "Native AAR origin is a third-party published asset; SHA256 pins its bytes, not the author's trustworthiness."
+
+      - name: Restore temporary DEV signing material
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$NLIC_DEV_KEYSTORE_BASE64"
+          test -n "$NLIC_DEV_STORE_PASSWORD"
+          test -n "$NLIC_DEV_KEY_PASSWORD"
+          test -n "$NLIC_DEV_KEY_ALIAS"
+          mkdir -p .signing
+          chmod 700 .signing
+          printf '%s' "$NLIC_DEV_KEYSTORE_BASE64" | base64 --decode > "$NLIC_DEV_KEYSTORE_PATH"
+          chmod 600 "$NLIC_DEV_KEYSTORE_PATH"
+
+      - name: Compile and lint optimized Release TEST with native libbox
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew :app:assembleRelease :app:testReleaseUnitTest :app:lintRelease \
+            --no-daemon --stacktrace
+
+      - name: Verify APK and keep only ARM64 preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p core-preview
+          apk="$(find app/build/outputs/apk/release -type f -name '*arm64-v8a*release*.apk' -print -quit)"
+          if [[ -z "$apk" ]]; then
+            apk="$(find app/build/outputs/apk/release -type f -name '*universal*release*.apk' -print -quit)"
+          fi
+          test -s "$apk"
+          output="core-preview/N-LIC-1.9.1-CorePreview-arm64-Release-DEV.apk"
+          cp "$apk" "$output"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$output" > core-preview/SIGNATURE.txt
+          grep -iq '9eac8ece5fb89eeacb03c5eff20155724a206d73180d58c78fc7d3911dbee5c5' core-preview/SIGNATURE.txt
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$output" > core-preview/APK_METADATA.txt
+          grep -q "io.github.vanimusic6sudo.nlic" core-preview/APK_METADATA.txt
+          if grep -q '^application-debuggable' core-preview/APK_METADATA.txt; then exit 1; fi
+          if ! unzip -Z1 "$output" | grep -q 'lib/arm64-v8a/libbox.so'; then
+            echo "Missing libbox ARM64 native library" >&2
+            exit 1
+          fi
+          cat > core-preview/READ_ME_FIRST.txt <<'EOF'
+          N-LIC 1.9.1 LIC-Core Preview — not production software.
+          APK uses the N-LIC DEV certificate, NOT an official release key.
+          ARM64 only. N-LIC's old ByeDPI is the default. Import a subscription,
+          select a supported node, and explicitly enable LIC-Core in Settings.
+          LIC-Bay (TCP only) is optional and defaults to OFF.
+          This experiment has not yet passed a physical Android VPN/QUIC leak audit.
+          WARNING: Play Protect has previously flagged N-LIC builds.
+          Do not turn off Play Protect; do not use this APK for sensitive traffic.
+          Included native libbox: singbox-android/libbox 1.14.3 AAR SHA256:
+          6f1f295b1d988d4875546a48cb90a90e2b5f70ca10432f1a8d95e757a76f01d9
+          Source: https://github.com/singbox-android/libbox
+          Sing-box upstream: https://github.com/SagerNet/sing-box
+          EOF
+          sha256sum "$output" > core-preview/SHA256SUMS.txt
+
+      - name: Save lint reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: N-LIC-1.9.1-Core-Lint
+          path: app/build/reports/lint-results-release.*
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Publish experimental Core Preview APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: N-LIC-1.9.1-CorePreview-ARM64-DevSigned
+          path: core-preview/
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Remove secret material and third-party AAR
+        if: always()
+        shell: bash
+        run: |
+          rm -rf .signing
+          rm -f app/libs/libbox.aar
