@@ -245,4 +245,8 @@
     <string name="nlic_shortcut_confirm_title">Подтвердить действие N-LIC</string>
     <string name="nlic_shortcut_confirm_message">Выполнить команду из ярлыка? Управление сетью требует подтверждения.</string>
     <string name="nlic_upstream_credits">Оригинальный ByeByeDPI · romanvht, hufrea, heiher</string>
+    <string name="stream_probe_enable">Проверка видеопотока (256 КБ)</string>
+    <string name="stream_probe_enable_desc">Необязательный тест загрузки через SOCKS5. В отличие от картинок, показывает медленный поток и обрыв после первых килобайт.</string>
+    <string name="stream_probe_url">HTTPS-ссылка на видеопоток для проверки</string>
+    <string name="stream_probe_url_desc">Вставьте действующую ссылку googlevideo.com/videoplayback или https://speed.cloudflare.com/__down?bytes=262144. Ссылка удаляется после запуска проверки, в результаты не попадает.</string>
 </resources>
