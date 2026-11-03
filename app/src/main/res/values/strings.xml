@@ -335,4 +335,5 @@
     <string name="nlic_ui_legacy_action">Вернуться к обычному ByeDPI</string>
     <string name="nlic_ui_legacy_desc">Отключить VPN и выключить LIC-Core. Подписки сохранятся.</string>
     <string name="nlic_ui_legacy_confirm">Отключить текущий VPN и вернуться к обычному ByeDPI? Возможен краткий доступ к интернету вне VPN.</string>
+    <string name="nlic_ui_open_center">LIC-Core · Серверы и VPN</string>
 </resources>
