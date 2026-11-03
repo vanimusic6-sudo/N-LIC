@@ -317,6 +317,22 @@ class SubscriptionLabActivity : BaseActivity() {
         }
     }
 
+    private fun failureAdvice(code: String): String = when {
+        code.startsWith("BAY_") ->
+            getString(R.string.nlic_core_advice_bay)
+        code.startsWith("CORE_SOCKS") ->
+            getString(R.string.nlic_core_advice_socks)
+        code.startsWith("REMOTE_TEST") || code == "TUNNEL_TEST" ->
+            getString(R.string.nlic_core_advice_https)
+        code.startsWith("TUN") || code.startsWith("HEV") ->
+            getString(R.string.nlic_core_advice_tun)
+        code == "CONFIG" || code == "CONFIG_COMPILE" ->
+            getString(R.string.nlic_core_advice_config)
+        code == "CATALOG" || code == "PREPARE" ->
+            getString(R.string.nlic_core_advice_catalog)
+        else -> getString(R.string.nlic_core_advice_engine)
+    }
+
     private fun render() {
         val catalog = readCatalog()
         val all = catalog.allNodes
@@ -332,8 +348,10 @@ class SubscriptionLabActivity : BaseActivity() {
             runningVpn -> R.string.nlic_control_running
             else -> R.string.nlic_control_disconnected
         })
+        val failure = ServiceManager.lastCoreFailureCode
         details.text = when {
             busy -> getString(R.string.nlic_control_working)
+            failure != null && !runningVpn -> failureAdvice(failure)
             latestMessage != null -> latestMessage
             !BuildConfig.NLIC_LIBBOX_INCLUDED -> getString(R.string.nlic_core_missing)
             all.isEmpty() -> getString(R.string.nlic_control_start_hint)
@@ -341,7 +359,6 @@ class SubscriptionLabActivity : BaseActivity() {
             runningVpn -> getString(R.string.nlic_control_verified)
             else -> getString(R.string.nlic_control_status_hint)
         }
-        val failure = ServiceManager.lastCoreFailureCode
         stage.text = when {
             runningVpn && locallyVerified -> getString(R.string.nlic_control_https_ok)
             failure != null -> getString(R.string.nlic_control_stage_failure, failure)
