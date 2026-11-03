@@ -1,0 +1,33 @@
+name: N-LIC native core API contract diagnostics
+
+on:
+  push:
+    branches: [fix/nlic-core-bay-ui-security-20261103]
+    paths: [.github/workflows/nlic-core-api-contract.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Install Java
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Fetch pinned libbox and print SAFE API signatures
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --connect-timeout 15 --max-time 240 \
+            -o libbox.aar https://github.com/singbox-android/libbox/releases/download/1.14.3/libbox.aar
+          echo "6f1f295b1d988d4875546a48cb90a90e2b5f70ca10432f1a8d95e757a76f01d9  libbox.aar" | sha256sum -c
+          unzip -p libbox.aar classes.jar > libbox-classes.jar
+          jar tf libbox-classes.jar | grep -E '(Libbox|CommandServer|PlatformInterface|SetupOptions|OverrideOptions|NetworkInterface|StringIterator)' | head -60
+          for cls in io.nekohasekai.libbox.Libbox io.nekohasekai.libbox.CommandServer io.nekohasekai.libbox.SetupOptions io.nekohasekai.libbox.PlatformInterface io.nekohasekai.libbox.CommandServerHandler io.nekohasekai.libbox.OverrideOptions; do
+            echo "----- $cls"
+            javap -classpath libbox-classes.jar -public "$cls"
+          done
