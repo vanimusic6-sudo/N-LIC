@@ -372,4 +372,11 @@
     <string name="nlic_control_apply">Uygula ve yeniden bağlan</string>
     <string name="nlic_control_generic_failure">İşlem başarısız. Ayarlar korundu; bağlantıyı kontrol edin.</string>
     <string name="nlic_control_bay_risk">⚠ Yerel ByeDPI SOCKS şifresizdir ve diğer uygulamalar tarafından kullanılabilir. LIC-Bay yalnızca deneysel amaçlıdır.</string>
+    <string name="nlic_core_advice_bay">ByeDPI seçilen VPN sunucusuna TCP bağlantısı kuramadı. LIC-Bay ayarını veya başka bir sunucuyu deneyin.</string>
+    <string name="nlic_core_advice_socks">Yerel sing-box SOCKS5 dinleyicisi başlatılamadı veya kimlik doğrulayamadı. Sorun cihazdaki motorla ilgili.</string>
+    <string name="nlic_core_advice_https">Yerel motor çalışıyor ancak uzak VPN üzerinden HTTPS doğrulanamadı. TLS/REALITY veya başka sunucu deneyin.</string>
+    <string name="nlic_core_advice_tun">Android VPN tüneli başlatılamadı. VPN iznini kontrol edin ve diğer VPN uygulamalarını kapatın.</string>
+    <string name="nlic_core_advice_config">Sunucu ayarları reddedildi. Protokolü, TLS/REALITY ve taşıma türünü kontrol edin.</string>
+    <string name="nlic_core_advice_catalog">Ayarlar veya şifreli abonelik kasası okunamadı. Verileri incelemeden uygulamayı silmeyin.</string>
+    <string name="nlic_core_advice_engine">Çekirdek başlatılamadı. Aşağıdaki güvenli aşama kodu hatanın yerini gösterir.</string>
 </resources>
