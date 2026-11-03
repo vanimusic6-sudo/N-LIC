@@ -5,6 +5,8 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.SystemClock
+import io.github.romanvht.byedpi.services.NativeEngine
+import java.net.Proxy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -22,13 +24,14 @@ internal data class NetworkHealthReport(
     val snapshot: AccessSnapshot,
     val checks: List<ConnectionCheck>,
     val notes: List<String>,
+    val proxyChecks: List<ConnectionCheck> = emptyList(),
 ) {
     fun asText(): String = buildString {
         appendLine("N-LIC · network health (direct physical network, opt-in)")
         appendLine("Transport: ${snapshot.type}")
         appendLine("IPv4: ${snapshot.hasIpv4}, IPv6: ${snapshot.hasIpv6}, NAT64: ${snapshot.hasNat64}")
         appendLine("Physical MTU reported: ${snapshot.physicalMtu}")
-        for (check in checks) {
+        for (check in checks + proxyChecks) {
             appendLine("${check.target}: ${check.detail} · ${check.latencyMs} ms" +
                 if (check.bytes > 0) " · ${check.bytes} bytes" else "")
         }
@@ -95,8 +98,32 @@ internal object NetworkHealthUtils {
         coroutineContext.ensureActive()
         val large = checkDownload(network, MAX_DOWNLOAD_BYTES, "Cloudflare 256 KiB")
         val checks = listOf(youtube, youtubeApi, telegram, telegramAlt, small, large)
-        val notes = NetworkHealthInterpretation.describe(youtubeApi, telegram, small, large)
-        NetworkHealthReport(snapshot, checks, notes)
+        val notes = NetworkHealthInterpretation.describe(youtubeApi, telegram, small, large).toMutableList()
+        val localProxy = if (NativeEngine.running(context) != null) {
+            val (host, portText) = context.getPreferences().getProxyIpAndPort()
+            val hostAddress = when (host) {
+                "0.0.0.0" -> "127.0.0.1"
+                "::", "[::]" -> "::1"
+                else -> host
+            }
+            val port = portText.toIntOrNull()
+            if (port != null && port in 1..65535) {
+                Proxy(Proxy.Type.SOCKS, InetSocketAddress(hostAddress, port))
+            } else null
+        } else null
+        val viaProxy = if (localProxy == null) emptyList() else {
+            coroutineContext.ensureActive()
+            val telegramProxied = checkSocksTcp(localProxy, "149.154.167.51", "N-LIC SOCKS / Telegram DC2")
+            coroutineContext.ensureActive()
+            val largeProxied = checkDownload(
+                null, MAX_DOWNLOAD_BYTES, "N-LIC SOCKS / Cloudflare 256 KiB", localProxy
+            )
+            notes.addAll(NetworkHealthInterpretation.comparePaths(
+                telegram, telegramProxied, large, largeProxied
+            ))
+            listOf(telegramProxied, largeProxied)
+        }
+        NetworkHealthReport(snapshot, checks, notes, viaProxy)
     }
 
     private fun checkTcp(network: Network, host: String, label: String): ConnectionCheck {
@@ -133,13 +160,36 @@ internal object NetworkHealthUtils {
         return ConnectionCheck(label, false, elapsed(start), reason)
     }
 
-    private fun checkDownload(network: Network, bytes: Int, label: String): ConnectionCheck {
+    private fun checkSocksTcp(proxy: Proxy, host: String, label: String): ConnectionCheck {
+        val start = SystemClock.elapsedRealtime()
+        return try {
+            java.net.Socket(proxy).use { socket ->
+                socket.connect(InetSocketAddress(host, 443), CONNECT_TIMEOUT_MS)
+                ConnectionCheck(label, true, elapsed(start), "SOCKS_CONNECT_OK")
+            }
+        } catch (_: SocketTimeoutException) {
+            ConnectionCheck(label, false, elapsed(start), "SOCKS_CONNECT_TIMEOUT")
+        } catch (_: IOException) {
+            ConnectionCheck(label, false, elapsed(start), "SOCKS_CONNECT_FAILURE")
+        } catch (_: Exception) {
+            ConnectionCheck(label, false, elapsed(start), "SOCKS_UNKNOWN_FAILURE")
+        }
+    }
+
+    private fun checkDownload(
+        network: Network?,
+        bytes: Int,
+        label: String,
+        proxy: Proxy? = null,
+    ): ConnectionCheck {
         val start = SystemClock.elapsedRealtime()
         val url = URL("https://speed.cloudflare.com/__down?bytes=$bytes")
         var connection: HttpURLConnection? = null
         var received = 0
         return try {
-            connection = network.openConnection(url) as HttpURLConnection
+            connection = if (proxy == null) {
+                requireNotNull(network).openConnection(url) as HttpURLConnection
+            } else url.openConnection(proxy) as HttpURLConnection
             connection.instanceFollowRedirects = false
             connection.connectTimeout = CONNECT_TIMEOUT_MS
             connection.readTimeout = READ_TIMEOUT_MS
