@@ -293,8 +293,16 @@ internal class NativeSession(
                 if (state != EngineProtocol.STATE_STOPPING) fail("Engine startup timed out")
                 throw e
             } catch (e: Throwable) {
-                Log.e(TAG, "Failed to start engine", e)
-                fail(e.message ?: "Failed to start engine")
+                if (config.args.firstOrNull() == "--nlic-libbox") {
+                    // libbox/native exceptions may embed the full outbound JSON
+                    // (including subscription credentials). Never send them to
+                    // logcat or to the service's untrusted UI error surface.
+                    Log.e(TAG, "LIC-Core startup failed (${e.javaClass.simpleName}); details withheld")
+                    fail("LIC-Core could not establish an encrypted connection")
+                } else {
+                    Log.e(TAG, "Failed to start engine", e)
+                    fail(e.message ?: "Failed to start engine")
+                }
             }
         }
     }
@@ -303,8 +311,14 @@ internal class NativeSession(
         val error = try {
             "$name stopped with code ${run()}"
         } catch (e: Throwable) {
-            Log.e(TAG, "$name failed", e)
-            "$name: ${e.message ?: "native engine failed"}"
+            if (name == "ByeDPI-Bay") {
+                // Native ByeDPI arguments can include private upstream details.
+                Log.e(TAG, "LIC-Bay stopped unexpectedly (${e.javaClass.simpleName})")
+                "$name: native engine failed"
+            } else {
+                Log.e(TAG, "$name failed", e)
+                "$name: ${e.message ?: "native engine failed"}"
+            }
         }
         handler.post { if (state != EngineProtocol.STATE_STOPPING) fail(error) }
     }
