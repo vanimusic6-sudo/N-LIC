@@ -72,6 +72,50 @@ internal object TunnelHealthProbe {
     }
 
     /**
+     * The pinned ByeDPI implementation implements SOCKS5 UDP ASSOCIATE.
+     * Verify that the actual local engine accepts the command BEFORE
+     * sing-box starts a QUIC/WireGuard UDP dial. Does not claim that the
+     * remote UDP packets crossed a censoring network.
+     */
+    fun checkBayUdp(proxyPort: Int): Boolean {
+        if (proxyPort !in 1..65535) return false
+        return try {
+            java.net.DatagramSocket(
+                InetSocketAddress("127.0.0.1", 0)
+            ).use { udp ->
+                Socket().use { socket ->
+                    socket.connect(InetSocketAddress("127.0.0.1", proxyPort), TIMEOUT)
+                    socket.soTimeout = TIMEOUT
+                    negotiate(socket, null)
+                    val port = udp.localPort
+                    val output = socket.getOutputStream()
+                    output.write(byteArrayOf(5, 3, 0, 1, 127, 0, 0, 1,
+                        (port ushr 8).toByte(), port.toByte()))
+                    output.flush()
+                    val input = DataInputStream(socket.getInputStream())
+                    check(input.readUnsignedByte() == 5 &&
+                        input.readUnsignedByte() == 0 &&
+                        input.readUnsignedByte() == 0) {
+                        "UDP ASSOCIATE was not accepted"
+                    }
+                    val addrLength = when (input.readUnsignedByte()) {
+                        1 -> 4
+                        4 -> 16
+                        3 -> input.readUnsignedByte()
+                        else -> error("Invalid UDP ASSOCIATE reply")
+                    }
+                    input.readFully(ByteArray(addrLength))
+                    val relayPort = input.readUnsignedShort()
+                    check(relayPort in 1..65535)
+                    true
+                }
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
      * Readiness probe for an authenticated local SOCKS5 server. Does not
      * contact an external endpoint and never logs the random secret.
      */
