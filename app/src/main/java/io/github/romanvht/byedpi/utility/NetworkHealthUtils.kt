@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.content.pm.PackageManager
+import android.provider.Settings
 import android.os.SystemClock
 import io.github.romanvht.byedpi.services.NativeEngine
 import java.net.Proxy
@@ -26,11 +28,17 @@ internal data class NetworkHealthReport(
     val notes: List<String>,
     val proxyChecks: List<ConnectionCheck> = emptyList(),
     val route: ProbeRoute = ProbeRoute.BOUND_PHYSICAL,
+    val internetPermission: Boolean? = null,
+    val networkStatePermission: Boolean? = null,
+    val airplaneMode: Boolean? = null,
 ) {
     fun asText(): String = buildString {
         appendLine("N-LIC · network health (direct physical network, opt-in)")
         appendLine("Transport: ${snapshot.type}")
         appendLine("Probe route: ${route.label}")
+        if (internetPermission != null) appendLine("INTERNET permission: $internetPermission")
+        if (networkStatePermission != null) appendLine("ACCESS_NETWORK_STATE: $networkStatePermission")
+        if (airplaneMode != null) appendLine("Airplane mode: $airplaneMode")
         if (snapshot.type == AccessType.UNKNOWN) {
             appendLine("IPv4 / IPv6 / NAT64: not observable (NOT a negative test)")
             appendLine("Physical MTU: not observable")
@@ -100,6 +108,15 @@ internal object NetworkHealthUtils {
         // explicitly marking the result UNBOUND rather than claiming direct
         // carrier access. This may transit another system VPN.
         val route = ProbeRoute.forBoundNetwork(network != null)
+        val hasInternetPermission = context.packageManager.checkPermission(
+            android.Manifest.permission.INTERNET, context.packageName
+        ) == PackageManager.PERMISSION_GRANTED
+        val hasNetworkStatePermission = context.packageManager.checkPermission(
+            android.Manifest.permission.ACCESS_NETWORK_STATE, context.packageName
+        ) == PackageManager.PERMISSION_GRANTED
+        val airplane = runCatching {
+            Settings.Global.getInt(context.contentResolver, Settings.Global.AIRPLANE_MODE_ON, 0) == 1
+        }.getOrNull()
         coroutineContext.ensureActive()
 
         // Telegram production DC IPs are example DCs, not a guarantee that the
@@ -112,14 +129,33 @@ internal object NetworkHealthUtils {
         coroutineContext.ensureActive()
         val telegramAlt = checkTcp(network, "91.108.56.130", "Telegram DC5 / TCP 443")
         coroutineContext.ensureActive()
+        // Public neutral connectivity controls using NUMERIC addresses. These
+        // don't depend on DNS, YouTube or Telegram-specific routing. They are
+        // TCP-only probes; not evidence that encrypted HTTP works.
+        val control4 = checkTcp(network, "1.1.1.1", "Control IPv4 Cloudflare / TCP 443")
+        coroutineContext.ensureActive()
+        val control6 = checkTcp(network, "2606:4700:4700::1111", "Control IPv6 Cloudflare / TCP 443")
+        coroutineContext.ensureActive()
         val small = checkDownload(network, 16 * 1024, "Cloudflare 16 KiB")
         coroutineContext.ensureActive()
         val large = checkDownload(network, MAX_DOWNLOAD_BYTES, "Cloudflare 256 KiB")
-        val checks = listOf(youtube, youtubeApi, telegram, telegramAlt, small, large)
+        val checks = listOf(youtube, youtubeApi, telegram, telegramAlt, control4, control6, small, large)
         val notes = NetworkHealthInterpretation.describe(youtubeApi, telegram, small, large)
             .toMutableList()
+        notes.addAll(0, ConnectivityFailureDiagnosis.describe(
+            checks,
+            physicalNetworkVisible = network != null,
+            airplaneModeEnabled = airplane,
+            internetPermissionGranted = hasInternetPermission,
+            networkStatePermissionGranted = hasNetworkStatePermission,
+        ))
         if (network == null) notes.add(0, visibilityReason(context))
-        val base = NetworkHealthReport(snapshot, checks, notes, route = route)
+        val base = NetworkHealthReport(
+            snapshot, checks, notes, route = route,
+            internetPermission = hasInternetPermission,
+            networkStatePermission = hasNetworkStatePermission,
+            airplaneMode = airplane,
+        )
         if (compareSocks) addProxyComparison(context, base) else base
     }
 
@@ -210,18 +246,18 @@ internal object NetworkHealthUtils {
                             if (ip is java.net.Inet6Address) "TCP_OK_IPV6" else "TCP_OK_IPV4",
                         )
                     }
-                } catch (_: SocketTimeoutException) {
-                    reason = "TCP_TIMEOUT"
-                } catch (_: IOException) {
-                    reason = "CONNECT_FAILED"
+                } catch (e: SocketTimeoutException) {
+                    reason = ConnectivityFailureDiagnosis.classify(e)
+                } catch (e: IOException) {
+                    reason = ConnectivityFailureDiagnosis.classify(e)
                 }
             }
-        } catch (_: java.net.UnknownHostException) {
-            reason = "DNS_FAILURE"
-        } catch (_: SecurityException) {
-            reason = "NETWORK_PERMISSION"
-        } catch (_: Exception) {
-            reason = "NETWORK_FAILURE"
+        } catch (e: java.net.UnknownHostException) {
+            reason = ConnectivityFailureDiagnosis.classify(e)
+        } catch (e: SecurityException) {
+            reason = ConnectivityFailureDiagnosis.classify(e)
+        } catch (e: Exception) {
+            reason = ConnectivityFailureDiagnosis.classify(e)
         }
         return ConnectionCheck(label, false, elapsed(start), reason)
     }
@@ -233,12 +269,12 @@ internal object NetworkHealthUtils {
                 socket.connect(InetSocketAddress(host, 443), CONNECT_TIMEOUT_MS)
                 ConnectionCheck(label, true, elapsed(start), "SOCKS_CONNECT_OK")
             }
-        } catch (_: SocketTimeoutException) {
-            ConnectionCheck(label, false, elapsed(start), "SOCKS_CONNECT_TIMEOUT")
-        } catch (_: IOException) {
-            ConnectionCheck(label, false, elapsed(start), "SOCKS_CONNECT_FAILURE")
-        } catch (_: Exception) {
-            ConnectionCheck(label, false, elapsed(start), "SOCKS_UNKNOWN_FAILURE")
+        } catch (e: SocketTimeoutException) {
+            ConnectionCheck(label, false, elapsed(start), "SOCKS_${ConnectivityFailureDiagnosis.classify(e)}")
+        } catch (e: IOException) {
+            ConnectionCheck(label, false, elapsed(start), "SOCKS_${ConnectivityFailureDiagnosis.classify(e)}")
+        } catch (e: Exception) {
+            ConnectionCheck(label, false, elapsed(start), "SOCKS_${ConnectivityFailureDiagnosis.classify(e)}")
         }
     }
 
@@ -289,12 +325,12 @@ internal object NetworkHealthUtils {
                 if (received > 0) "STALLED_AFTER_BYTES" else "TIMEOUT_BEFORE_BYTES",
                 received,
             )
-        } catch (_: SSLException) {
-            ConnectionCheck(label, false, elapsed(start), "TLS_FAILURE", received)
-        } catch (_: IOException) {
-            ConnectionCheck(label, false, elapsed(start), "NETWORK_FAILURE", received)
-        } catch (_: Exception) {
-            ConnectionCheck(label, false, elapsed(start), "UNKNOWN_FAILURE", received)
+        } catch (e: SSLException) {
+            ConnectionCheck(label, false, elapsed(start), ConnectivityFailureDiagnosis.classify(e), received)
+        } catch (e: IOException) {
+            ConnectionCheck(label, false, elapsed(start), ConnectivityFailureDiagnosis.classify(e), received)
+        } catch (e: Exception) {
+            ConnectionCheck(label, false, elapsed(start), ConnectivityFailureDiagnosis.classify(e), received)
         } finally {
             connection?.disconnect()
         }
