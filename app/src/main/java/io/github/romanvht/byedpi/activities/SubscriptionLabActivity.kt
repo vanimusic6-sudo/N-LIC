@@ -6,7 +6,6 @@ import android.os.Bundle
 import android.text.InputType
 import android.view.View
 import android.view.WindowManager
-import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
@@ -15,7 +14,6 @@ import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.switchmaterial.SwitchMaterial
-import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import io.github.romanvht.byedpi.BuildConfig
 import io.github.romanvht.byedpi.R
 import io.github.romanvht.byedpi.data.AppStatus
@@ -352,36 +350,43 @@ class SubscriptionLabActivity : BaseActivity() {
         findViewById<View>(R.id.nlic_progress).visibility =
             if (busy) View.VISIBLE else View.GONE
 
-        val picker = findViewById<MaterialAutoCompleteTextView>(R.id.nlic_server_picker)
-        val labels = all.take(150).map {
-            it.name + "  ·  " + it.protocol
-        }
-        picker.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, labels))
-        picker.setText(
-            if (auto) getString(R.string.nlic_control_auto_selected)
-            else selected?.let { it.name + "  ·  " + it.protocol }
-                ?: getString(R.string.nlic_control_select_server), false
-        )
-        picker.setOnItemClickListener { _, _, position, _ ->
-            val node = all.getOrNull(position) ?: return@setOnItemClickListener
-            runCatching { SubscriptionVault.select(applicationContext, node.id) }
-                .onSuccess {
-                    // Explicitly choosing a server means leaving automatic
-                    // selection. Otherwise the picker appears to ignore taps.
-                    if (auto) prefs.edit().putBoolean("nlic_core_auto", false).commit()
-                    // A UDP node cannot use ByeDPI's TCP-only upstream detour.
-                    if (bay && SingBoxConfigCompiler.compile(
-                            node, SingBoxConfigCompiler.Bay.ON
-                        ) !is SingBoxConfigCompiler.Result.Compiled
-                    ) {
-                        prefs.edit().putBoolean("nlic_core_bay", false).commit()
+        val choices = all.take(150)
+        val labels = choices.map { node -> node.name + "  ·  " + node.protocol }
+        findViewById<MaterialButton>(R.id.nlic_server_picker_button).apply {
+            text = if (auto) getString(R.string.nlic_control_auto_selected)
+                else selected?.let { it.name + "  ·  " + it.protocol }
+                    ?: getString(R.string.nlic_control_select_server)
+            isEnabled = !busy && choices.isNotEmpty()
+            setOnClickListener {
+                val selectedPosition = choices.indexOfFirst { node -> node.id == selected?.id }
+                AlertDialog.Builder(this@SubscriptionLabActivity)
+                    .setTitle(R.string.nlic_control_server_title)
+                    .setSingleChoiceItems(labels.toTypedArray(), selectedPosition) { dialog, position ->
+                        val node = choices.getOrNull(position)
+                        if (node != null) {
+                            runCatching {
+                                SubscriptionVault.select(applicationContext, node.id)
+                            }.onSuccess {
+                                if (auto) {
+                                    prefs.edit().putBoolean("nlic_core_auto", false).commit()
+                                }
+                                if (bay && SingBoxConfigCompiler.compile(
+                                        node, SingBoxConfigCompiler.Bay.ON
+                                    ) !is SingBoxConfigCompiler.Result.Compiled
+                                ) {
+                                    prefs.edit().putBoolean("nlic_core_bay", false).commit()
+                                }
+                                latestMessage = null
+                                locallyVerified = false
+                                render()
+                            }.onFailure { toast(R.string.nlic_subscriptions_error) }
+                        }
+                        dialog.dismiss()
                     }
-                    latestMessage = null
-                    locallyVerified = false
-                    render()
-                }.onFailure { toast(R.string.nlic_subscriptions_error) }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            }
         }
-        picker.isEnabled = !busy && all.isNotEmpty()
         findViewById<TextView>(R.id.nlic_server_hint).text = when {
             all.isEmpty() -> getString(R.string.nlic_control_start_hint)
             auto -> getString(R.string.nlic_core_auto_desc)
