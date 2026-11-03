@@ -70,7 +70,8 @@
 
         <activity
             android:name=".activities.SubscriptionLabActivity"
-            android:label="@string/nlic_subscriptions_title"
+            android:label="@string/nlic_control_title"
+            android:theme="@style/Theme.NlicControl"
             android:exported="false" />
 
         <activity
