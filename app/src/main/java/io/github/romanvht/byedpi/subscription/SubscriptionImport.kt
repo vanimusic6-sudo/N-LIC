@@ -1,32 +1,37 @@
 package io.github.romanvht.byedpi.subscription
 
 import com.google.gson.JsonParser
+import com.google.gson.annotations.SerializedName
+import androidx.annotation.Keep
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
+@Keep
 internal data class SubscriptionNode(
-    val id: String,
-    val name: String,
-    val protocol: String,
-    val host: String,
-    val port: Int,
-    val originalUri: String,
-    val group: String = "Imported",
+    @SerializedName("id") val id: String,
+    @SerializedName("name") val name: String,
+    @SerializedName("protocol") val protocol: String,
+    @SerializedName("host") val host: String,
+    @SerializedName("port") val port: Int,
+    @SerializedName("originalUri") val originalUri: String,
+    @SerializedName("group") val group: String = "Imported",
 )
 
+@Keep
 internal data class SubscriptionGroup(
-    val title: String,
-    val url: String,
-    val nodes: List<SubscriptionNode>,
-    val refreshedAt: Long,
+    @SerializedName("title") val title: String,
+    @SerializedName("url") val url: String,
+    @SerializedName("nodes") val nodes: List<SubscriptionNode>,
+    @SerializedName("refreshedAt") val refreshedAt: Long,
 )
 
+@Keep
 internal data class SubscriptionCatalog(
-    val groups: List<SubscriptionGroup> = emptyList(),
-    val manual: List<SubscriptionNode> = emptyList(),
-    val selectedNodeId: String? = null,
+    @SerializedName("groups") val groups: List<SubscriptionGroup> = emptyList(),
+    @SerializedName("manual") val manual: List<SubscriptionNode> = emptyList(),
+    @SerializedName("selectedNodeId") val selectedNodeId: String? = null,
 ) {
     val allNodes: List<SubscriptionNode>
         get() = (manual + groups.flatMap { it.nodes }).distinctBy { it.id }
