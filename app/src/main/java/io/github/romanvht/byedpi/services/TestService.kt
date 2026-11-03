@@ -50,6 +50,7 @@ class TestService : Service() {
             val previous = state.value
             mutableState.value = previous.copy(
                 runId = previous.runId + 1,
+                networkType = NetworkEnvironment.capture(context).type.name,
                 isRunning = true,
                 isStopping = false,
                 currentStrategy = 0,
@@ -74,13 +75,18 @@ class TestService : Service() {
         }
 
         suspend fun loadResults(context: Context) {
-            val previous = state.value
-            if (previous.isLoaded || previous.isRunning) return
             val app = context.applicationContext
+            val access = NetworkEnvironment.capture(app).type
+            val previous = state.value
+            if (previous.isRunning || previous.isLoaded && previous.networkType == access.name) return
             val loaded = withContext(Dispatchers.IO) {
+                val primary = File(app.filesDir, AccessPolicy.resultsFileName(access))
+                val selectedFile = if (access == AccessType.UNKNOWN && !primary.exists()) {
+                    File(app.filesDir, RESULTS_FILE)
+                } else primary
                 val results = try {
                     synchronized(resultsLock) {
-                        AtomicFile(File(app.filesDir, RESULTS_FILE)).openRead().bufferedReader().use { reader ->
+                        AtomicFile(selectedFile).openRead().bufferedReader().use { reader ->
                             val type = object : TypeToken<List<StrategyResult>>() {}.type
                             Gson().fromJson<List<StrategyResult>>(reader, type) ?: emptyList()
                         }
@@ -90,6 +96,7 @@ class TestService : Service() {
                 }
                 previous.copy(
                     isLoaded = true,
+                    networkType = access.name,
                     strategies = results,
                     wasInterrupted = app.getPreferences().getBoolean("is_test_running", false),
                 )
@@ -186,7 +193,7 @@ class TestService : Service() {
                     Toast.makeText(this@TestService, R.string.test_settings_domain_empty, Toast.LENGTH_LONG).show()
                     return@launch
                 }
-                strategies.addAll(options.commands.map { StrategyResult(command = it) })
+                strategies.addAll(options.commands.map { StrategyResult(command = it, networkType = options.networkType.name) })
                 prepared = true
                 getPreferences().edit(commit = true) { putBoolean("is_test_running", true) }
                 publish(strategies, 0)
@@ -199,6 +206,14 @@ class TestService : Service() {
 
                 for ((index, strategy) in strategies.withIndex()) {
                     ensureActive()
+                    val currentAccess = NetworkEnvironment.capture(this@TestService).type
+                    if (options.networkType != AccessType.UNKNOWN &&
+                        currentAccess != AccessType.UNKNOWN &&
+                        currentAccess != options.networkType) {
+                        Log.w(TAG, "Connection type changed; stopping before mixing radio results")
+                        failed = true
+                        break
+                    }
                     currentStrategy = strategy
                     strategy.totalRequests = options.sites.size * options.requestsCount
                     publish(strategies, index + 1)
@@ -208,7 +223,7 @@ class TestService : Service() {
                     }
                     strategy.isCompleted = true
                     publish(strategies)
-                    saveResults(strategies)
+                    saveResults(strategies, options.networkType)
                     stopEngine()
                     currentStrategy = null
                     delay(options.delaySec * 500L)
@@ -231,7 +246,7 @@ class TestService : Service() {
                     stopEngine()
                     if (prepared) {
                         try {
-                            saveResults(strategies)
+                            saveResults(strategies, settings?.networkType ?: AccessType.UNKNOWN)
                         } catch (e: Exception) {
                             Log.e(TAG, "Failed to save proxy test results", e)
                             failed = true
@@ -245,6 +260,7 @@ class TestService : Service() {
                     mutableState.value = if (prepared) TestState(
                         runId = previous.runId,
                         isLoaded = true,
+                        networkType = settings?.networkType?.name ?: "UNKNOWN",
                         strategies = snapshot(strategies),
                         failed = failed,
                     ) else previous.copy(failed = failed)
@@ -356,14 +372,18 @@ class TestService : Service() {
         val prefs = getPreferences()
         val userCommands = prefs.getBoolean("byedpi_proxytest_usercommands", false)
         val sniValue = prefs.getStringNotNull("byedpi_proxytest_sni", "google.com")
+        val accessType = NetworkEnvironment.capture(this).type
+        val catalog = if (accessType == AccessType.CELLULAR) {
+            "proxytest_strategies_mobile.list"
+        } else "proxytest_strategies.list"
         val content = if (userCommands) prefs.getStringNotNull("byedpi_proxytest_commands", "")
-        else assets.open("proxytest_strategies.list").bufferedReader().use { it.readText() }
+        else assets.open(catalog).bufferedReader().use { it.readText() }
         // Escape quote delimiters before substituting imported SNI into strategy templates.
         val safeSni = sniValue.trim().take(253).takeIf {
             it.matches(Regex("[A-Za-z0-9.-]{1,253}")) && !it.startsWith(".") && !it.endsWith(".")
         } ?: "www.iana.org"
         val escapedSni = safeSni.replace("\\", "\\\\").replace("\"", "\\\"")
-        val commands = content.replace("{sni}", "\"${escapedSni}\"").lines().map { it.trim() }.filter { it.isNotEmpty() }.take(200)
+        val commands = content.replace("{sni}", "\"${escapedSni}\"").lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }.take(200)
         val host = prefs.getStringNotNull("byedpi_proxy_ip", "127.0.0.1")
         val port = prefs.getIntStringNotNull("byedpi_proxy_port", 1080)
         val delaySec = prefs.getIntStringNotNull("byedpi_proxytest_delay", 1).coerceIn(0, 10)
@@ -379,7 +399,7 @@ class TestService : Service() {
         DomainListUtils.syncLists(this)
         return TestSettings(
             DomainListUtils.getActiveDomains(this).toList(), commands, host, port,
-            delaySec, requestsCount, requestTimeout, requestLimit, streamUrl
+            delaySec, requestsCount, requestTimeout, requestLimit, streamUrl, accessType
         )
     }
 
@@ -393,11 +413,11 @@ class TestService : Service() {
     private fun snapshot(strategies: List<StrategyResult>): List<StrategyResult> =
         strategies.map { it.copy(siteResults = it.siteResults.toMutableList()) }
 
-    private suspend fun saveResults(strategies: List<StrategyResult>) {
+    private suspend fun saveResults(strategies: List<StrategyResult>, access: AccessType) {
         val results = snapshot(strategies)
         withContext(Dispatchers.IO) {
             synchronized(resultsLock) {
-                val file = AtomicFile(File(filesDir, RESULTS_FILE))
+                val file = AtomicFile(File(filesDir, AccessPolicy.resultsFileName(access)))
                 val output = file.startWrite()
                 try {
                     output.write(gson.toJson(results).toByteArray(Charsets.UTF_8))

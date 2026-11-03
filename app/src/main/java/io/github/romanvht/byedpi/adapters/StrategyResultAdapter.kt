@@ -65,7 +65,13 @@ class StrategyResultAdapter(
     override fun onBindViewHolder(holder: StrategyViewHolder, position: Int) {
         val strategy = strategies[position]
 
-        holder.commandTextView.text = strategy.command
+        val networkTag = when (strategy.networkType) {
+            "CELLULAR" -> " · Mobile"
+            "WIFI" -> " · Wi-Fi"
+            "ETHERNET" -> " · Ethernet"
+            else -> ""
+        }
+        holder.commandTextView.text = strategy.command + networkTag
         updateStreamLabel(holder, strategy)
 
         if (strategy.totalRequests > 0) {
