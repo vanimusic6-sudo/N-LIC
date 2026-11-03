@@ -250,7 +250,7 @@
     <string name="stream_probe_url">Test için HTTPS video akışı bağlantısı</string>
     <string name="stream_probe_url_desc">Geçerli bir googlevideo.com/videoplayback adresi veya https://speed.cloudflare.com/__down?bytes=262144 bağlantısı girin. Test başlayınca bağlantı silinir, sonuçlara kaydedilmez.</string>
     <string name="nlic_mobile_safe_mtu">Mobil ağ: güvenli MTU (deneysel)</string>
-    <string name="nlic_mobile_safe_mtu_desc">Mobil ağda sanal paketleri 1280–1400 baytla sınırlar. Wi-Fi değişmez. Bağlantı kötüleşirse kapatıp N-LIC'i yeniden bağlayın.</string>
+    <string name="nlic_mobile_safe_mtu_desc">Mobil ağda sanal paketleri 1280–1400 baytla sınırlar. Wi-Fi değişmez. Bağlantı kötüleşirse kapatıp N-LIC uygulamasını yeniden bağlayın.</string>
     <string name="nlic_mobile_ipv6_auto">Mobil ağ: IPv6 trafiğini N-LIC üzerinden yönlendir</string>
     <string name="nlic_mobile_ipv6_auto_desc">Genel IPv6 ayarı kapalı olsa bile IPv6 destekli mobil ağlarda VPN üzerinden IPv6 yönlendirmesini açar. Wi-Fi değişmez. Sorun olursa kapatabilirsiniz.</string>
     <string name="nlic_network_profiles">Wi-Fi ve mobil ağ için ayrı stratejiler</string>
