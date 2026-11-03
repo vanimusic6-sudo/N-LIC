@@ -98,7 +98,7 @@ internal object NetworkEnvironment {
         val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
             as? ConnectivityManager ?: return AccessSnapshot(AccessType.UNKNOWN)
         return try {
-            val activeNetwork = manager.activeNetwork
+            val activeNetwork = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) manager.activeNetwork else null
             var activeCandidate: AccessCandidate? = null
             val candidates = manager.allNetworks.mapNotNull { network ->
                 val caps = manager.getNetworkCapabilities(network) ?: return@mapNotNull null
