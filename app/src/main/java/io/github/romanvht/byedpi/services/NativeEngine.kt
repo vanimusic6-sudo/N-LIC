@@ -96,7 +96,8 @@ internal class NativeEngine(
                 NetworkEnvironment.capture(context).type,
                 adaptive?.command ?: manual,
             ) { key -> preferences.getString(key, null) }
-            val proxy = if (preferences.getCmdEnable() && selected != manual) {
+            val proxy = if ((preferences.getCmdEnable() || adaptive != null) &&
+                selected != manual) {
                 // Apply only on engine startup; never interrupt an existing flow.
                 val host = preferences.getStringNotNull("byedpi_proxy_ip", "127.0.0.1")
                 val port = preferences.getIntStringNotNull("byedpi_proxy_port", 1080)
