@@ -25,6 +25,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
 import io.github.romanvht.byedpi.R
+import io.github.romanvht.byedpi.BuildConfig
 import io.github.romanvht.byedpi.data.*
 import io.github.romanvht.byedpi.databinding.ActivityMainBinding
 import io.github.romanvht.byedpi.services.ServiceManager
@@ -192,6 +193,12 @@ class MainActivity : BaseActivity() {
             } else {
                 binding.statusButtonCard.strokeWidth = 0
             }
+        }
+
+        binding.nlicCoreButton.visibility =
+            if (BuildConfig.NLIC_LIBBOX_INCLUDED) View.VISIBLE else View.GONE
+        binding.nlicCoreButton.setOnClickListener {
+            startActivity(Intent(this, SubscriptionLabActivity::class.java))
         }
 
         binding.settingsButton.setOnClickListener {
