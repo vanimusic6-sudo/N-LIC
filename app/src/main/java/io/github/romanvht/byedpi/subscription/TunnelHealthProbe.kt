@@ -12,21 +12,28 @@ internal data class LocalSocksAuth(val username: String, val password: String)
 internal object TunnelHealthProbe {
     private const val TARGET = "www.gstatic.com"
     private const val TIMEOUT = 4_000
+    private val TRUSTED_204_TARGETS = setOf(TARGET, "cp.cloudflare.com")
 
-    fun check(host: String, port: Int, auth: LocalSocksAuth? = null): Boolean = try {
+    // The selected hostname is a fixed allowlisted HTTPS connectivity
+    // endpoint, NOT a provider-controlled URL. No cookies or tokens sent.
+    fun check(
+        host: String, port: Int, auth: LocalSocksAuth? = null,
+        target: String = TARGET,
+    ): Boolean = try {
+        require(target in TRUSTED_204_TARGETS)
         Socket().use { socket ->
             socket.connect(InetSocketAddress(host, port), TIMEOUT)
             socket.soTimeout = TIMEOUT
-            connectDomain(socket, TARGET, 443, auth)
+            connectDomain(socket, target, 443, auth)
             val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
-            (factory.createSocket(socket, TARGET, 443, true) as SSLSocket).use { tls ->
+            (factory.createSocket(socket, target, 443, true) as SSLSocket).use { tls ->
                 tls.soTimeout = TIMEOUT
                 tls.sslParameters = tls.sslParameters.apply {
                     endpointIdentificationAlgorithm = "HTTPS"
                 }
                 tls.startHandshake()
                 tls.outputStream.write(("GET /generate_204 HTTP/1.1\r\n" +
-                    "Host: $TARGET\r\nConnection: close\r\n\r\n").toByteArray(Charsets.US_ASCII))
+                    "Host: $target\r\nConnection: close\r\n\r\n").toByteArray(Charsets.US_ASCII))
                 tls.outputStream.flush()
                 // A bounded first line suffices; no cookies, body or redirects.
                 val line = StringBuilder()
