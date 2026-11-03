@@ -23,7 +23,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal class CoreStartException(val stage: String) :
     IllegalStateException("LIC-Core / $stage")
 
-internal class LibboxRuntime(private val context: Context) : AutoCloseable {
+internal class LibboxRuntime(
+    private val context: Context,
+    /** Returns an Android VpnService-owned TUN descriptor; libbox dup()s it. */
+    private val openAndroidTun: (() -> Int)? = null,
+) : AutoCloseable {
     companion object {
         private const val TAG = "LICCore"
         private const val LIBBOX = "io.nekohasekai.libbox."
@@ -81,6 +85,7 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
                 PlatformHandler(
                     context as? VpnService ?: error("Core must run inside Android VpnService"),
                     networkMonitor,
+                    openAndroidTun,
                 ),
             )
             val handler = Proxy.newProxyInstance(
@@ -167,6 +172,7 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
     private class PlatformHandler(
         private val vpn: VpnService,
         private val monitor: CoreNetworkMonitor,
+        private val openAndroidTun: (() -> Int)?,
     ) : InvocationHandler {
         override fun invoke(proxy: Any, method: Method, args: Array<out Any?>?): Any? =
             when (method.name) {
@@ -183,9 +189,16 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
                     }
                     null
                 }
-                "openTun" -> throw SecurityException(
-                    "Second TUN disallowed: N-LIC VpnService must own the tunnel"
-                )
+                "openTun" -> {
+                    // Android's only TUN is created lazily by libbox while
+                    // initializing the native sing-box service. No extra HEV
+                    // TUN or loopback translation path is used.
+                    val opener = openAndroidTun
+                        ?: error("Native TUN service missing Android VPN descriptor")
+                    val fd = opener()
+                    check(fd >= 0) { "Android VPN tunnel could not be created" }
+                    fd
+                }
                 "startDefaultInterfaceMonitor" -> {
                     args?.firstOrNull()?.let(monitor::start)
                     null
