@@ -245,4 +245,8 @@
     <string name="nlic_shortcut_confirm_title">Confirm N-LIC action</string>
     <string name="nlic_shortcut_confirm_message">Run the shortcut action? Network control requires confirmation.</string>
     <string name="nlic_upstream_credits">Original ByeByeDPI · romanvht, hufrea, heiher</string>
+    <string name="stream_probe_enable">Video stream test (256 KiB)</string>
+    <string name="stream_probe_enable_desc">Optional SOCKS5 download test. Unlike image checks, it detects slow transfers and stalls after the first kilobytes.</string>
+    <string name="stream_probe_url">HTTPS video stream URL for testing</string>
+    <string name="stream_probe_url_desc">Paste a valid googlevideo.com/videoplayback URL or https://speed.cloudflare.com/__down?bytes=262144. The URL is cleared when testing starts and never stored in results.</string>
 </resources>
