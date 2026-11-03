@@ -41,6 +41,7 @@ class SingBoxConfigCompilerTest {
         val outbounds = config.getAsJsonArray("outbounds")
         assertEquals(2, outbounds.size())
         assertEquals("lic-bay-local-socks", outbounds[0].asJsonObject.get("detour").asString)
+        assertEquals("hysteria2", outbounds[0].asJsonObject.get("type").asString)
         assertEquals("socks", outbounds[1].asJsonObject.get("type").asString)
         assertEquals("127.0.0.1", outbounds[1].asJsonObject.get("server").asString)
         assertEquals(1080, outbounds[1].asJsonObject.get("server_port").asInt)
@@ -81,11 +82,15 @@ class SingBoxConfigCompilerTest {
         assertEquals("password", out.get("password").asString)
     }
 
-    @Test fun `HY2 is a native QUIC candidate and cannot be ByeDPI wrapped`() {
+    @Test fun `HY2 QUIC uses ByeDPI UDP relay with no silent direct fallback`() {
         val uri = "hysteria2://secret@vpn.example:443?insecure=0&sni=cdn.example"
         assertEquals("hysteria2", json(uri).getAsJsonArray("outbounds")[0].asJsonObject
             .get("type").asString)
-        assertTrue(compile(uri, SingBoxConfigCompiler.Bay.ON) is SingBoxConfigCompiler.Result.Unsupported)
+        val out = json(uri, SingBoxConfigCompiler.Bay.ON).getAsJsonArray("outbounds")
+        assertEquals("lic-bay-local-socks", out[0].asJsonObject.get("detour").asString)
+        assertEquals("socks", out[1].asJsonObject.get("type").asString)
+        assertEquals(BayTransport.UDP_ASSOCIATE,
+            LICBay.plan(requireNotNull(SubscriptionImport.parseNode(uri))).transport)
     }
 
     @Test fun `unsupported transport and intentionally insecure TLS are rejected`() {
@@ -117,7 +122,7 @@ class SingBoxConfigCompilerTest {
         assertTrue(json.getAsJsonObject("route").has("default_domain_resolver"))
     }
 
-    @Test fun `LIC Bay URLTest excludes UDP first nodes and shares one local SOCKS`() {
+    @Test fun `LIC Bay URLTest includes UDP and TCP with one local SOCKS`() {
         val nodes = listOf(
             "hysteria2://key@one.example:443?sni=one.example",
             "vless://$uuid@two.example:443?security=tls&sni=two.example",
@@ -127,10 +132,10 @@ class SingBoxConfigCompilerTest {
             as SingBoxConfigCompiler.Result.Compiled
         val json = JsonParser.parseString(r.config).asJsonObject
         val outbounds = json.getAsJsonArray("outbounds")
-        assertEquals(4, outbounds.size())
-        assertEquals("socks", outbounds[2].asJsonObject.get("type").asString)
-        assertEquals(12080, outbounds[2].asJsonObject.get("server_port").asInt)
-        assertEquals(2, outbounds[3].asJsonObject.getAsJsonArray("outbounds").size())
+        assertEquals(5, outbounds.size())
+        assertEquals("socks", outbounds[3].asJsonObject.get("type").asString)
+        assertEquals(12080, outbounds[3].asJsonObject.get("server_port").asInt)
+        assertEquals(3, outbounds[4].asJsonObject.getAsJsonArray("outbounds").size())
         assertEquals("lic-bay-local-socks", outbounds[0].asJsonObject.get("detour").asString)
     }
 
