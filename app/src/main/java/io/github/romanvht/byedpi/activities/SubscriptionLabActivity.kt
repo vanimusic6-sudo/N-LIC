@@ -310,8 +310,8 @@ class SubscriptionLabActivity : BaseActivity() {
         val bay = if (prefs.getBoolean("nlic_core_bay", false))
             SingBoxConfigCompiler.Bay.ON else SingBoxConfigCompiler.Bay.OFF
         return if (prefs.getBoolean("nlic_core_auto", false)) {
-            SingBoxConfigCompiler.compileAuto(catalog.allNodes, bay)
-                is SingBoxConfigCompiler.Result.Compiled
+            SingBoxConfigCompiler.compileAuto(catalog.allNodes, bay) is
+                SingBoxConfigCompiler.Result.Compiled
         } else {
             val selected = catalog.allNodes.firstOrNull { it.id == catalog.selectedNodeId }
                 ?: return false
