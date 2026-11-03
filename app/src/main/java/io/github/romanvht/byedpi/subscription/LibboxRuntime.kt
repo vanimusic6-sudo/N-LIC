@@ -1,6 +1,7 @@
 package io.github.romanvht.byedpi.subscription
 
 import android.content.Context
+import android.net.VpnService
 import android.util.Log
 import java.io.File
 import java.lang.reflect.InvocationHandler
@@ -77,7 +78,10 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
             val handlerType = Class.forName(LIBBOX + "CommandServerHandler")
             val platform = Proxy.newProxyInstance(
                 platformType.classLoader, arrayOf(platformType),
-                PlatformHandler(networkMonitor),
+                PlatformHandler(
+                    context as? VpnService ?: error("Core must run inside Android VpnService"),
+                    networkMonitor,
+                ),
             )
             val handler = Proxy.newProxyInstance(
                 handlerType.classLoader, arrayOf(handlerType),
@@ -160,11 +164,25 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
             }
     }
 
-    private class PlatformHandler(private val monitor: CoreNetworkMonitor) : InvocationHandler {
+    private class PlatformHandler(
+        private val vpn: VpnService,
+        private val monitor: CoreNetworkMonitor,
+    ) : InvocationHandler {
         override fun invoke(proxy: Any, method: Method, args: Array<out Any?>?): Any? =
             when (method.name) {
-                "usePlatformAutoDetectInterfaceControl" -> false
-                "autoDetectInterfaceControl" -> Unit
+                // Critical: when Android installs our VPN, native sing-box
+                // upstream sockets must bypass the VPN to avoid an endless
+                // VPN -> SOCKS -> VPN routing loop.  Android VpnService.protect
+                // is the supported, per-FD platform hook.
+                "usePlatformAutoDetectInterfaceControl" -> true
+                "autoDetectInterfaceControl" -> {
+                    val fd = (args?.firstOrNull() as? Int)
+                        ?: throw IllegalStateException("LIC-Core missing outbound file descriptor")
+                    check(fd >= 0 && vpn.protect(fd)) {
+                        "LIC-Core could not protect physical outbound socket"
+                    }
+                    null
+                }
                 "openTun" -> throw SecurityException(
                     "Second TUN disallowed: N-LIC VpnService must own the tunnel"
                 )
