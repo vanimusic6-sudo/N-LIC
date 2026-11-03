@@ -35,13 +35,13 @@ class SingBoxConfigCompilerTest {
         assertEquals(1, config.getAsJsonArray("outbounds").size())
     }
 
-    @Test fun `LIC Bay creates a detour only for TCP outbounds`() {
+    @Test fun `LIC Bay creates a TCP SOCKS detour for TLS VLESS outbound`() {
         val uri = "vless://$uuid@vpn.example.net:443?security=tls&sni=cdn.example.net"
         val config = json(uri, SingBoxConfigCompiler.Bay.ON)
         val outbounds = config.getAsJsonArray("outbounds")
         assertEquals(2, outbounds.size())
         assertEquals("lic-bay-local-socks", outbounds[0].asJsonObject.get("detour").asString)
-        assertEquals("hysteria2", outbounds[0].asJsonObject.get("type").asString)
+        assertEquals("vless", outbounds[0].asJsonObject.get("type").asString)
         assertEquals("socks", outbounds[1].asJsonObject.get("type").asString)
         assertEquals("127.0.0.1", outbounds[1].asJsonObject.get("server").asString)
         assertEquals(1080, outbounds[1].asJsonObject.get("server_port").asInt)
