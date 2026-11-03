@@ -23,6 +23,8 @@ import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
 import io.github.romanvht.byedpi.subscription.LibboxRuntime
 import io.github.romanvht.byedpi.subscription.CoreStartException
+import io.github.romanvht.byedpi.subscription.LocalSocksAuth
+import java.security.SecureRandom
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -67,6 +69,7 @@ internal class NativeSession(
     private var state = EngineProtocol.STATE_IDLE
     private var proxy: ByeDpiProxy? = null
     private var boxEngine: LibboxRuntime? = null
+    private var localAuth: LocalSocksAuth? = null
     private var proxyThread: Thread? = null
     private var tunnelThread: Thread? = null
     private var tunFd: ParcelFileDescriptor? = null
@@ -235,12 +238,18 @@ internal class NativeSession(
                         }
                         val bay = if (bayEnabled) SingBoxConfigCompiler.Bay.ON
                             else SingBoxConfigCompiler.Bay.OFF
+                        // A random ephemeral secret limits other apps' access to
+                        // the loopback SOCKS listener while LIC-Core is running.
+                        val password = ByteArray(24).also { SecureRandom().nextBytes(it) }
+                            .joinToString("") { "%02x".format(it.toInt() and 255) }
+                        val auth = LocalSocksAuth("nlic", password)
+                        localAuth = auth
                         val compiled = if (autoEnabled) {
-                            SingBoxConfigCompiler.compileAuto(saved.allNodes, bay, legacyPort)
+                            SingBoxConfigCompiler.compileAuto(saved.allNodes, bay, legacyPort, auth.password)
                         } else {
                             val node = saved.allNodes.firstOrNull { it.id == saved.selectedNodeId }
                                 ?: error("Selected LIC-Core server is not available")
-                            SingBoxConfigCompiler.compile(node, bay, legacyPort)
+                            SingBoxConfigCompiler.compile(node, bay, legacyPort, auth.password)
                         }
                         val plan = compiled as? SingBoxConfigCompiler.Result.Compiled
                             ?: error("Selected LIC-Core configuration cannot be used")
@@ -270,8 +279,8 @@ internal class NativeSession(
                         val box = LibboxRuntime(service)
                         boxEngine = box
                         withContext(Dispatchers.IO) { box.start(plan.config) }
-                        withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port) }
-                        withTimeout(20_000) { awaitRemoteReadiness(config.host, config.port) }
+                        withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port, auth) }
+                        withTimeout(20_000) { awaitRemoteReadiness(config.host, config.port, auth) }
                     } else {
                         val engine = withContext(Dispatchers.IO) { ByeDpiProxy() }
                         proxy = engine
@@ -293,6 +302,12 @@ internal class NativeSession(
                             appendLine("  address: ${config.host}")
                             appendLine("  port: ${config.port}")
                             appendLine("  udp: udp")
+                            localAuth?.let {
+                                // Values are ASCII hex and never interpolated
+                                // into shell commands or user-visible logs.
+                                appendLine("  username: ${it.username}")
+                                appendLine("  password: ${it.password}")
+                            }
                         }
                         tunnelThread = runNative("HEV") { TProxyService.startTunnel(tunnelConfig, fd.fd) }
                         // Do not publish RUNNING when the native tunnel exited immediately.
@@ -347,7 +362,7 @@ internal class NativeSession(
         handler.post { if (state != EngineProtocol.STATE_STOPPING) fail(error) }
     }
 
-    private suspend fun awaitProxy(host: String, port: Int) {
+    private suspend fun awaitProxy(host: String, port: Int, auth: LocalSocksAuth? = null) {
         val address = when (host) {
             "0.0.0.0" -> "127.0.0.1"
             "::", "[::]" -> "::1"
@@ -355,28 +370,18 @@ internal class NativeSession(
         }
         while (true) {
             val ready = withContext(Dispatchers.IO) {
-                try {
-                    Socket().use { socket ->
-                        socket.connect(InetSocketAddress(address, port), PROBE_TIMEOUT)
-                        socket.soTimeout = PROBE_TIMEOUT
-                        socket.getOutputStream().write(byteArrayOf(5, 1, 0))
-                        val input = socket.getInputStream()
-                        input.read() == 5 && input.read() == 0
-                    }
-                } catch (_: IOException) {
-                    false
-                }
+                TunnelHealthProbe.checkLocal(address, port, auth)
             }
             if (ready) return
-            delay(50)
+            delay(75)
         }
     }
 
     /** Real outbound HTTPS validation BEFORE adding Android routes. */
-    private suspend fun awaitRemoteReadiness(host: String, port: Int) {
+    private suspend fun awaitRemoteReadiness(host: String, port: Int, auth: LocalSocksAuth) {
         repeat(3) { attempt ->
             val ok = withContext(Dispatchers.IO) {
-                TunnelHealthProbe.check(host, port)
+                TunnelHealthProbe.check(host, port, auth)
             }
             if (ok) return
             if (attempt < 2) delay(400)
