@@ -41,7 +41,7 @@ class VPNFileImportTest {
     }
 
     @Test fun `WireGuard rejects hooks, extra peers, missing full tunnel, weak keys`() {
-        assertTrue(VPNFileImport.parse("test.conf", wireguard("PostUp = curl bad")).isEmptyOrThrows())
+        assertNull(VPNFileImport.wireguard(wireguard("PostUp = curl bad")))
         assertNull(VPNFileImport.wireguard(wireguard().replace("AllowedIPs = 0.0.0.0/0, ::/0",
             "AllowedIPs = 10.0.0.0/8")))
         assertNull(VPNFileImport.wireguard(wireguard() + "\n[Peer]\nPublicKey=$key"))
@@ -73,5 +73,4 @@ class VPNFileImportTest {
         assertFalse(compiled.config.contains("0.0.0.0"))
     }
 
-    private fun List<SubscriptionNode>.isEmptyOrThrows() = isEmpty()
 }
