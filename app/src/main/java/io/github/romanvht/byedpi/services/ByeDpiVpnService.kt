@@ -142,21 +142,25 @@ class ByeDpiVpnService : VpnService() {
             }
 
             "whitelist" -> {
+                var allowed = 0
                 for (packageName in configuration.apps) {
                     // The N-LIC UID must never enter its own TUN: its
                     // native SOCKS outbound sockets would recursively loop.
                     if (packageName == applicationContext.packageName) continue
                     try {
                         builder.addAllowedApplication(packageName)
+                        allowed++
                     } catch (e: Exception) {
                         Log.e(TAG, "Не удалось добавить приложение $packageName в белый список", e)
                     }
                 }
+                check(allowed > 0) { "Select at least one installed app for VPN whitelist" }
             }
 
             "disable" -> {
                 builder.addDisallowedApplication(applicationContext.packageName)
             }
+            else -> error("Unsupported application routing mode")
         }
 
         return builder.establish() ?: throw IllegalStateException("VPN connection failed")

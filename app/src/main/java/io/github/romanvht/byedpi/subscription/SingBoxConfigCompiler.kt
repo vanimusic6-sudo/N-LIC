@@ -109,13 +109,13 @@ internal object SingBoxConfigCompiler {
         bayPort: Int = 1080,
     ): Result {
         if (nodes.isEmpty()) return Result.Unsupported("No subscription nodes")
-        val candidates = nodes.distinctBy { it.id }.take(12)
+        val candidates = nodes.distinctBy { it.id }.asSequence()
         val valid = candidates.mapNotNull { node ->
             val result = compile(node, bay, bayPort)
             if (result !is Result.Compiled) return@mapNotNull null
             val root = JsonParser.parseString(result.config).asJsonObject
             node to root
-        }
+        }.take(12).toList()
         if (valid.isEmpty()) {
             return Result.Unsupported("No compatible servers for LIC-Auto and LIC-Bay")
         }
@@ -182,15 +182,17 @@ internal object SingBoxConfigCompiler {
         val query = args(uri.rawQuery)
         val security = query["security"] ?: "none"
         val network = query["type"] ?: "tcp"
+        if (query["encryption"]?.let { it != "none" } == true) return null
         if (query["allowInsecure"] == "1" || query["insecure"] == "1") return null
         out.addProperty("uuid", uuid)
         val flow = query["flow"].orEmpty()
         if (flow.isNotEmpty()) {
-            if (flow != "xtls-rprx-vision") return null
+            if (flow != "xtls-rprx-vision" || network != "tcp" || security == "none") return null
             out.addProperty("flow", flow)
         }
         val tls = tls(
-            security, query["sni"] ?: uri.host, query["fp"],
+            security, query["sni"] ?: uri.host,
+            query["fp"] ?: if (security == "reality") "chrome" else null,
             query["pbk"], query["sid"], query["alpn"],
         ) ?: return null
         if (security != "none") out.add("tls", tls)
@@ -206,7 +208,8 @@ internal object SingBoxConfigCompiler {
         if (query["allowInsecure"] == "1" || query["insecure"] == "1") return null
         out.addProperty("password", password)
         val security = query["security"] ?: "tls"
-        val tls = tls(security, query["sni"] ?: uri.host, query["fp"], null,
+        val tls = tls(security, query["sni"] ?: uri.host,
+            query["fp"] ?: if (security == "reality") "chrome" else null, null,
             null, query["alpn"]) ?: return null
         if (security == "none") return null // Never downgrade Trojan TLS.
         out.add("tls", tls)

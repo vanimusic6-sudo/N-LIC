@@ -13,7 +13,11 @@ import androidx.preference.Preference
 import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreferenceCompat
-import android.content.SharedPreferences
+import android.app.Activity
+import android.net.VpnService
+import androidx.activity.result.contract.ActivityResultContracts
+import io.github.romanvht.byedpi.data.Mode
+import io.github.romanvht.byedpi.services.ServiceManager
 import io.github.romanvht.byedpi.BuildConfig
 import io.github.romanvht.byedpi.utility.getPreferences
 import io.github.romanvht.byedpi.R
@@ -23,11 +27,18 @@ import kotlinx.coroutines.withContext
 import java.net.URI
 
 /**
- * Phase 1 subscription manager. Import, view and run bounded TCP checks.
- * There is intentionally NO button that pretends to establish a VPN through
- * imported VLESS/VMess nodes before a real VPN core is integrated.
+ * Subscription manager and explicit control of the integrated VPN core.
+ * TCP shortlist and authenticated outbound tests remain separate actions.
  */
 class SubscriptionLabFragment : PreferenceFragmentCompat() {
+    private var connecting = false
+    private val vpnPermission = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) connectCore()
+        else Toast.makeText(requireContext(), R.string.vpn_permission_denied, Toast.LENGTH_SHORT).show()
+    }
+
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         render()
     }
@@ -90,8 +101,10 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
 
         val prefs = context.getPreferences()
         val selectedNode = saved.allNodes.firstOrNull { it.id == saved.selectedNodeId }
+        val selectedBay = if (prefs.getBoolean("nlic_core_bay", false))
+            SingBoxConfigCompiler.Bay.ON else SingBoxConfigCompiler.Bay.OFF
         val canCompile = selectedNode?.let {
-            SingBoxConfigCompiler.compile(it) is SingBoxConfigCompiler.Result.Compiled
+            SingBoxConfigCompiler.compile(it, selectedBay) is SingBoxConfigCompiler.Result.Compiled
         } == true
         val byedpiVpnMode = prefs.getString("byedpi_mode", "vpn") == "vpn"
         val autoEnabled = prefs.getBoolean("nlic_core_auto", false)
@@ -113,8 +126,8 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
                 else -> getString(R.string.nlic_core_reconnect)
             }
             isChecked = prefs.getBoolean(key, false)
-            isEnabled = BuildConfig.NLIC_LIBBOX_INCLUDED && byedpiVpnMode &&
-                (if (autoEnabled) autoAvailable else canCompile)
+            isEnabled = isChecked || (BuildConfig.NLIC_LIBBOX_INCLUDED && byedpiVpnMode &&
+                (if (autoEnabled) autoAvailable else canCompile))
             setOnPreferenceChangeListener { _, newValue ->
                 prefs.edit().putBoolean(key, newValue as Boolean).commit()
                 render()
@@ -149,14 +162,33 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
             summary = if (bayEligible) getString(R.string.nlic_core_bay_desc)
                 else getString(R.string.nlic_core_bay_udp)
             isChecked = prefs.getBoolean(key, false)
-            isEnabled = BuildConfig.NLIC_LIBBOX_INCLUDED && bayEligible &&
-                prefs.getBoolean("nlic_core_mode", false)
+            isEnabled = isChecked || (BuildConfig.NLIC_LIBBOX_INCLUDED && bayEligible &&
+                prefs.getBoolean("nlic_core_mode", false))
             setOnPreferenceChangeListener { _, newValue ->
                 prefs.edit().putBoolean(key, newValue as Boolean).commit()
+                render()
                 true
             }
         })
 
+        section.addPreference(Preference(context).apply {
+            title = getString(if (connecting) R.string.nlic_core_connecting else R.string.nlic_core_connect)
+            summary = getString(R.string.nlic_core_connect_desc)
+            isEnabled = !connecting && BuildConfig.NLIC_LIBBOX_INCLUDED && byedpiVpnMode &&
+                (if (autoEnabled) autoAvailable else canCompile)
+            setOnPreferenceClickListener {
+                val permission = VpnService.prepare(context)
+                if (permission == null) connectCore() else vpnPermission.launch(permission)
+                true
+            }
+        })
+        section.addPreference(Preference(context).apply {
+            title = getString(R.string.nlic_core_disconnect)
+            setOnPreferenceClickListener {
+                ServiceManager.stop()
+                true
+            }
+        })
         section.addPreference(Preference(context).apply {
             title = getString(R.string.nlic_core_profile_check)
             summary = if (if (autoEnabled) autoAvailable else canCompile)
@@ -193,7 +225,8 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
         })
         section.addPreference(Preference(context).apply {
             title = getString(R.string.nlic_bay_label)
-            summary = getString(R.string.nlic_bay_phase)
+            summary = getString(if (BuildConfig.NLIC_LIBBOX_INCLUDED)
+                R.string.nlic_core_bay_desc else R.string.nlic_bay_phase)
             isSelectable = false
         })
         if (saved.allNodes.isNotEmpty()) {
@@ -227,6 +260,10 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
                         .setTitle(R.string.nlic_subscriptions_clear)
                         .setMessage(R.string.nlic_subscriptions_clear_confirm)
                         .setPositiveButton(android.R.string.ok) { _, _ ->
+                            if (prefs.getBoolean("nlic_core_mode", false)) ServiceManager.stop()
+                            prefs.edit().putBoolean("nlic_core_mode", false)
+                                .putBoolean("nlic_core_auto", false)
+                                .putBoolean("nlic_core_bay", false).commit()
                             SubscriptionVault.clear(context)
                             render()
                         }
@@ -235,6 +272,31 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
                     true
                 }
             })
+        }
+    }
+
+    private fun connectCore() {
+        if (connecting) return
+        val app = requireContext().applicationContext
+        app.getPreferences().edit().putBoolean("nlic_core_mode", true).commit()
+        connecting = true
+        render()
+        lifecycleScope.launch {
+            try {
+                ServiceManager.waitStop()
+                val connected = ServiceManager.waitStart(app, Mode.VPN)
+                if (isAdded) Toast.makeText(requireContext(),
+                    if (connected) R.string.nlic_core_connected else R.string.nlic_core_connect_failed,
+                    Toast.LENGTH_LONG).show()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                if (isAdded) Toast.makeText(requireContext(),
+                    R.string.nlic_core_connect_failed, Toast.LENGTH_LONG).show()
+            } finally {
+                connecting = false
+                if (isAdded) render()
+            }
         }
     }
 

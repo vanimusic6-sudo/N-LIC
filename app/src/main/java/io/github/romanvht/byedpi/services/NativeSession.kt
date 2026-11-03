@@ -35,9 +35,7 @@ import kotlinx.coroutines.withTimeout
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.net.URL
-import java.net.Proxy
-import javax.net.ssl.HttpsURLConnection
+import io.github.romanvht.byedpi.subscription.TunnelHealthProbe
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
@@ -215,79 +213,81 @@ internal class NativeSession(
         nativeStarted = true
         startJob = scope.launch {
             try {
-                if (config.args.firstOrNull() == "--nlic-libbox") {
-                    check(createTunnel != null) {
-                        "LIC-Core requires VPN mode; proxy-only service is unsupported"
-                    }
-                    val preferences = service.getPreferences()
-                    val saved = withContext(Dispatchers.IO) { SubscriptionVault.read(service) }
-                    val bayEnabled = config.args.getOrNull(1) == "--nlic-bay"
-                    val autoEnabled = config.args.getOrNull(2) == "--nlic-auto"
-                    val legacyArgs = config.args.drop(3)
-                    val (legacyHostArg, legacyPortArg) = legacyArgs.checkIpAndPortInArgs()
-                    val (defaultHost, defaultPort) = preferences.getProxyIpAndPort()
-                    val legacyHost = legacyHostArg ?: defaultHost
-                    val legacyPort = (legacyPortArg ?: defaultPort).toIntOrNull()
-                        ?: error("Invalid LIC-Bay port")
-                    check(!bayEnabled ||
-                        legacyHost in listOf("127.0.0.1", "::1", "[::1]", "localhost")) {
-                        "LIC-Bay must listen on loopback"
-                    }
-                    val bay = if (bayEnabled) SingBoxConfigCompiler.Bay.ON
-                        else SingBoxConfigCompiler.Bay.OFF
-                    val compiled = if (autoEnabled) {
-                        SingBoxConfigCompiler.compileAuto(saved.allNodes, bay, legacyPort)
+                withTimeout(50_000) {
+                    if (config.args.firstOrNull() == "--nlic-libbox") {
+                        check(createTunnel != null) {
+                            "LIC-Core requires VPN mode; proxy-only service is unsupported"
+                        }
+                        val preferences = service.getPreferences()
+                        val saved = withContext(Dispatchers.IO) { SubscriptionVault.read(service) }
+                        val bayEnabled = config.args.getOrNull(1) == "--nlic-bay"
+                        val autoEnabled = config.args.getOrNull(2) == "--nlic-auto"
+                        val legacyArgs = config.args.drop(3)
+                        val (legacyHostArg, legacyPortArg) = legacyArgs.checkIpAndPortInArgs()
+                        val (defaultHost, defaultPort) = preferences.getProxyIpAndPort()
+                        val legacyHost = legacyHostArg ?: defaultHost
+                        val legacyPort = (legacyPortArg ?: defaultPort).toIntOrNull()
+                            ?: error("Invalid LIC-Bay port")
+                        check(!bayEnabled ||
+                            legacyHost == "127.0.0.1") {
+                            "LIC-Bay must listen on 127.0.0.1"
+                        }
+                        val bay = if (bayEnabled) SingBoxConfigCompiler.Bay.ON
+                            else SingBoxConfigCompiler.Bay.OFF
+                        val compiled = if (autoEnabled) {
+                            SingBoxConfigCompiler.compileAuto(saved.allNodes, bay, legacyPort)
+                        } else {
+                            val node = saved.allNodes.firstOrNull { it.id == saved.selectedNodeId }
+                                ?: error("Selected LIC-Core server is not available")
+                            SingBoxConfigCompiler.compile(node, bay, legacyPort)
+                        }
+                        val plan = compiled as? SingBoxConfigCompiler.Result.Compiled
+                            ?: error("Selected LIC-Core configuration cannot be used")
+                        if (bayEnabled) {
+                            check(legacyArgs.isNotEmpty()) { "Missing LIC-Bay command" }
+                            val engine = withContext(Dispatchers.IO) { ByeDpiProxy() }
+                            proxy = engine
+                            proxyThread = runNative("ByeDPI-Bay") {
+                                engine.startProxy(legacyArgs.toTypedArray())
+                            }
+                            withTimeout(START_TIMEOUT) { awaitProxy(legacyHost, legacyPort) }
+                        }
+                        val box = LibboxRuntime(service)
+                        boxEngine = box
+                        withContext(Dispatchers.IO) { box.start(plan.config) }
+                        withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port) }
+                        withTimeout(20_000) { awaitRemoteReadiness(config.host, config.port) }
                     } else {
-                        val node = saved.allNodes.firstOrNull { it.id == saved.selectedNodeId }
-                            ?: error("Selected LIC-Core server is not available")
-                        SingBoxConfigCompiler.compile(node, bay, legacyPort)
-                    }
-                    val plan = compiled as? SingBoxConfigCompiler.Result.Compiled
-                        ?: error("Selected LIC-Core configuration cannot be used")
-                    if (bayEnabled) {
-                        check(legacyArgs.isNotEmpty()) { "Missing LIC-Bay command" }
                         val engine = withContext(Dispatchers.IO) { ByeDpiProxy() }
                         proxy = engine
-                        proxyThread = runNative("ByeDPI-Bay") {
-                            engine.startProxy(legacyArgs.toTypedArray())
+                        proxyThread = runNative("ByeDPI") { engine.startProxy(config.args.toTypedArray()) }
+                        withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port) }
+                    }
+                    createTunnel?.let { create ->
+                        val underlyingLink = NetworkEnvironment.capture(service)
+                        val tuneMobile = service.getPreferences().getBoolean("nlic_mobile_safe_mtu", true)
+                        val mtu = AccessPolicy.tunMtu(underlyingLink, tuneMobile)
+                        val fd = create(config, underlyingLink, mtu)
+                        tunFd = fd
+                        val tunnelConfig = buildString {
+                            appendLine("tunnel:")
+                            appendLine("  mtu: $mtu")
+                            appendLine("misc:")
+                            appendLine("  task-stack-size: 81920")
+                            appendLine("socks5:")
+                            appendLine("  address: ${config.host}")
+                            appendLine("  port: ${config.port}")
+                            appendLine("  udp: udp")
                         }
-                        withTimeout(START_TIMEOUT) { awaitProxy(legacyHost, legacyPort) }
+                        tunnelThread = runNative("HEV") { TProxyService.startTunnel(tunnelConfig, fd.fd) }
+                        // Do not publish RUNNING when the native tunnel exited immediately.
+                        delay(100)
+                        check(tunnelThread?.isAlive == true) { "HEV tunnel exited during startup" }
                     }
-                    val box = LibboxRuntime(service)
-                    boxEngine = box
-                    withContext(Dispatchers.IO) { box.start(plan.config) }
-                    withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port) }
-                    withTimeout(12_000) { awaitRemoteReadiness(config.host, config.port) }
-                } else {
-                    val engine = withContext(Dispatchers.IO) { ByeDpiProxy() }
-                    proxy = engine
-                    proxyThread = runNative("ByeDPI") { engine.startProxy(config.args.toTypedArray()) }
-                    withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port) }
-                }
-                createTunnel?.let { create ->
-                    val underlyingLink = NetworkEnvironment.capture(service)
-                    val tuneMobile = service.getPreferences().getBoolean("nlic_mobile_safe_mtu", true)
-                    val mtu = AccessPolicy.tunMtu(underlyingLink, tuneMobile)
-                    val fd = create(config, underlyingLink, mtu)
-                    tunFd = fd
-                    val tunnelConfig = buildString {
-                        appendLine("tunnel:")
-                        appendLine("  mtu: $mtu")
-                        appendLine("misc:")
-                        appendLine("  task-stack-size: 81920")
-                        appendLine("socks5:")
-                        appendLine("  address: ${config.host}")
-                        appendLine("  port: ${config.port}")
-                        appendLine("  udp: udp")
+                    if (state != EngineProtocol.STATE_STOPPING) {
+                        state = EngineProtocol.STATE_RUNNING
+                        reply(EngineProtocol.STARTED)
                     }
-                    tunnelThread = runNative("HEV") { TProxyService.startTunnel(tunnelConfig, fd.fd) }
-                    // Do not publish RUNNING when the native tunnel exited immediately.
-                    delay(100)
-                    check(tunnelThread?.isAlive == true) { "HEV tunnel exited during startup" }
-                }
-                if (state != EngineProtocol.STATE_STOPPING) {
-                    state = EngineProtocol.STATE_RUNNING
-                    reply(EngineProtocol.STARTED)
                 }
             } catch (e: CancellationException) {
                 if (state != EngineProtocol.STATE_STOPPING) fail("Engine startup timed out")
@@ -336,26 +336,14 @@ internal class NativeSession(
 
     /** Real outbound HTTPS validation BEFORE adding Android routes. */
     private suspend fun awaitRemoteReadiness(host: String, port: Int) {
-        val ok = withContext(Dispatchers.IO) {
-            var conn: HttpsURLConnection? = null
-            try {
-                val socks = Proxy(Proxy.Type.SOCKS, InetSocketAddress(host, port))
-                conn = URL("https://www.gstatic.com/generate_204")
-                    .openConnection(socks) as HttpsURLConnection
-                conn.instanceFollowRedirects = false
-                conn.connectTimeout = 5_000
-                conn.readTimeout = 5_000
-                conn.useCaches = false
-                conn.responseCode == 204
-            } catch (_: Exception) {
-                false
-            } finally {
-                conn?.disconnect()
+        repeat(3) { attempt ->
+            val ok = withContext(Dispatchers.IO) {
+                TunnelHealthProbe.check(host, port)
             }
+            if (ok) return
+            if (attempt < 2) delay(400)
         }
-        check(ok) {
-            "LIC-Core could not establish a validated HTTPS session through the selected server"
-        }
+        error("LIC-Core could not validate HTTPS through the selected server")
     }
 
     private fun fail(error: String) {

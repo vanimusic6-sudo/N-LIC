@@ -48,8 +48,8 @@ android {
         minSdk = if (includeNativeLibbox) 24 else 21
         //noinspection OldTargetApi
         targetSdk = 34
-        versionCode = 1828
-        versionName = "1.9.1"
+        versionCode = 1829
+        versionName = "1.9.2"
         buildConfigField("boolean", "NLIC_LIBBOX_INCLUDED",
             if (includeNativeLibbox) "true" else "false")
 

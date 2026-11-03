@@ -134,6 +134,35 @@ class SingBoxConfigCompilerTest {
         assertEquals("lic-bay-local-socks", outbounds[0].asJsonObject.get("detour").asString)
     }
 
+    @Test fun `auto scans past incompatible entries before applying the candidate limit`() {
+        val unsupported = (1..12).mapNotNull {
+            SubscriptionImport.parseNode("vless://$uuid@bad$it.example:443?security=tls&type=xhttp")
+        }
+        val good = requireNotNull(SubscriptionImport.parseNode(
+            "trojan://pass@good.example:443?security=tls"))
+        val result = SingBoxConfigCompiler.compileAuto(unsupported + good)
+        assertTrue(result is SingBoxConfigCompiler.Result.Compiled)
+        val out = JsonParser.parseString((result as SingBoxConfigCompiler.Result.Compiled).config)
+            .asJsonObject.getAsJsonArray("outbounds")
+        assertEquals(2, out.size())
+        assertEquals("good.example", out[0].asJsonObject.get("server").asString)
+    }
+
+    @Test fun `Reality supplies a TLS fingerprint when the link omits one`() {
+        val out = json("vless://$uuid@vpn.example:443?security=reality&sni=cdn.example" +
+            "&pbk=VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV")
+            .getAsJsonArray("outbounds")[0].asJsonObject
+        assertEquals("chrome", out.getAsJsonObject("tls").getAsJsonObject("utls")
+            .get("fingerprint").asString)
+    }
+
+    @Test fun `unsupported VLESS encryption and incompatible Vision are not silently dropped`() {
+        assertTrue(compile("vless://$uuid@vpn.example:443?encryption=unknown") is
+            SingBoxConfigCompiler.Result.Unsupported)
+        assertTrue(compile("vless://$uuid@vpn.example:443?security=tls&type=ws&flow=xtls-rprx-vision") is
+            SingBoxConfigCompiler.Result.Unsupported)
+    }
+
     @Test fun `errors never leak the pasted secret`() {
         val result = compile("trojan://VERY_PRIVATE_PASSWORD@vpn.example:443?security=none")
         assertTrue(result is SingBoxConfigCompiler.Result.Unsupported)

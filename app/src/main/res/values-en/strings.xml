@@ -310,4 +310,10 @@
     <string name="nlic_core_profile_unsupported">No selected server or its settings are unsupported. Connection is disabled.</string>
     <string name="nlic_core_auto_toggle">LIC-Auto · automatically select working VPN</string>
     <string name="nlic_core_auto_desc">In LIC-Core mode, sing-box tests up to 12 encrypted VPN outbounds using HTTPS, selects a lower-latency working server and checks again every 10 minutes without interrupting existing connections. Requires Core Preview.</string>
+    <string name="nlic_core_connect">Connect / apply settings</string>
+    <string name="nlic_core_connecting">Checking VPN connection…</string>
+    <string name="nlic_core_connect_desc">Reconnect using the selected server, LIC-Auto and LIC-Bay. Readiness is verified over HTTPS through the tunnel.</string>
+    <string name="nlic_core_connected">VPN connected · HTTPS through the server verified</string>
+    <string name="nlic_core_connect_failed">VPN could not be verified. Check the server or disable LIC-Bay and retry.</string>
+    <string name="nlic_core_disconnect">Disconnect VPN</string>
 </resources>
