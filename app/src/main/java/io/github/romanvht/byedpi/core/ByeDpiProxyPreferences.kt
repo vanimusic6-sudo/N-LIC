@@ -34,8 +34,8 @@ class ByeDpiProxyCmdPreferences(val args: Array<String>) : ByeDpiProxyPreference
                 if (cmdPort == null) addAll(listOf("--port", port))
             }
 
-            Log.d("ProxyPref", "CMD: ${args.joinToString(" ")}")
-            Log.d("ProxyPref", "Added from settings: ${prefix.joinToString(" ")}")
+            // Never print custom commands, host patterns or SNI in production logs.
+            Log.d("ProxyPref", "Prepared custom proxy profile (${args.size} options)")
 
             return (listOf("ciadpi") + prefix + args).toTypedArray()
         }
@@ -131,7 +131,7 @@ class ByeDpiProxyUIPreferences(val settings: UISettings = UISettings()) : ByeDpi
             }
 
             if (settings.desyncMethod == UISettings.DesyncMethod.OOB || settings.desyncMethod == UISettings.DesyncMethod.DISOOB) {
-                args.add("-e${settings.oobChar[0].code.toByte()}")
+                args.add("-e${(settings.oobChar.firstOrNull() ?: 'a').code.toByte()}")
             }
 
             val modHttpFlags = buildList {
@@ -158,7 +158,7 @@ class ByeDpiProxyUIPreferences(val settings: UISettings = UISettings()) : ByeDpi
                 args.add("-An")
             }
 
-            Log.d("ProxyPref", "UI to cmd: ${args.joinToString(" ")}")
+            Log.d("ProxyPref", "Prepared UI proxy profile (${args.size} options)")
             return args.toTypedArray()
         }
 }
