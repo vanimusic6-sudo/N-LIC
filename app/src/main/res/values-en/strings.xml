@@ -405,4 +405,8 @@
     <string name="nlic_privacy_description">Open Android VPN settings and consider Always-on VPN and Block connections without VPN. Without this, apps can access the network directly during reconnection.</string>
     <string name="nlic_privacy_confirmation">Open system VPN settings? N-LIC cannot enable Android\'s Block connections without VPN on your behalf. Check the selected app.</string>
     <string name="nlic_privacy_unavailable">Cannot open system VPN settings on this device.</string>
+    <string name="nlic_home_policy_loading">Checking network strategy…</string>
+    <string name="nlic_home_policy_measured">Selected from recent successful local tests on this network type</string>
+    <string name="nlic_home_policy_baseline">No recent test results · using conservative fallback</string>
+    <string name="nlic_home_policy_off">Automatic strategy disabled</string>
 </resources>
