@@ -26,17 +26,22 @@ Neither an aggressive fake TTL nor more split flags can solve all of these.
    must agree. This is an experimental performance measure, not a reliable
    speed optimization across every carrier.
 3. On mobile links with IPv6, capture IPv6 packets in the N-LIC VPN instead of
-   allowing the default IPv4-only VPN configuration to bypass processing.
+   leaving IPv6 traffic outside the configured VPN routes (which Android can
+   block entirely depending on VPN family configuration).
    This is configurable and can be disabled if a particular carrier breaks.
-4. Do not falsely advertise unmetered connectivity on cellular.
-5. Separate saved strategy results by connection type, preventing a
+4. Mark cellular VPN connections as metered. Preserve the Wi-Fi behavior.
+5. When a mobile carrier is IPv6-only or advertises NAT64, allow Android to
+   inherit the carrier DNS64 resolver instead of overriding it with the
+   bundled default 1.1.1.1. Do not override a customized DNS choice.
+   This is a reversible option with a guarded API-30 NAT64 check.
+6. Separate saved strategy results by connection type, preventing a
    Wi-Fi winner from being treated as a mobile-data winner.
-6. Use a mobile-first 16-profile catalog with conservative TLS-only profiles,
+7. Use a mobile-first 16-profile catalog with conservative TLS-only profiles,
    staged fallback, and rare TTL-dependent profiles last. Never silently
    change a user's active command or reconnect ongoing streams.
-7. If transport switches during a scan, stop early rather than blend Wi-Fi
+8. If transport switches during a scan, stop early rather than blend Wi-Fi
    success and mobile failures into a misleading ranking.
-8. Offer a **default-off** separate profile per transport. Explicitly
+9. Offer a **default-off** separate profile per transport. Explicitly
    applying a command or editing it saves the slot for the current link.
    Only a newly started VPN uses the saved slot; no live flow is restarted.
    Unknown links fall back to the ordinary user command.

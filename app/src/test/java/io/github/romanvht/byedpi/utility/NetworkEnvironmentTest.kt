@@ -37,6 +37,14 @@ class NetworkEnvironmentTest {
         assertTrue(AccessPolicy.shouldCaptureIpv6(true, wifi6, false))
     }
 
+    @Test fun `carrier DNS64 policy does not override custom resolvers or WiFi`() {
+        val nat64 = AccessSnapshot(AccessType.CELLULAR, 1400, true, true, true)
+        assertTrue(AccessPolicy.preferCarrierDnsOnNat64(nat64, true, "1.1.1.1"))
+        assertFalse(AccessPolicy.preferCarrierDnsOnNat64(nat64, true, "9.9.9.9"))
+        assertFalse(AccessPolicy.preferCarrierDnsOnNat64(nat64, false, "1.1.1.1"))
+        assertFalse(AccessPolicy.preferCarrierDnsOnNat64(nat64.copy(type = AccessType.WIFI), true, "1.1.1.1"))
+    }
+
     @Test fun `different radios use separate results files without identifiers`() {
         assertEquals("proxy_test_results_wifi.json", AccessPolicy.resultsFileName(AccessType.WIFI))
         assertEquals("proxy_test_results_cellular.json", AccessPolicy.resultsFileName(AccessType.CELLULAR))

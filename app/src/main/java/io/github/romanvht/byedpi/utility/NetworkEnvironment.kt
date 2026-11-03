@@ -15,6 +15,7 @@ internal data class AccessSnapshot(
     val physicalMtu: Int = 0,
     val hasIpv4: Boolean = false,
     val hasIpv6: Boolean = false,
+    val hasNat64: Boolean = false,
 ) {
     val isCellular: Boolean get() = type == AccessType.CELLULAR
 }
@@ -25,6 +26,7 @@ internal data class AccessCandidate(
     val mtu: Int,
     val ipv4: Boolean,
     val ipv6: Boolean,
+    val nat64: Boolean = false,
 )
 
 /**
@@ -51,7 +53,7 @@ internal object AccessPolicy {
                         }
                     }
             ).firstOrNull()
-        return candidate?.let { AccessSnapshot(it.type, it.mtu, it.ipv4, it.ipv6) }
+        return candidate?.let { AccessSnapshot(it.type, it.mtu, it.ipv4, it.ipv6, it.nat64) }
             ?: AccessSnapshot(AccessType.UNKNOWN)
     }
 
@@ -72,6 +74,14 @@ internal object AccessPolicy {
         underlying: AccessSnapshot,
         mobileAutoEnabled: Boolean,
     ): Boolean = userEnabled || (underlying.isCellular && underlying.hasIpv6 && mobileAutoEnabled)
+
+    fun preferCarrierDnsOnNat64(
+        snapshot: AccessSnapshot,
+        enabled: Boolean,
+        configuredDns: String,
+    ): Boolean = enabled && snapshot.isCellular &&
+        (snapshot.hasNat64 || snapshot.hasIpv6 && !snapshot.hasIpv4) &&
+        configuredDns == "1.1.1.1"
 
     fun resultsFileName(type: AccessType) =
         "proxy_test_results_${type.name.lowercase()}.json"
@@ -99,9 +109,14 @@ internal object NetworkEnvironment {
                     type = type,
                     validated = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
                         caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
-                    mtu = links?.mtu ?: 0,
+                    // getMtu is API 29+: invoking on Android 5-9 crashes at runtime.
+                    mtu = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        links?.mtu ?: 0
+                    } else 0,
                     ipv4 = links?.linkAddresses?.any { it.address is Inet4Address } == true,
                     ipv6 = links?.linkAddresses?.any { it.address is Inet6Address } == true,
+                    nat64 = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+                        links?.nat64Prefix != null,
                 )
             }
             AccessPolicy.select(candidates)

@@ -59,6 +59,13 @@
             android:defaultValue="false" />
 
         <SwitchPreference
+            android:key="nlic_mobile_dns64_auto"
+            android:icon="@drawable/ic_dns"
+            android:title="@string/nlic_mobile_dns64_auto"
+            android:summary="@string/nlic_mobile_dns64_auto_desc"
+            android:defaultValue="true" />
+
+        <SwitchPreference
             android:key="nlic_mobile_ipv6_auto"
             android:icon="@drawable/ic_network"
             android:title="@string/nlic_mobile_ipv6_auto"

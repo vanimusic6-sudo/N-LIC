@@ -70,8 +70,19 @@ internal class NativeEngine(
             }
             return Configuration(
                 args.toList(), host ?: defaultHost, resolvedPort,
-                dns = if (PrivateDnsUtils.getState(context) is PrivateDnsState.Configured) ""
-                    else preferences.getStringNotNull("dns_ip", "1.1.1.1"),
+                dns = preferences.getStringNotNull("dns_ip", "1.1.1.1").let { userDns ->
+                    val link = NetworkEnvironment.capture(context)
+                    val carrierDns = AccessPolicy.preferCarrierDnsOnNat64(
+                        link,
+                        preferences.getBoolean("nlic_mobile_dns64_auto", true),
+                        userDns,
+                    )
+                    if (PrivateDnsUtils.getState(context) is PrivateDnsState.Configured || carrierDns) {
+                        // No VPN DNS override: Android inherits the underlying
+                        // resolver (including DNS64 on IPv6-only mobile paths).
+                        ""
+                    } else userDns
+                },
                 ipv6 = preferences.getBoolean("ipv6_enable", false),
                 appListType = preferences.getStringNotNull("applist_type", "disable"),
                 apps = preferences.getSelectedApps(),
