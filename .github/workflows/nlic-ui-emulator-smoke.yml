@@ -1,0 +1,89 @@
+name: N-LIC UI runtime smoke (Android emulator)
+
+on:
+  push:
+    branches: [fix/nlic-core-bay-ui-security-20261103]
+    paths:
+      - app/**
+      - .github/workflows/nlic-ui-emulator-smoke.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nlic-ui-runtime-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  activity-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      NLIC_INCLUDE_LIBBOX: "true"
+      NLIC_EMULATOR_X86_ONLY: "true"
+    steps:
+      - name: Checkout native submodules
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: recursive
+
+      - name: Configure Java 21
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Configure Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+
+      - name: Use preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          test -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "Using cached cmdline-tools at $SDK_ROOT (avoid CDN transient ECONNRESET)"
+      - name: Install Android build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1" "ndk;27.2.12479018"
+          chmod +x ./gradlew
+
+      - name: Download verified sing-box native AAR for x86_64 emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p app/libs
+          curl --fail --location --retry 3 --connect-timeout 15 --max-time 240 \
+            -o app/libs/libbox.aar \
+            https://github.com/singbox-android/libbox/releases/download/1.14.3/libbox.aar
+          echo "6f1f295b1d988d4875546a48cb90a90e2b5f70ca10432f1a8d95e757a76f01d9  app/libs/libbox.aar" | sha256sum -c
+          unzip -tqq app/libs/libbox.aar
+
+      - name: Launch emulator and exercise REAL libbox config + UI server list
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
+
+      - name: Publish UI crash and instrumentation results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nlic-native-emulator-diagnostics
+          path: |
+            app/build/outputs/androidTest-results/connected/
+            app/build/reports/androidTests/connected/
+          if-no-files-found: ignore
+          retention-days: 5

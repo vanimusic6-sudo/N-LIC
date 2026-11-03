@@ -198,6 +198,31 @@ class SingBoxConfigCompilerTest {
         assertTrue(compile(insecureUrl) is SingBoxConfigCompiler.Result.Unsupported)
     }
 
+    @Test fun `private Core SOCKS listener requires an ephemeral authentication secret`() {
+        val uri = "vless://$uuid@edge.example:443?security=tls"
+        val node = requireNotNull(SubscriptionImport.parseNode(uri))
+        val password = "a".repeat(48)
+        val compiled = SingBoxConfigCompiler.compile(node,
+            SingBoxConfigCompiler.Bay.OFF, 1080, password)
+            as SingBoxConfigCompiler.Result.Compiled
+        val json = JsonParser.parseString(compiled.config).asJsonObject
+        val inbound = json.getAsJsonArray("inbounds")[0].asJsonObject
+        assertEquals("socks", inbound.get("type").asString)
+        assertEquals("127.0.0.1", inbound.get("listen").asString)
+        val account = inbound.getAsJsonArray("users")[0].asJsonObject
+        assertEquals("nlic", account.get("username").asString)
+        assertEquals(password, account.get("password").asString)
+        val auto = SingBoxConfigCompiler.compileAuto(listOf(node),
+            SingBoxConfigCompiler.Bay.OFF, 1080, password)
+            as SingBoxConfigCompiler.Result.Compiled
+        assertEquals(password, JsonParser.parseString(auto.config).asJsonObject
+            .getAsJsonArray("inbounds")[0].asJsonObject.getAsJsonArray("users")[0]
+            .asJsonObject.get("password").asString)
+        assertTrue(SingBoxConfigCompiler.compile(node,
+            SingBoxConfigCompiler.Bay.OFF, 1080, "unsafe:YAML") is
+            SingBoxConfigCompiler.Result.Unsupported)
+    }
+
     @Test fun `errors never leak the pasted secret`() {
         val result = compile("trojan://VERY_PRIVATE_PASSWORD@vpn.example:443?security=none")
         assertTrue(result is SingBoxConfigCompiler.Result.Unsupported)

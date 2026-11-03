@@ -6,9 +6,13 @@ plugins {
 }
 
 val includeNativeLibbox = System.getenv("NLIC_INCLUDE_LIBBOX") == "true"
-val abis = if (includeNativeLibbox && System.getenv("NLIC_ARM64_ONLY") == "true") {
-    setOf("arm64-v8a")
-} else setOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+// The emulator test exercises the EXACT pinned libbox Go library on x86_64,
+// without changing the arm64-only consumer Release DEV artifact.
+val abis = when {
+    System.getenv("NLIC_EMULATOR_X86_ONLY") == "true" -> setOf("x86_64")
+    includeNativeLibbox && System.getenv("NLIC_ARM64_ONLY") == "true" -> setOf("arm64-v8a")
+    else -> setOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+}
 
 // Dev signing values are injected by GitHub Actions; no signing secrets live in the repo.
 val devKeystorePath = System.getenv("NLIC_DEV_KEYSTORE_PATH")
@@ -48,8 +52,8 @@ android {
         minSdk = if (includeNativeLibbox) 24 else 21
         //noinspection OldTargetApi
         targetSdk = 34
-        versionCode = 1829
-        versionName = "1.9.2"
+        versionCode = 1832
+        versionName = "1.9.5"
         buildConfigField("boolean", "NLIC_LIBBOX_INCLUDED",
             if (includeNativeLibbox) "true" else "false")
 
@@ -163,7 +167,11 @@ dependencies {
     implementation("androidx.preference:preference-ktx:1.2.1")
     implementation("com.google.android.material:material:1.13.0")
     implementation("com.google.code.gson:gson:2.14.0")
+    // Pin a modern TLS-validated HTTPS client; its DNS callback is used to
+    // prevent DNS rebinding when importing user-provided subscription URLs.
+    implementation("com.squareup.okhttp3:okhttp:5.3.2")
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test:core:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
 }

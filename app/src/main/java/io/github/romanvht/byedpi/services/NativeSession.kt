@@ -22,7 +22,11 @@ import io.github.romanvht.byedpi.utility.checkIpAndPortInArgs
 import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
 import io.github.romanvht.byedpi.subscription.LibboxRuntime
+import io.github.romanvht.byedpi.subscription.CoreStartException
+import io.github.romanvht.byedpi.subscription.LocalSocksAuth
+import java.security.SecureRandom
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -66,6 +70,7 @@ internal class NativeSession(
     private var state = EngineProtocol.STATE_IDLE
     private var proxy: ByeDpiProxy? = null
     private var boxEngine: LibboxRuntime? = null
+    private var localAuth: LocalSocksAuth? = null
     private var proxyThread: Thread? = null
     private var tunnelThread: Thread? = null
     private var tunFd: ParcelFileDescriptor? = null
@@ -212,6 +217,10 @@ internal class NativeSession(
         }
         nativeStarted = true
         startJob = scope.launch {
+            // Only fixed phase identifiers appear in logs and UI: neither
+            // outbound JSON nor VPN credentials may leave the native process.
+            var corePhase = "PREPARE"
+            val coreMode = config.args.firstOrNull() == "--nlic-libbox"
             try {
                 withTimeout(50_000) {
                     if (config.args.firstOrNull() == "--nlic-libbox") {
@@ -219,31 +228,50 @@ internal class NativeSession(
                             "LIC-Core requires VPN mode; proxy-only service is unsupported"
                         }
                         val preferences = service.getPreferences()
+                        corePhase = "CATALOG"
                         val saved = withContext(Dispatchers.IO) { SubscriptionVault.read(service) }
+                        corePhase = "PREPARE"
                         val bayEnabled = config.args.getOrNull(1) == "--nlic-bay"
                         val autoEnabled = config.args.getOrNull(2) == "--nlic-auto"
-                        val legacyArgs = config.args.drop(3)
-                        val (legacyHostArg, legacyPortArg) = legacyArgs.checkIpAndPortInArgs()
-                        val (defaultHost, defaultPort) = preferences.getProxyIpAndPort()
-                        val legacyHost = legacyHostArg ?: defaultHost
-                        val legacyPort = (legacyPortArg ?: defaultPort).toIntOrNull()
-                            ?: error("Invalid LIC-Bay port")
-                        check(!bayEnabled ||
-                            legacyHost == "127.0.0.1") {
-                            "LIC-Bay must listen on 127.0.0.1"
+                        // LIC-Core DIRECT must not depend on the old ByeDPI
+                        // command or proxy port. Parsing legacy flags even when
+                        // Bay was OFF could reject a perfectly valid VPN node
+                        // before sing-box was ever initialized.
+                        val legacyArgs = if (bayEnabled) config.args.drop(3)
+                            else emptyList()
+                        val (legacyHost, legacyPort) = if (bayEnabled) {
+                            val (flagHost, flagPort) = legacyArgs.checkIpAndPortInArgs()
+                            val (savedHost, savedPort) = preferences.getProxyIpAndPort()
+                            val host = flagHost ?: savedHost
+                            val port = (flagPort ?: savedPort).toIntOrNull()
+                                ?: error("Invalid LIC-Bay port")
+                            check(host == "127.0.0.1") {
+                                "LIC-Bay must listen on 127.0.0.1"
+                            }
+                            host to port
+                        } else {
+                            "127.0.0.1" to 1080 // No ByeDPI listener starts.
                         }
                         val bay = if (bayEnabled) SingBoxConfigCompiler.Bay.ON
                             else SingBoxConfigCompiler.Bay.OFF
+                        // A random ephemeral secret limits other apps' access to
+                        // the loopback SOCKS listener while LIC-Core is running.
+                        val password = ByteArray(24).also { SecureRandom().nextBytes(it) }
+                            .joinToString("") { "%02x".format(it.toInt() and 255) }
+                        val auth = LocalSocksAuth("nlic", password)
+                        localAuth = auth
+                        corePhase = "CONFIG_COMPILE"
                         val compiled = if (autoEnabled) {
-                            SingBoxConfigCompiler.compileAuto(saved.allNodes, bay, legacyPort)
+                            SingBoxConfigCompiler.compileAuto(saved.allNodes, bay, legacyPort, auth.password)
                         } else {
                             val node = saved.allNodes.firstOrNull { it.id == saved.selectedNodeId }
                                 ?: error("Selected LIC-Core server is not available")
-                            SingBoxConfigCompiler.compile(node, bay, legacyPort)
+                            SingBoxConfigCompiler.compile(node, bay, legacyPort, auth.password)
                         }
                         val plan = compiled as? SingBoxConfigCompiler.Result.Compiled
                             ?: error("Selected LIC-Core configuration cannot be used")
                         if (bayEnabled) {
+                            corePhase = "BAY_PROXY"
                             check(legacyArgs.isNotEmpty()) { "Missing LIC-Bay command" }
                             val engine = withContext(Dispatchers.IO) { ByeDpiProxy() }
                             proxy = engine
@@ -251,18 +279,46 @@ internal class NativeSession(
                                 engine.startProxy(legacyArgs.toTypedArray())
                             }
                             withTimeout(START_TIMEOUT) { awaitProxy(legacyHost, legacyPort) }
+                            // Fast, explicit validation of SOCKS5 detour: it must
+                            // reach the selected server BEFORE sing-box uses it.
+                            // In URLTest mode let the core test candidates itself.
+                            if (!autoEnabled) {
+                                corePhase = "BAY_UPSTREAM"
+                                val selected = saved.allNodes.firstOrNull {
+                                    it.id == saved.selectedNodeId
+                                } ?: error("LIC-Core / NO_SERVER")
+                                // DPI evasion may add latency; a single 2.5 s
+                                // SYN timeout is not evidence of a broken Bay
+                                // route. Retry without sending private keys.
+                                var bayWorking = false
+                                repeat(3) { attempt ->
+                                    if (!bayWorking) {
+                                        bayWorking = withContext(Dispatchers.IO) {
+                                            TunnelHealthProbe.checkBay(
+                                                legacyPort, selected.host, selected.port
+                                            )
+                                        }
+                                    }
+                                    if (!bayWorking && attempt < 2) delay(450)
+                                }
+                                check(bayWorking) { "LIC-Core / BAY_UNREACHABLE" }
+                            }
                         }
+                        corePhase = "CORE_START"
                         val box = LibboxRuntime(service)
                         boxEngine = box
                         withContext(Dispatchers.IO) { box.start(plan.config) }
-                        withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port) }
-                        withTimeout(20_000) { awaitRemoteReadiness(config.host, config.port) }
+                        corePhase = "CORE_SOCKS"
+                        withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port, auth) }
+                        corePhase = "REMOTE_TEST"
+                        withTimeout(28_000) { awaitRemoteReadiness(config.host, config.port, auth) }
                     } else {
                         val engine = withContext(Dispatchers.IO) { ByeDpiProxy() }
                         proxy = engine
                         proxyThread = runNative("ByeDPI") { engine.startProxy(config.args.toTypedArray()) }
                         withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port) }
                     }
+                    corePhase = "TUN"
                     createTunnel?.let { create ->
                         val underlyingLink = NetworkEnvironment.capture(service)
                         val tuneMobile = service.getPreferences().getBoolean("nlic_mobile_safe_mtu", true)
@@ -278,7 +334,14 @@ internal class NativeSession(
                             appendLine("  address: ${config.host}")
                             appendLine("  port: ${config.port}")
                             appendLine("  udp: udp")
+                            localAuth?.let {
+                                // Values are ASCII hex and never interpolated
+                                // into shell commands or user-visible logs.
+                                appendLine("  username: ${it.username}")
+                                appendLine("  password: ${it.password}")
+                            }
                         }
+                        corePhase = "HEV"
                         tunnelThread = runNative("HEV") { TProxyService.startTunnel(tunnelConfig, fd.fd) }
                         // Do not publish RUNNING when the native tunnel exited immediately.
                         delay(100)
@@ -290,15 +353,27 @@ internal class NativeSession(
                     }
                 }
             } catch (e: CancellationException) {
-                if (state != EngineProtocol.STATE_STOPPING) fail("Engine startup timed out")
+                if (state != EngineProtocol.STATE_STOPPING) {
+                    if (coreMode && e is TimeoutCancellationException) {
+                        fail("LIC-Core / ${corePhase}_TIMEOUT")
+                    } else if (coreMode) {
+                        fail("LIC-Core / ${corePhase}")
+                    } else fail("Engine startup timed out")
+                }
                 throw e
             } catch (e: Throwable) {
-                if (config.args.firstOrNull() == "--nlic-libbox") {
-                    // libbox/native exceptions may embed the full outbound JSON
-                    // (including subscription credentials). Never send them to
-                    // logcat or to the service's untrusted UI error surface.
-                    Log.e(TAG, "LIC-Core startup failed (${e.javaClass.simpleName}); details withheld")
-                    fail("LIC-Core could not establish an encrypted connection")
+                if (coreMode) {
+                    // Some previous builds collapsed all start failures into
+                    // ENGINE. Preserve the exact *safe phase*, but never the
+                    // nested libbox/Go exception (may contain server URI).
+                    val safeCode = when {
+                        e is CoreStartException -> e.stage
+                        e.message == "LIC-Core / BAY_UNREACHABLE" -> "BAY_UNREACHABLE"
+                        e.message == "LIC-Core / NO_SERVER" -> "NO_SERVER"
+                        else -> corePhase
+                    }
+                    Log.e(TAG, "LIC-Core failed at stage $safeCode (details withheld)")
+                    fail("LIC-Core / $safeCode")
                 } else {
                     Log.e(TAG, "Failed to start engine", e)
                     fail(e.message ?: "Failed to start engine")
@@ -311,19 +386,32 @@ internal class NativeSession(
         val error = try {
             "$name stopped with code ${run()}"
         } catch (e: Throwable) {
-            if (name == "ByeDPI-Bay") {
-                // Native ByeDPI arguments can include private upstream details.
-                Log.e(TAG, "LIC-Bay stopped unexpectedly (${e.javaClass.simpleName})")
+            if (name == "ByeDPI-Bay" ||
+                configuration?.args?.firstOrNull() == "--nlic-libbox") {
+                // Core may carry an ephemeral SOCKS password in the private
+                // HEV YAML. Never log nested native exception strings.
+                Log.e(TAG, "LIC-Core native task $name exited (${e.javaClass.simpleName}, redacted)")
                 "$name: native engine failed"
             } else {
                 Log.e(TAG, "$name failed", e)
                 "$name: ${e.message ?: "native engine failed"}"
             }
         }
-        handler.post { if (state != EngineProtocol.STATE_STOPPING) fail(error) }
+        handler.post {
+            if (state != EngineProtocol.STATE_STOPPING) {
+                if (configuration?.args?.firstOrNull() == "--nlic-libbox") {
+                    val code = when (name) {
+                        "ByeDPI-Bay" -> "BAY_PROXY_EXIT"
+                        "HEV" -> "HEV_EXIT"
+                        else -> "ENGINE_EXIT"
+                    }
+                    fail("LIC-Core / $code")
+                } else fail(error)
+            }
+        }
     }
 
-    private suspend fun awaitProxy(host: String, port: Int) {
+    private suspend fun awaitProxy(host: String, port: Int, auth: LocalSocksAuth? = null) {
         val address = when (host) {
             "0.0.0.0" -> "127.0.0.1"
             "::", "[::]" -> "::1"
@@ -331,31 +419,28 @@ internal class NativeSession(
         }
         while (true) {
             val ready = withContext(Dispatchers.IO) {
-                try {
-                    Socket().use { socket ->
-                        socket.connect(InetSocketAddress(address, port), PROBE_TIMEOUT)
-                        socket.soTimeout = PROBE_TIMEOUT
-                        socket.getOutputStream().write(byteArrayOf(5, 1, 0))
-                        val input = socket.getInputStream()
-                        input.read() == 5 && input.read() == 0
-                    }
-                } catch (_: IOException) {
-                    false
-                }
+                TunnelHealthProbe.checkLocal(address, port, auth)
             }
             if (ready) return
-            delay(50)
+            delay(75)
         }
     }
 
     /** Real outbound HTTPS validation BEFORE adding Android routes. */
-    private suspend fun awaitRemoteReadiness(host: String, port: Int) {
-        repeat(3) { attempt ->
+    private suspend fun awaitRemoteReadiness(host: String, port: Int, auth: LocalSocksAuth) {
+        // Do not declare a working encrypted VPN dead solely because one
+        // CDN blocks a captive-portal test path. Require a real validated TLS
+        // + 204 response from either of two fixed public endpoints.
+        val targets = listOf(
+            "www.gstatic.com", "cp.cloudflare.com",
+            "www.gstatic.com", "cp.cloudflare.com",
+        )
+        for ((index, target) in targets.withIndex()) {
             val ok = withContext(Dispatchers.IO) {
-                TunnelHealthProbe.check(host, port)
+                TunnelHealthProbe.check(host, port, auth, target)
             }
             if (ok) return
-            if (attempt < 2) delay(400)
+            if (index < targets.lastIndex) delay(300)
         }
         error("LIC-Core could not validate HTTPS through the selected server")
     }
@@ -367,7 +452,11 @@ internal class NativeSession(
         reply(EngineProtocol.FAILED, Bundle().apply {
             putString(EngineProtocol.ERROR, error)
         })
-        terminate()
+        // Messenger is one-way. Killing :native in the same call can race
+        // with delivery to the UI, so the actual safe error phase is lost
+        // and the app displays only ENGINE. Give Binder a bounded 350 ms to
+        // deliver FAILED before terminating the failed service.
+        handler.postDelayed({ terminate() }, 350L)
     }
 
     private fun reply(what: Int, data: Bundle = Bundle()) {

@@ -1,6 +1,7 @@
 package io.github.romanvht.byedpi.subscription
 
 import android.content.Context
+import android.net.VpnService
 import android.util.Log
 import java.io.File
 import java.lang.reflect.InvocationHandler
@@ -19,6 +20,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  * The sing-box config produced by SingBoxConfigCompiler has NO TUN inbound:
  * one Android VPN is owned by the existing N-LIC VpnService / HEV tunnel.
  */
+internal class CoreStartException(val stage: String) :
+    IllegalStateException("LIC-Core / $stage")
+
 internal class LibboxRuntime(private val context: Context) : AutoCloseable {
     companion object {
         private const val TAG = "LICCore"
@@ -43,6 +47,7 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
     fun start(config: String) {
         require(!closed.get() && server == null) { "Native core already started or stopped" }
         check(installed()) { "This APK does not contain LIC-Core native engine" }
+        var stage = "SETUP"
         try {
             val setupClass = Class.forName(LIBBOX + "SetupOptions")
             val setup = setupClass.getConstructor().newInstance()
@@ -51,23 +56,32 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
             // Upstream libbox writes a plaintext configuration.json snapshot
             // into basePath when starting. Isolate it into app-private storage,
             // then remove it immediately after start or on every failure.
-            snapshotFile().delete()
+            check(eraseSnapshot()) { "Could not erase private core snapshot" }
             set(setup, "basePath", workspace.absolutePath)
             set(setup, "workingPath", workspace.absolutePath)
             set(setup, "tempPath", context.cacheDir.absolutePath)
             set(setup, "debug", false)
             set(setup, "logMaxLines", 128L)
             set(setup, "commandServerSecret", java.util.UUID.randomUUID().toString())
-            set(setup, "appVersion", "nlic-1.9.2")
-            set(setup, "appMarketingVersion", "1.9.2")
+            set(setup, "appVersion", "nlic-1.9.5")
+            set(setup, "appMarketingVersion", "1.9.5")
             val libbox = Class.forName(LIBBOX + "Libbox")
             libbox.getMethod("setup", setupClass).invoke(null, setup)
 
+            // Validate against the *native* pinned sing-box schema before dial.
+            // The full credential-bearing reflection exception is never logged.
+            stage = "CONFIG"
+            libbox.getMethod("checkConfig", String::class.java).invoke(null, config)
+
+            stage = "INTERFACES"
             val platformType = Class.forName(LIBBOX + "PlatformInterface")
             val handlerType = Class.forName(LIBBOX + "CommandServerHandler")
             val platform = Proxy.newProxyInstance(
                 platformType.classLoader, arrayOf(platformType),
-                PlatformHandler(networkMonitor),
+                PlatformHandler(
+                    context as? VpnService ?: error("Core must run inside Android VpnService"),
+                    networkMonitor,
+                ),
             )
             val handler = Proxy.newProxyInstance(
                 handlerType.classLoader, arrayOf(handlerType),
@@ -78,26 +92,31 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
                 .newInstance(handler, platform)
             server = instance
             serverClass = cls
+            stage = "COMMAND"
             cls.getMethod("start").invoke(instance)
             val override = Class.forName(LIBBOX + "OverrideOptions")
                 .getConstructor().newInstance()
+            stage = "OUTBOUND"
             try {
                 cls.getMethod("startOrReloadService", String::class.java, override.javaClass)
                     .invoke(instance, config, override)
             } finally {
-                snapshotFile().delete()
+                if (!eraseSnapshot()) {
+                    stage = "CREDENTIAL_STORAGE"
+                    throw CoreStartException(stage)
+                }
             }
         } catch (_: Throwable) {
-            Log.e(TAG, "Pinned libbox native engine failed to start; no credentials are logged")
+            Log.e(TAG, "LIC-Core startup failed at stage $stage (details redacted)")
             close()
-            throw IllegalStateException("LIC-Core failed to initialize or validate the selected server")
+            throw CoreStartException(stage)
         }
     }
 
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
         networkMonitor.close()
-        snapshotFile().delete()
+        eraseSnapshot()
         val instance = server ?: return
         val cls = serverClass ?: return
         try {
@@ -110,10 +129,15 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
         } catch (_: Throwable) {
             Log.w(TAG, "LIC-Core close was unsuccessful")
         } finally {
-            snapshotFile().delete()
+            eraseSnapshot()
             server = null
             serverClass = null
         }
+    }
+
+    private fun eraseSnapshot(): Boolean {
+        val file = snapshotFile()
+        return !file.exists() || (file.delete() && !file.exists())
     }
 
     private fun snapshotFile() = File(
@@ -140,11 +164,25 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
             }
     }
 
-    private class PlatformHandler(private val monitor: CoreNetworkMonitor) : InvocationHandler {
+    private class PlatformHandler(
+        private val vpn: VpnService,
+        private val monitor: CoreNetworkMonitor,
+    ) : InvocationHandler {
         override fun invoke(proxy: Any, method: Method, args: Array<out Any?>?): Any? =
             when (method.name) {
-                "usePlatformAutoDetectInterfaceControl" -> false
-                "autoDetectInterfaceControl" -> Unit
+                // Critical: when Android installs our VPN, native sing-box
+                // upstream sockets must bypass the VPN to avoid an endless
+                // VPN -> SOCKS -> VPN routing loop.  Android VpnService.protect
+                // is the supported, per-FD platform hook.
+                "usePlatformAutoDetectInterfaceControl" -> true
+                "autoDetectInterfaceControl" -> {
+                    val fd = (args?.firstOrNull() as? Int)
+                        ?: throw IllegalStateException("LIC-Core missing outbound file descriptor")
+                    check(fd >= 0 && vpn.protect(fd)) {
+                        "LIC-Core could not protect physical outbound socket"
+                    }
+                    null
+                }
                 "openTun" -> throw SecurityException(
                     "Second TUN disallowed: N-LIC VpnService must own the tunnel"
                 )

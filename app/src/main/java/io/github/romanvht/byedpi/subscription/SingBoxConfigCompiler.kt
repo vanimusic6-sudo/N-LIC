@@ -29,7 +29,16 @@ internal object SingBoxConfigCompiler {
         data class Unsupported(val reason: String) : Result()
     }
 
-    fun compile(node: SubscriptionNode, bay: Bay = Bay.OFF, bayPort: Int = 1080): Result {
+    fun compile(
+        node: SubscriptionNode,
+        bay: Bay = Bay.OFF,
+        bayPort: Int = 1080,
+        localPassword: String? = null,
+    ): Result {
+        if (localPassword != null && (localPassword.length !in 24..128 ||
+                !localPassword.all { it in "0123456789abcdef" })) {
+            return Result.Unsupported("Invalid internal SOCKS credentials")
+        }
         if (bayPort !in 1..65535 || bayPort == PROXY_PORT) {
             return Result.Unsupported("Invalid or conflicting LIC-Bay port")
         }
@@ -61,10 +70,20 @@ internal object SingBoxConfigCompiler {
             })
             root.add("inbounds", JsonArray().apply {
                 add(JsonObject().apply {
-                    addProperty("type", "mixed")
+                    // SOCKS-only: never expose an unauthenticated HTTP proxy.
+                    // The live native session always provides random credentials.
+                    addProperty("type", "socks")
                     addProperty("tag", LOCAL_SOCKS_TAG)
                     addProperty("listen", "127.0.0.1")
                     addProperty("listen_port", PROXY_PORT)
+                    if (localPassword != null) {
+                        add("users", JsonArray().apply {
+                            add(JsonObject().apply {
+                                addProperty("username", "nlic")
+                                addProperty("password", localPassword)
+                            })
+                        })
+                    }
                 })
             })
             val outbounds = JsonArray()
@@ -85,6 +104,10 @@ internal object SingBoxConfigCompiler {
             root.add("outbounds", outbounds)
             root.add("route", JsonObject().apply {
                 addProperty("final", PROXY_TAG)
+                // Android libbox rejects auto_detect_interface=true (supported
+                // only on desktop OS in sing-box 1.14). The Android
+                // PlatformInterface.ProtectFunc calls VpnService.protect(fd)
+                // independently, so routing loops are still prevented.
                 addProperty("auto_detect_interface", false)
                 addProperty("default_domain_resolver", "lic-bootstrap-dns")
             })
@@ -107,11 +130,12 @@ internal object SingBoxConfigCompiler {
         nodes: List<SubscriptionNode>,
         bay: Bay = Bay.OFF,
         bayPort: Int = 1080,
+        localPassword: String? = null,
     ): Result {
         if (nodes.isEmpty()) return Result.Unsupported("No subscription nodes")
         val candidates = nodes.distinctBy { it.id }.asSequence()
         val valid = candidates.mapNotNull { node ->
-            val result = compile(node, bay, bayPort)
+            val result = compile(node, bay, bayPort, localPassword)
             if (result !is Result.Compiled) return@mapNotNull null
             val root = JsonParser.parseString(result.config).asJsonObject
             node to root
