@@ -67,25 +67,30 @@ internal class CoreNetworkMonitor(context: Context) : AutoCloseable {
             val expensive = caps != null && !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
             val key = "$name/$index/$expensive"
             val target = synchronized(lock) {
-                if (lastUpdate == key) null else listener?.also { lastUpdate = key }
+                if (lastUpdate == key) null else listener
             } ?: return
             target.javaClass.methods.first { it.name == "updateDefaultInterface" }
                 .invoke(target, name, index, expensive, false)
+            synchronized(lock) { if (listener === target) lastUpdate = key }
         } catch (_: Exception) {
             // Do not invent interface data when Android hides the physical path.
         }
     }
 
     fun interfaces(): Any {
-        val entries = runCatching {
-            physicalNetworks().mapNotNull { network ->
-                val links = manager.getLinkProperties(network) ?: return@mapNotNull null
-                val name = links.interfaceName ?: return@mapNotNull null
-                val iface = NetworkInterface.getByName(name) ?: return@mapNotNull null
-                val caps = manager.getNetworkCapabilities(network) ?: return@mapNotNull null
-                val entry = Class.forName(PREFIX + "NetworkInterface").getConstructor().newInstance()
-                fun set(name: String, type: Class<*>, value: Any) {
-                    entry.javaClass.getMethod(name, type).invoke(entry, value)
+        // One malformed/mobile-only interface must not make sing-box believe
+        // that ALL physical networks disappeared.
+        val networks = runCatching { physicalNetworks() }.getOrDefault(emptyList())
+        val entries = networks.mapNotNull { network ->
+            runCatching {
+                val links = manager.getLinkProperties(network) ?: return@runCatching null
+                val name = links.interfaceName ?: return@runCatching null
+                val iface = NetworkInterface.getByName(name) ?: return@runCatching null
+                val caps = manager.getNetworkCapabilities(network) ?: return@runCatching null
+                val entry = Class.forName(PREFIX + "NetworkInterface")
+                    .getConstructor().newInstance()
+                fun set(field: String, type: Class<*>, value: Any) {
+                    entry.javaClass.getMethod(field, type).invoke(entry, value)
                 }
                 set("setName", String::class.java, name)
                 set("setIndex", Int::class.javaPrimitiveType!!, iface.index)
@@ -99,18 +104,19 @@ internal class CoreNetworkMonitor(context: Context) : AutoCloseable {
                 set("setDNSServer", strings, iterator("StringIterator",
                     links.dnsServers.mapNotNull { it.hostAddress }))
                 entry
-            }
-        }.getOrDefault(emptyList())
+            }.getOrNull()
+        }
         return iterator("NetworkInterfaceIterator", entries)
     }
 
     private fun iterator(type: String, values: List<Any>): Any {
         val clazz = Class.forName(PREFIX + type)
-        val iter = values.iterator()
+        var cursor = 0
         return Proxy.newProxyInstance(clazz.classLoader, arrayOf(clazz)) { proxy, method, args ->
             when (method.name) {
-                "hasNext" -> iter.hasNext()
-                "next" -> if (iter.hasNext()) iter.next() else null
+                "len" -> values.size - cursor
+                "hasNext" -> cursor < values.size
+                "next" -> if (cursor < values.size) values[cursor++] else null
                 "toString" -> "N-LIC interface iterator"
                 "hashCode" -> System.identityHashCode(proxy)
                 "equals" -> proxy === args?.firstOrNull()
