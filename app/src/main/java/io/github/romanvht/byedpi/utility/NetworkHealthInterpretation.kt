@@ -13,6 +13,32 @@ internal data class ConnectionCheck(
 )
 
 internal object NetworkHealthInterpretation {
+    fun comparePaths(
+        telegramDirect: ConnectionCheck,
+        telegramSocks: ConnectionCheck,
+        largeDirect: ConnectionCheck,
+        largeSocks: ConnectionCheck,
+    ): List<String> = buildList {
+        if (!telegramDirect.ok && telegramSocks.ok) {
+            add("N-LIC SOCKS установил соединение с проверяемым Telegram DC, " +
+                "но прямое соединение не удалось. Это полезный признак различия путей.")
+        } else if (!telegramDirect.ok && !telegramSocks.ok) {
+            add("Прямой и локальный SOCKS-пути к проверяемому Telegram DC не открылись. " +
+                "Для блокировки IP на уровне маршрута может потребоваться внешний ретранслятор.")
+        }
+        if (!largeDirect.ok && largeSocks.ok) {
+            add("Через N-LIC успешно пришли 256 КиБ, а напрямую нет. " +
+                "Выбранная стратегия может помогать на этом конкретном CDN.")
+        } else if (!largeDirect.ok && !largeSocks.ok) {
+            add("256 КиБ не скачались по обоим путям. Проверь ограничение потока, " +
+                "доступность CDN, потери пакетов и изменение маршрута.")
+        }
+        if (largeDirect.ok && !largeSocks.ok) {
+            add("Прямой большой ответ работает, SOCKS не справился: " +
+                "возможно, выбранная DPI-цепочка вредит этому соединению.")
+        }
+    }
+
     fun describe(
         youtube: ConnectionCheck,
         telegram: ConnectionCheck,
