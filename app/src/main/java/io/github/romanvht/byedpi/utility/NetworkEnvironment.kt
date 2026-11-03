@@ -38,23 +38,29 @@ internal object AccessPolicy {
     private const val LEGACY_TUN_MTU = 8500
     const val MOBILE_TUN_MTU = 1400
 
-    fun select(candidates: List<AccessCandidate>): AccessSnapshot {
-        val candidate = candidates
-            .filter { it.type != AccessType.UNKNOWN }
-            .sortedWith(
-                compareByDescending<AccessCandidate> { it.validated }
-                    .thenBy {
-                        when (it.type) {
-                            AccessType.WIFI -> 0
-                            AccessType.ETHERNET -> 1
-                            AccessType.CELLULAR -> 2
-                            AccessType.OTHER -> 3
-                            AccessType.UNKNOWN -> 4
-                        }
-                    }
-            ).firstOrNull()
-        return candidate?.let { AccessSnapshot(it.type, it.mtu, it.ipv4, it.ipv6, it.nat64) }
-            ?: AccessSnapshot(AccessType.UNKNOWN)
+    /**
+     * On Android both Wi-Fi and mobile can remain VALIDATED while only one is
+     * in use. Prefer the *active* non-VPN Network, never whichever radio sorts
+     * first. If both remain eligible but Android exposes only a VPN as active,
+     * report UNKNOWN instead of claiming Wi-Fi is the carrier.
+     */
+    fun select(
+        candidates: List<AccessCandidate>,
+        activeCandidate: AccessCandidate? = null,
+    ): AccessSnapshot {
+        fun snap(c: AccessCandidate) =
+            AccessSnapshot(c.type, c.mtu, c.ipv4, c.ipv6, c.nat64)
+        if (activeCandidate != null && activeCandidate.type != AccessType.UNKNOWN) {
+            return snap(activeCandidate)
+        }
+        val validated = candidates.filter { it.type != AccessType.UNKNOWN && it.validated }
+        if (validated.map { it.type }.distinct().size == 1) {
+            return snap(validated.first())
+        }
+        if (validated.isNotEmpty()) return AccessSnapshot(AccessType.UNKNOWN)
+        val connected = candidates.filter { it.type != AccessType.UNKNOWN }
+        return if (connected.size == 1) snap(connected.first())
+            else AccessSnapshot(AccessType.UNKNOWN)
     }
 
     /**
@@ -92,6 +98,8 @@ internal object NetworkEnvironment {
         val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
             as? ConnectivityManager ?: return AccessSnapshot(AccessType.UNKNOWN)
         return try {
+            val activeNetwork = manager.activeNetwork
+            var activeCandidate: AccessCandidate? = null
             val candidates = manager.allNetworks.mapNotNull { network ->
                 val caps = manager.getNetworkCapabilities(network) ?: return@mapNotNull null
                 if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ||
@@ -117,9 +125,9 @@ internal object NetworkEnvironment {
                     ipv6 = links?.linkAddresses?.any { it.address is Inet6Address } == true,
                     nat64 = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
                         links?.nat64Prefix != null,
-                )
+                ).also { if (network == activeNetwork) activeCandidate = it }
             }
-            AccessPolicy.select(candidates)
+            AccessPolicy.select(candidates, activeCandidate)
         } catch (_: SecurityException) {
             AccessSnapshot(AccessType.UNKNOWN)
         }

@@ -14,6 +14,16 @@ class NetworkEnvironmentTest {
         assertEquals(AccessType.CELLULAR, AccessPolicy.select(listOf(offlineWifi, cellular)).type)
     }
 
+    @Test fun `active mobile must win over simultaneously validated WiFi`() {
+        val wifi = AccessCandidate(AccessType.WIFI, true, 1500, true, true)
+        val mobile = AccessCandidate(AccessType.CELLULAR, true, 1400, false, true, true)
+        assertEquals(AccessType.CELLULAR, AccessPolicy.select(listOf(wifi, mobile), mobile).type)
+        // When only a VPN is the default Android may not expose its underlying
+        // transport. Better return unknown than choose the wrong strategy.
+        assertEquals(AccessType.UNKNOWN, AccessPolicy.select(listOf(wifi, mobile)).type)
+        assertEquals(AccessType.WIFI, AccessPolicy.select(listOf(wifi, mobile), wifi).type)
+    }
+
     @Test fun `mobile frames use bounded mtu while wifi retains known good baseline`() {
         assertEquals(8500, AccessPolicy.tunMtu(AccessSnapshot(AccessType.WIFI, 1500)))
         assertEquals(1400, AccessPolicy.tunMtu(AccessSnapshot(AccessType.CELLULAR, 1500)))
