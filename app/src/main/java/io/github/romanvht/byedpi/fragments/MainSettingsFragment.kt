@@ -169,6 +169,14 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
         uiSettings.isEnabled = !cmdEnable
         cmdSettings.isEnabled = cmdEnable
         proxyTest.isEnabled = cmdEnable
+        if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+            // N-LIC is a managed VPN client, not a shell-argument editor.
+            // Legacy settings remain on disk for migration/rollback but
+            // cannot be edited via the 2.0 primary UI.
+            findPreferenceNotNull<SwitchPreference>("byedpi_enable_cmd_settings").isVisible = false
+            cmdSettings.isVisible = false
+            proxyTest.isEnabled = true
+        }
 
         dns.summary = dnsSummary()
         dnsEdit.isVisible = false

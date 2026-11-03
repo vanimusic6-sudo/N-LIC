@@ -53,7 +53,7 @@ internal object SubscriptionImport {
         // multiple lines; a newline alone does NOT imply plain URI lines.
         val anyUriLine = cleaned.lines().any { candidate ->
             listOf("vless://", "vmess://", "trojan://", "ss://",
-                "hysteria2://", "hy2://", "tuic://").any {
+                "hysteria2://", "hy2://", "tuic://", "anytls://").any {
                 candidate.trim().startsWith(it, true)
             }
         }
@@ -77,7 +77,7 @@ internal object SubscriptionImport {
         val scheme = line.substringBefore("://", "").lowercase()
         return try {
             when (scheme) {
-                "vless", "trojan", "hysteria2", "hy2", "tuic" -> {
+                "vless", "trojan", "hysteria2", "hy2", "tuic", "anytls" -> {
                     val uri = URI(line)
                     val host = uri.host?.removePrefix("[")?.removeSuffix("]") ?: return null
                     val port = uri.port

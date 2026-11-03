@@ -15,10 +15,15 @@ object DiagnosticUtils {
         val mode = preferences.mode()
         val privateDnsState = PrivateDnsUtils.getState(context)
         val cmdEnabled = preferences.getCmdEnable()
-        val strategy = if (cmdEnabled) {
-            preferences.getCmdArgs()
+        // Full ByeDPI arguments can contain provider hosts, domain lists,
+        // paths or future authentication flags. The exported report is
+        // designed to be shareable, so do not include raw strategy content.
+        val strategy = if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+            "Managed local strategy (redacted)"
+        } else if (cmdEnabled) {
+            "Custom strategy (redacted)"
         } else {
-            ByeDpiProxyUIPreferences(preferences).uiargs.drop(1).joinToString(" ")
+            "GUI strategy (redacted)"
         }
         val (ip, port) = preferences.getProxyIpAndPort()
         val activeLists = DomainListUtils.getLists(context)

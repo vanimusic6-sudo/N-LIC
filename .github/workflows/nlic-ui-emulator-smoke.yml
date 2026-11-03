@@ -2,7 +2,7 @@ name: N-LIC UI runtime smoke (Android emulator)
 
 on:
   push:
-    branches: [fix/nlic-core-bay-ui-security-20261103]
+    branches: [fix/nlic-core-bay-ui-security-20261103, feature/nlic-2-adaptive-vpn-ui-import-20261104]
     paths:
       - app/**
       - .github/workflows/nlic-ui-emulator-smoke.yml
@@ -75,6 +75,8 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
+            mkdir -p app/build/emulator-diagnostics
+            trap 'adb logcat -d -v threadtime -t 5000 > app/build/emulator-diagnostics/logcat.txt || true' EXIT
             ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
 
       - name: Publish UI crash and instrumentation results
@@ -83,6 +85,7 @@ jobs:
         with:
           name: nlic-native-emulator-diagnostics
           path: |
+            app/build/emulator-diagnostics/
             app/build/outputs/androidTest-results/connected/
             app/build/reports/androidTests/connected/
           if-no-files-found: ignore

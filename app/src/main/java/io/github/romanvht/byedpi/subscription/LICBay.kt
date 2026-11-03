@@ -9,12 +9,12 @@ internal data class LICBayPlan(
 
 internal object LICBay {
     fun plan(node: SubscriptionNode): LICBayPlan {
-        if (node.protocol in setOf("HYSTERIA2", "HY2", "TUIC")) {
+        if (node.protocol in setOf("HYSTERIA2", "HY2", "TUIC", "WIREGUARD")) {
             return LICBayPlan(false,
                 "UDP-first endpoint: ByeDPI TCP/SOCKS wrapping is not generally applicable.",
                 null)
         }
-        if (node.protocol !in setOf("VLESS", "VMESS", "TROJAN", "SHADOWSOCKS")) {
+        if (node.protocol !in setOf("VLESS", "VMESS", "TROJAN", "SHADOWSOCKS", "ANYTLS")) {
             return LICBayPlan(false, "Unsupported protocol", null)
         }
         return LICBayPlan(true,

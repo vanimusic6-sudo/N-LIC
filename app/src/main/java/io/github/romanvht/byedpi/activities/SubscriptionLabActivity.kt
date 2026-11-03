@@ -3,6 +3,8 @@ package io.github.romanvht.byedpi.activities
 import android.app.Activity
 import android.net.VpnService
 import android.os.Bundle
+import android.provider.OpenableColumns
+import java.io.ByteArrayOutputStream
 import android.text.InputType
 import android.view.View
 import android.view.WindowManager
@@ -28,6 +30,8 @@ import io.github.romanvht.byedpi.subscription.SubscriptionGroup
 import io.github.romanvht.byedpi.subscription.SubscriptionImport
 import io.github.romanvht.byedpi.subscription.SubscriptionNode
 import io.github.romanvht.byedpi.subscription.SubscriptionVault
+import io.github.romanvht.byedpi.subscription.VPNFileImport
+import io.github.romanvht.byedpi.utility.AdaptiveDpiPolicy
 import io.github.romanvht.byedpi.utility.getPreferences
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +49,14 @@ class SubscriptionLabActivity : BaseActivity() {
     private var busy = false
     private var locallyVerified = false
     private var latestMessage: String? = null
+
+    // SAF grants access only to a file explicitly chosen by the user.
+    // No broad storage permission, no provider URI is retained or logged.
+    private val filePicker = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) importChosenFile(uri)
+    }
 
     private val vpnPermission = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -66,11 +78,30 @@ class SubscriptionLabActivity : BaseActivity() {
         findViewById<MaterialButton>(R.id.nlic_add_link).setOnClickListener {
             showImportDialog(subscription = false)
         }
+        findViewById<MaterialButton>(R.id.nlic_add_file).setOnClickListener {
+            if (!busy) filePicker.launch(arrayOf("*/*"))
+        }
+        findViewById<MaterialButton>(R.id.nlic_refresh_now).setOnClickListener {
+            refreshSubscriptions()
+        }
         findViewById<MaterialButton>(R.id.nlic_connect).setOnClickListener { requestConnection() }
         findViewById<MaterialButton>(R.id.nlic_disconnect).setOnClickListener { disconnectCore() }
         findViewById<MaterialButton>(R.id.nlic_expand_advanced).setOnClickListener {
             val panel = findViewById<View>(R.id.nlic_advanced_panel)
             panel.visibility = if (panel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+        }
+        findViewById<MaterialButton>(R.id.nlic_privacy).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.nlic_privacy_title)
+                .setMessage(R.string.nlic_privacy_confirmation)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    runCatching {
+                        startActivity(android.content.Intent("android.settings.VPN_SETTINGS"))
+                    }.onFailure {
+                        toast(R.string.nlic_privacy_unavailable)
+                    }
+                }
+                .setNegativeButton(android.R.string.cancel, null).show()
         }
         findViewById<MaterialButton>(R.id.nlic_help).setOnClickListener {
             AlertDialog.Builder(this).setTitle(R.string.nlic_ui_help)
@@ -102,6 +133,13 @@ class SubscriptionLabActivity : BaseActivity() {
                 .setNegativeButton(android.R.string.cancel, null).show()
         }
         render()
+        // The home power button starts this Activity with an explicit visible
+        // user gesture. Never autoplay VPN merely because Activity resumed
+        // or was restored from background.
+        if (savedInstanceState == null &&
+            intent.getBooleanExtra("nlic_quick_connect", false)) {
+            window.decorView.post { requestConnection() }
+        }
     }
 
     override fun onResume() {
@@ -147,6 +185,42 @@ class SubscriptionLabActivity : BaseActivity() {
         dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
 
+    private fun importChosenFile(uri: android.net.Uri) = runOperation {
+        val filename = withContext(Dispatchers.IO) {
+            runCatching {
+                contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME),
+                    null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getString(0) else null
+                }
+            }.getOrNull()?.take(120) ?: "import.txt"
+        }
+        val content = withContext(Dispatchers.IO) {
+            val stream = contentResolver.openInputStream(uri)
+                ?: error("Selected document is unavailable")
+            stream.use { input ->
+                val output = ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                while (true) {
+                    val bytes = input.read(buffer)
+                    if (bytes == -1) break
+                    require(output.size() + bytes <= VPNFileImport.MAX_BYTES) {
+                        "File too large"
+                    }
+                    output.write(buffer, 0, bytes)
+                }
+                output.toString(Charsets.UTF_8.name())
+            }
+        }
+        val nodes = withContext(Dispatchers.Default) {
+            VPNFileImport.parse(filename, content)
+        }
+        withContext(Dispatchers.IO) {
+            SubscriptionVault.addManual(applicationContext, nodes)
+            selectFirstIfNeeded()
+        }
+        latestMessage = getString(R.string.nlic_home_file_imported, nodes.size)
+    }
+
     private fun importLinks(text: String) = runOperation {
         val nodes = withContext(Dispatchers.Default) { SubscriptionImport.parse(text) }
         require(nodes.isNotEmpty()) { "NO_NODES" }
@@ -162,7 +236,12 @@ class SubscriptionLabActivity : BaseActivity() {
         val nodes = withContext(Dispatchers.IO) {
             val body = SubscriptionFetcher.fetch(url)
             val hostLabel = URI(url).host ?: "Subscription"
-            val parsed = SubscriptionImport.parse(body, hostLabel)
+            val parsed = if (body.trimStart().startsWith("{") ||
+                body.trimStart().startsWith("[")) {
+                VPNFileImport.parse("$hostLabel.json", body)
+            } else {
+                SubscriptionImport.parse(body, hostLabel)
+            }
             require(parsed.isNotEmpty()) { "NO_NODES" }
             SubscriptionVault.updateGroup(applicationContext,
                 SubscriptionGroup(hostLabel, url, parsed, System.currentTimeMillis()))
@@ -191,22 +270,34 @@ class SubscriptionLabActivity : BaseActivity() {
             return@runOperation
         }
         var count = 0
+        var failures = 0
         for (group in groups.take(30)) {
             val updated = runCatching {
                 withContext(Dispatchers.IO) {
-                    val nodes = SubscriptionImport.parse(
-                        SubscriptionFetcher.fetch(group.url), group.title
-                    )
+                    val body = SubscriptionFetcher.fetch(group.url)
+                    val nodes = if (body.trimStart().startsWith("{") ||
+                        body.trimStart().startsWith("[")) {
+                        VPNFileImport.parse("${group.title}.json", body)
+                    } else {
+                        SubscriptionImport.parse(body, group.title)
+                    }
                     if (nodes.isNotEmpty()) {
                         SubscriptionVault.updateGroup(applicationContext,
                             group.copy(nodes = nodes, refreshedAt = System.currentTimeMillis()))
                     }
                     nodes.size
                 }
-            }.getOrDefault(0)
+            }.getOrElse {
+                failures++
+                0 // Last known-good encrypted cache remains untouched.
+            }
             count += updated
         }
-        latestMessage = getString(R.string.nlic_subscriptions_refreshed, count)
+        latestMessage = if (failures == 0) {
+            getString(R.string.nlic_subscriptions_refreshed, count)
+        } else {
+            getString(R.string.nlic_home_refresh_partial, count, failures)
+        }
     }
 
     private fun checkTcpEndpoints() {
@@ -443,6 +534,17 @@ class SubscriptionLabActivity : BaseActivity() {
         findViewById<TextView>(R.id.nlic_bay_hint).text =
             if (bay) bayHint + "\n" + getString(R.string.nlic_control_bay_risk) else bayHint
 
+        findViewById<SwitchMaterial>(R.id.nlic_adaptive_switch).apply {
+            setOnCheckedChangeListener(null)
+            isChecked = prefs.getBoolean(AdaptiveDpiPolicy.KEY, true)
+            isEnabled = !busy
+            setOnCheckedChangeListener { _, enabled ->
+                prefs.edit().putBoolean(AdaptiveDpiPolicy.KEY, enabled).commit()
+                latestMessage = getString(R.string.nlic_home_policy_description)
+                render()
+            }
+        }
+
         findViewById<MaterialButton>(R.id.nlic_connect).apply {
             isEnabled = !busy && canConnect(catalog)
             setText(if (runningVpn) R.string.nlic_control_apply else R.string.nlic_control_connect)
@@ -452,7 +554,7 @@ class SubscriptionLabActivity : BaseActivity() {
             isEnabled = !busy
         }
         listOf(R.id.nlic_add_subscription, R.id.nlic_add_link,
-            R.id.nlic_refresh, R.id.nlic_tcp_check, R.id.nlic_legacy_mode,
+            R.id.nlic_add_file, R.id.nlic_refresh_now, R.id.nlic_refresh, R.id.nlic_tcp_check, R.id.nlic_legacy_mode,
             R.id.nlic_clear).forEach { id ->
             findViewById<MaterialButton>(id).isEnabled = !busy
         }

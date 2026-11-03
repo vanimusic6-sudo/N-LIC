@@ -39,6 +39,19 @@ class NlicNativeGoContractTest {
         ).mapNotNull { SubscriptionImport.parseNode(it) }
         assertTrue("Fixtures must parse", nodes.size == 3)
         val password = "a".repeat(48)
+        val anytls = requireNotNull(SubscriptionImport.parseNode(
+            "anytls://dummy-password@test.example:443?security=tls#SMOKE-ANYTLS"
+        ))
+        val wgKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        val wg = VPNFileImport.parse("smoke.conf", """
+            [Interface]
+            PrivateKey = $wgKey
+            Address = 10.99.0.2/32
+            [Peer]
+            PublicKey = $wgKey
+            Endpoint = test.example:51820
+            AllowedIPs = 0.0.0.0/0, ::/0
+        """.trimIndent()).single()
         val candidates = nodes.map { node ->
             "FIXED-${node.protocol}" to SingBoxConfigCompiler.compile(
                 node, SingBoxConfigCompiler.Bay.OFF, 1080, password)
@@ -46,7 +59,11 @@ class NlicNativeGoContractTest {
             "AUTO" to SingBoxConfigCompiler.compileAuto(
                 nodes, SingBoxConfigCompiler.Bay.OFF, 1080, password),
             "BAY" to SingBoxConfigCompiler.compile(
-                nodes.first(), SingBoxConfigCompiler.Bay.ON, 1080, password)
+                nodes.first(), SingBoxConfigCompiler.Bay.ON, 1080, password),
+            "ANYTLS" to SingBoxConfigCompiler.compile(
+                anytls, SingBoxConfigCompiler.Bay.OFF, 1080, password),
+            "WIREGUARD" to SingBoxConfigCompiler.compile(
+                wg, SingBoxConfigCompiler.Bay.OFF, 1080, password)
         )
         for ((name, result) in candidates) {
             val compiled = result as? SingBoxConfigCompiler.Result.Compiled

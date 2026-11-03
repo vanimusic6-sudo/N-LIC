@@ -31,6 +31,10 @@ import io.github.romanvht.byedpi.databinding.ActivityMainBinding
 import io.github.romanvht.byedpi.services.ServiceManager
 import io.github.romanvht.byedpi.services.TestService
 import io.github.romanvht.byedpi.services.appStatus
+import io.github.romanvht.byedpi.subscription.SubscriptionVault
+import io.github.romanvht.byedpi.utility.AdaptiveDpiPolicy
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import io.github.romanvht.byedpi.utility.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -40,6 +44,7 @@ import kotlin.system.exitProcess
 class MainActivity : BaseActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var historyUtils: HistoryUtils
+    private var policyLabelJob: Job? = null
 
     companion object {
         private val TAG: String = MainActivity::class.java.simpleName
@@ -177,7 +182,13 @@ class MainActivity : BaseActivity() {
 
             val (status, _) = appStatus
             when (status) {
-                AppStatus.Halted -> start()
+                AppStatus.Halted -> {
+                    if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+                        startActivity(Intent(this, SubscriptionLabActivity::class.java).apply {
+                            putExtra("nlic_quick_connect", true)
+                        })
+                    } else start()
+                }
                 AppStatus.Running -> stop()
             }
 
@@ -220,6 +231,10 @@ class MainActivity : BaseActivity() {
         }
 
         binding.editorButton.setOnClickListener {
+            if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+                startActivity(Intent(this, SubscriptionLabActivity::class.java))
+                return@setOnClickListener
+            }
             val useCmdSettings = getPreferences().getCmdEnable()
 
             if (!useCmdSettings && appStatus.first == AppStatus.Running) {
@@ -243,7 +258,9 @@ class MainActivity : BaseActivity() {
         }
 
         binding.strategyButton.setOnClickListener {
-            showStrategyPicker()
+            if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+                startActivity(Intent(this, TestActivity::class.java))
+            } else showStrategyPicker()
         }
 
         if (!PermissionUtils.hasNotificationPermission(this)) {
@@ -310,6 +327,7 @@ class MainActivity : BaseActivity() {
     }
 
     override fun onDestroy() {
+        policyLabelJob?.cancel()
         super.onDestroy()
         unregisterReceiver(receiver)
     }
@@ -420,14 +438,24 @@ class MainActivity : BaseActivity() {
         val preferences = getPreferences()
         val (ip, port) = preferences.getProxyIpAndPort()
 
-        binding.proxyAddress.text = getString(R.string.proxy_address, ip, port)
+        binding.proxyAddress.text =
+            if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+                runCatching {
+                    val catalog = SubscriptionVault.read(applicationContext)
+                    val selected = catalog.allNodes.firstOrNull {
+                        it.id == catalog.selectedNodeId
+                    }
+                    selected?.let { it.name + " · " + it.protocol }
+                        ?: getString(R.string.nlic_control_start_hint)
+                }.getOrDefault(getString(R.string.nlic_control_status_hint))
+            } else getString(R.string.proxy_address, ip, port)
 
         when (status) {
             AppStatus.Halted -> {
-                val typedValue = android.util.TypedValue()
-                theme.resolveAttribute(android.R.attr.colorPrimary, typedValue,true)
-                binding.statusButtonCard.setCardBackgroundColor(typedValue.data)
-                binding.statusButtonIcon.clearColorFilter()
+                binding.statusButtonCard.setCardBackgroundColor(
+                    ContextCompat.getColor(this, R.color.nlic_surface_raised))
+                binding.statusButtonIcon.setColorFilter(
+                    ContextCompat.getColor(this, R.color.nlic_accent))
 
                 when (preferences.mode()) {
                     Mode.VPN -> {
@@ -441,8 +469,10 @@ class MainActivity : BaseActivity() {
             }
 
             AppStatus.Running -> {
-                binding.statusButtonCard.setCardBackgroundColor(ContextCompat.getColor(this, R.color.green_active))
-                binding.statusButtonIcon.setColorFilter(ContextCompat.getColor(this, android.R.color.white))
+                binding.statusButtonCard.setCardBackgroundColor(
+                    ContextCompat.getColor(this, R.color.nlic_success))
+                binding.statusButtonIcon.setColorFilter(
+                    ContextCompat.getColor(this, R.color.nlic_canvas))
 
                 when (mode) {
                     Mode.VPN -> {
@@ -458,6 +488,36 @@ class MainActivity : BaseActivity() {
     }
 
     private fun updateStrategyButton() {
+        if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+            // No raw ByeDPI command-line text on the new VPN-first home.
+            binding.cmdButtonsRow.visibility = View.VISIBLE
+            binding.strategyButton.visibility = View.VISIBLE
+            binding.strategyButtonName.visibility = View.VISIBLE
+            binding.strategyButtonName.text =
+                when (NetworkEnvironment.capture(this).type) {
+                    AccessType.WIFI -> "Wi-Fi"
+                    AccessType.CELLULAR -> getString(R.string.nlic_home_auto_network)
+                    AccessType.ETHERNET -> "Ethernet"
+                    else -> getString(R.string.nlic_home_connection)
+                }
+            binding.strategyButtonText.setText(R.string.nlic_home_policy_loading)
+            policyLabelJob?.cancel()
+            policyLabelJob = lifecycleScope.launch {
+                val decision = withContext(Dispatchers.IO) {
+                    val prefs = getPreferences()
+                    AdaptiveDpiPolicy.decide(this@MainActivity,
+                        prefs.getBoolean(AdaptiveDpiPolicy.KEY, true), prefs.getCmdArgs())
+                }
+                if (!isFinishing && !isDestroyed) {
+                    binding.strategyButtonText.setText(when {
+                        decision == null -> R.string.nlic_home_policy_off
+                        decision.measured -> R.string.nlic_home_policy_measured
+                        else -> R.string.nlic_home_policy_baseline
+                    })
+                }
+            }
+            return
+        }
         val useCmdSettings = getPreferences().getCmdEnable()
 
         if (!useCmdSettings) {
