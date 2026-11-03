@@ -147,6 +147,8 @@ internal object NetworkEnvironment {
             }
             AccessPolicy.select(candidates, activeCandidate, vpnHint)
         } catch (_: SecurityException) {
+            // Android/OEM may hide physical interfaces from a VPN client's UID.
+            // UNKNOWN is a visibility limit, not proof of no connectivity.
             AccessSnapshot(AccessType.UNKNOWN)
         }
     }

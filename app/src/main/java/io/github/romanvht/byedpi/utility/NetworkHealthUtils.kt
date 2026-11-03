@@ -25,12 +25,19 @@ internal data class NetworkHealthReport(
     val checks: List<ConnectionCheck>,
     val notes: List<String>,
     val proxyChecks: List<ConnectionCheck> = emptyList(),
+    val route: ProbeRoute = ProbeRoute.BOUND_PHYSICAL,
 ) {
     fun asText(): String = buildString {
         appendLine("N-LIC · network health (direct physical network, opt-in)")
         appendLine("Transport: ${snapshot.type}")
-        appendLine("IPv4: ${snapshot.hasIpv4}, IPv6: ${snapshot.hasIpv6}, NAT64: ${snapshot.hasNat64}")
-        appendLine("Physical MTU reported: ${snapshot.physicalMtu}")
+        appendLine("Probe route: ${route.label}")
+        if (snapshot.type == AccessType.UNKNOWN) {
+            appendLine("IPv4 / IPv6 / NAT64: not observable (NOT a negative test)")
+            appendLine("Physical MTU: not observable")
+        } else {
+            appendLine("IPv4: ${snapshot.hasIpv4}, IPv6: ${snapshot.hasIpv6}, NAT64: ${snapshot.hasNat64}")
+            appendLine("Physical MTU reported: ${snapshot.physicalMtu}")
+        }
         for (check in checks + proxyChecks) {
             appendLine("${check.target}: ${check.detail} · ${check.latencyMs} ms" +
                 if (check.bytes > 0) " · ${check.bytes} bytes" else "")
@@ -87,13 +94,12 @@ internal object NetworkHealthUtils {
     suspend fun run(context: Context, compareSocks: Boolean = true): NetworkHealthReport = withContext(Dispatchers.IO) {
         val snapshot = NetworkEnvironment.capture(context)
         val network = try { underlyingNetwork(context) } catch (_: SecurityException) { null }
-        if (network == null) {
-            return@withContext NetworkHealthReport(
-                snapshot,
-                emptyList(),
-                listOf(visibilityReason(context)),
-            )
-        }
+        // Real devices can report zero visible Networks (including no VPN)
+        // while default-route sockets still work. Do not return an empty test!
+        // When no physical Network is visible, use ordinary Android sockets,
+        // explicitly marking the result UNBOUND rather than claiming direct
+        // carrier access. This may transit another system VPN.
+        val route = ProbeRoute.forBoundNetwork(network != null)
         coroutineContext.ensureActive()
 
         // Telegram production DC IPs are example DCs, not a guarantee that the
@@ -111,7 +117,9 @@ internal object NetworkHealthUtils {
         val large = checkDownload(network, MAX_DOWNLOAD_BYTES, "Cloudflare 256 KiB")
         val checks = listOf(youtube, youtubeApi, telegram, telegramAlt, small, large)
         val notes = NetworkHealthInterpretation.describe(youtubeApi, telegram, small, large)
-        val base = NetworkHealthReport(snapshot, checks, notes)
+            .toMutableList()
+        if (network == null) notes.add(0, visibilityReason(context))
+        val base = NetworkHealthReport(snapshot, checks, notes, route = route)
         if (compareSocks) addProxyComparison(context, base) else base
     }
 
@@ -172,30 +180,30 @@ internal object NetworkHealthUtils {
             val cellularVisible = physical.count { it.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) }
             val wifiVisible = physical.count { it.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) }
             buildString {
-                append("Android did not expose one usable physical network to N-LIC. ")
+                append("Android did not expose a uniquely identifiable physical network to N-LIC. ")
                 append("Visible VPN: $vpnVisible; physical networks: ${physical.size}; ")
                 append("cellular: $cellularVisible; Wi-Fi: $wifiVisible. ")
-                append("If N-LIC is connected, run the new diagnostic with a temporary ")
-                append("VPN disconnect and automatic restore. Otherwise turn off Wi-Fi ")
-                append("and verify that mobile data is actually connected.")
+                append("Tests used the SYSTEM DEFAULT route instead; their success ")
+                append("does not establish a direct carrier path. Any active VPN could ")
+                append("carry these packets. If mobile testing, turn off Wi-Fi.")
             }
         } catch (_: SecurityException) {
-            "Android denied access to network capabilities; direct diagnostics require VPN disconnection."
+            "Network capabilities are unavailable. Tests used the Android system default route; VPN bypass is NOT confirmed."
         }
     }
 
-    private fun checkTcp(network: Network, host: String, label: String): ConnectionCheck {
+    private fun checkTcp(network: Network?, host: String, label: String): ConnectionCheck {
         val start = SystemClock.elapsedRealtime()
         var reason = "CONNECT_FAILED"
         try {
             // DNS is deliberately resolved on the same underlying interface.
-            val addresses = network.getAllByName(host).take(4)
+            val addresses = (network?.getAllByName(host) ?: java.net.InetAddress.getAllByName(host)).take(4)
             if (addresses.isEmpty()) {
                 return ConnectionCheck(label, false, elapsed(start), "DNS_EMPTY")
             }
             for (ip in addresses) {
                 try {
-                    network.socketFactory.createSocket().use { socket ->
+                    (network?.socketFactory?.createSocket() ?: java.net.Socket()).use { socket ->
                         socket.connect(InetSocketAddress(ip, 443), CONNECT_TIMEOUT_MS)
                         return ConnectionCheck(
                             label, true, elapsed(start),
@@ -246,7 +254,8 @@ internal object NetworkHealthUtils {
         var received = 0
         return try {
             connection = if (proxy == null) {
-                requireNotNull(network).openConnection(url) as HttpURLConnection
+                if (network != null) network.openConnection(url) as HttpURLConnection
+                else url.openConnection() as HttpURLConnection
             } else url.openConnection(proxy) as HttpURLConnection
             connection.instanceFollowRedirects = false
             connection.connectTimeout = CONNECT_TIMEOUT_MS

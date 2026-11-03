@@ -213,6 +213,9 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
         val physicalAvailable = runCatching {
             NetworkHealthUtils.underlyingNetwork(context) != null
         }.getOrDefault(false)
+        // Without N-LIC VPN, an unavailable ConnectivityManager network list
+        // must not prevent a plain default-route TCP/HTTPS diagnostic.
+        // Never silently disconnect any third-party VPN.
 
         if (vpnActive && !physicalAvailable) {
             // A VPN may be the only Network visible to our UID. Ask BEFORE
