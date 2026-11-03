@@ -1,64 +1,141 @@
 package io.github.romanvht.byedpi.subscription
 
+import android.app.Activity
 import android.content.Context
+import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import android.text.InputType
 import android.view.View
 import android.widget.EditText
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.Preference
 import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreferenceCompat
-import android.content.SharedPreferences
 import io.github.romanvht.byedpi.BuildConfig
-import io.github.romanvht.byedpi.utility.getPreferences
 import io.github.romanvht.byedpi.R
+import io.github.romanvht.byedpi.data.AppStatus
+import io.github.romanvht.byedpi.data.Mode
+import io.github.romanvht.byedpi.services.ServiceManager
+import io.github.romanvht.byedpi.services.appStatus
+import io.github.romanvht.byedpi.utility.getPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.URI
 
 /**
- * Phase 1 subscription manager. Import, view and run bounded TCP checks.
- * There is intentionally NO button that pretends to establish a VPN through
- * imported VLESS/VMess nodes before a real VPN core is integrated.
+ * LIC-Core control centre. Status distinguishes a running Android VPN from
+ * confirmed encrypted remote readiness (only the start action verifies that).
+ * Subscription data stays inside Android Keystore, never in preference keys.
  */
 class SubscriptionLabFragment : PreferenceFragmentCompat() {
+    private var connecting = false
+    private val vpnPermission = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) connectCore()
+        else if (isAdded) Toast.makeText(requireContext(),
+            R.string.vpn_permission_denied, Toast.LENGTH_SHORT).show()
+    }
+
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         render()
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (preferenceScreen != null) render()
+    }
+
     private fun render() {
+        if (!isAdded) return
         val context = requireContext()
         val screen = preferenceManager.createPreferenceScreen(context)
         preferenceScreen = screen
 
-        val section = PreferenceCategory(context).apply {
-            title = getString(R.string.nlic_subscriptions_title)
-        }
-        screen.addPreference(section)
-
-        section.addPreference(Preference(context).apply {
-            title = getString(R.string.nlic_subscriptions_phase)
-            summary = getString(
-                if (BuildConfig.NLIC_LIBBOX_INCLUDED) R.string.nlic_core_preview_warning
-                else R.string.nlic_subscriptions_phase_desc
-            )
-            isSelectable = false
-        })
         if (!SubscriptionVault.available()) {
-            section.addPreference(Preference(context).apply {
+            screen.addPreference(Preference(context).apply {
                 title = getString(R.string.nlic_subscriptions_unsupported)
                 isSelectable = false
             })
             return
         }
 
-        section.addPreference(Preference(context).apply {
+        val saved = runCatching { SubscriptionVault.read(context) }.getOrElse {
+            screen.addPreference(Preference(context).apply {
+                title = getString(R.string.nlic_subscriptions_vault_error)
+                summary = getString(R.string.nlic_subscriptions_vault_error_desc)
+                isSelectable = false
+            })
+            return
+        }
+        val prefs = context.getPreferences()
+        val allNodes = saved.allNodes
+        val selectedNode = allNodes.firstOrNull { it.id == saved.selectedNodeId }
+        val autoEnabled = prefs.getBoolean("nlic_core_auto", false)
+        val bayEnabled = prefs.getBoolean("nlic_core_bay", false)
+        val bay = if (bayEnabled) SingBoxConfigCompiler.Bay.ON
+            else SingBoxConfigCompiler.Bay.OFF
+        val byedpiVpnMode = prefs.getString("byedpi_mode", "vpn") == "vpn"
+        val canCompile = selectedNode?.let {
+            SingBoxConfigCompiler.compile(it, bay) is SingBoxConfigCompiler.Result.Compiled
+        } == true
+        val autoAvailable = SingBoxConfigCompiler.compileAuto(allNodes, bay) is
+            SingBoxConfigCompiler.Result.Compiled
+        val canConnect = BuildConfig.NLIC_LIBBOX_INCLUDED && byedpiVpnMode &&
+            (if (autoEnabled) autoAvailable else canCompile)
+        val runningVpn = appStatus.first == AppStatus.Running && appStatus.second == Mode.VPN
+        // Do not infer remote VPN success solely from Android's foreground status.
+        val possibleCoreRunning = runningVpn && prefs.getBoolean("nlic_core_mode", false)
+
+        screen.addPreference(NlicDashboardPreference(context).apply {
+            heading = getString(when {
+                connecting -> R.string.nlic_core_connecting
+                possibleCoreRunning -> R.string.nlic_ui_running
+                runningVpn -> R.string.nlic_ui_legacy_running
+                else -> R.string.nlic_ui_disconnected
+            })
+            details = when {
+                !BuildConfig.NLIC_LIBBOX_INCLUDED -> getString(R.string.nlic_core_missing)
+                autoEnabled -> getString(R.string.nlic_core_auto_toggle)
+                selectedNode != null -> selectedNode.name + " · " + selectedNode.protocol
+                else -> getString(R.string.nlic_ui_no_server)
+            }
+            hint = getString(when {
+                !BuildConfig.NLIC_LIBBOX_INCLUDED -> R.string.nlic_core_missing
+                !byedpiVpnMode -> R.string.nlic_core_requires_vpn
+                allNodes.isEmpty() -> R.string.nlic_ui_step_import
+                !autoEnabled && selectedNode == null -> R.string.nlic_ui_step_choose
+                !canConnect -> R.string.nlic_core_profile_unsupported
+                possibleCoreRunning -> R.string.nlic_ui_running_hint
+                else -> R.string.nlic_ui_step_connect
+            })
+            this.connecting = this@SubscriptionLabFragment.connecting
+            connectAllowed = canConnect
+            showDisconnect = runningVpn
+            onConnect = {
+                val permission = VpnService.prepare(context)
+                if (permission == null) connectCore() else vpnPermission.launch(permission)
+            }
+            onDisconnect = { disconnectCore() }
+            onHelp = {
+                AlertDialog.Builder(context)
+                    .setTitle(R.string.nlic_ui_help)
+                    .setMessage(R.string.nlic_ui_help_steps)
+                    .setPositiveButton(android.R.string.ok, null).show()
+            }
+        })
+
+        val imports = PreferenceCategory(context).apply {
+            title = getString(R.string.nlic_ui_import_section)
+        }
+        screen.addPreference(imports)
+        imports.addPreference(Preference(context).apply {
             title = getString(R.string.nlic_subscriptions_add_url)
             summary = getString(R.string.nlic_subscriptions_url_hint)
             setOnPreferenceClickListener {
@@ -68,7 +145,7 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
                 true
             }
         })
-        section.addPreference(Preference(context).apply {
+        imports.addPreference(Preference(context).apply {
             title = getString(R.string.nlic_subscriptions_add_link)
             summary = getString(R.string.nlic_subscriptions_add_link_hint)
             setOnPreferenceClickListener {
@@ -78,109 +155,97 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
                 true
             }
         })
-
-        val saved = runCatching { SubscriptionVault.read(context) }.getOrElse {
-            section.addPreference(Preference(context).apply {
-                title = getString(R.string.nlic_subscriptions_vault_error)
-                summary = getString(R.string.nlic_subscriptions_vault_error_desc)
-                isSelectable = false
+        if (saved.groups.isNotEmpty()) {
+            imports.addPreference(Preference(context).apply {
+                title = getString(R.string.nlic_subscriptions_refresh)
+                summary = getString(R.string.nlic_subscriptions_refresh_desc)
+                setOnPreferenceClickListener {
+                    refreshGroups(saved.groups)
+                    true
+                }
             })
-            return
         }
 
-        val prefs = context.getPreferences()
-        val selectedNode = saved.allNodes.firstOrNull { it.id == saved.selectedNodeId }
-        val canCompile = selectedNode?.let {
-            SingBoxConfigCompiler.compile(it) is SingBoxConfigCompiler.Result.Compiled
-        } == true
-        val byedpiVpnMode = prefs.getString("byedpi_mode", "vpn") == "vpn"
-        val autoEnabled = prefs.getBoolean("nlic_core_auto", false)
-        val autoPlan = SingBoxConfigCompiler.compileAuto(
-            saved.allNodes,
-            if (prefs.getBoolean("nlic_core_bay", false))
-                SingBoxConfigCompiler.Bay.ON else SingBoxConfigCompiler.Bay.OFF,
-        )
-        val autoAvailable = autoPlan is SingBoxConfigCompiler.Result.Compiled
-
-        section.addPreference(SwitchPreferenceCompat(context).apply {
-            key = "nlic_core_mode"
-            title = getString(R.string.nlic_core_toggle)
-            summary = when {
-                !BuildConfig.NLIC_LIBBOX_INCLUDED -> getString(R.string.nlic_core_missing)
-                !byedpiVpnMode -> getString(R.string.nlic_core_requires_vpn)
-                !(if (autoEnabled) autoAvailable else canCompile) ->
-                    getString(R.string.nlic_core_choose_supported)
-                else -> getString(R.string.nlic_core_reconnect)
+        val servers = PreferenceCategory(context).apply {
+            title = getString(R.string.nlic_subscriptions_nodes, allNodes.size)
+        }
+        screen.addPreference(servers)
+        if (allNodes.isEmpty()) {
+            servers.addPreference(Preference(context).apply {
+                title = getString(R.string.nlic_ui_no_server)
+                summary = getString(R.string.nlic_ui_step_import)
+                isSelectable = false
+            })
+        } else {
+            allNodes.take(150).forEach { node ->
+                val selected = node.id == saved.selectedNodeId
+                val compatible = SingBoxConfigCompiler.compile(node, bay) is
+                    SingBoxConfigCompiler.Result.Compiled
+                servers.addPreference(Preference(context).apply {
+                    title = (if (selected) "●  " else "○  ") + node.name
+                    summary = node.protocol + "  ·  " + getString(
+                        when {
+                            !compatible -> R.string.nlic_ui_unsupported
+                            selected -> R.string.nlic_ui_selected
+                            else -> R.string.nlic_ui_available
+                        }
+                    )
+                    isEnabled = !connecting
+                    setOnPreferenceClickListener {
+                        runCatching { SubscriptionVault.select(context, node.id) }
+                            .onSuccess { render() }
+                            .onFailure { showError() }
+                        true
+                    }
+                })
             }
-            isChecked = prefs.getBoolean(key, false)
-            isEnabled = BuildConfig.NLIC_LIBBOX_INCLUDED && byedpiVpnMode &&
-                (if (autoEnabled) autoAvailable else canCompile)
-            setOnPreferenceChangeListener { _, newValue ->
-                prefs.edit().putBoolean(key, newValue as Boolean).commit()
+        }
+
+        val enhancements = PreferenceCategory(context).apply {
+            title = getString(R.string.nlic_ui_enhancements_section)
+        }
+        screen.addPreference(enhancements)
+        enhancements.addPreference(SwitchPreferenceCompat(context).apply {
+            key = "nlic_core_auto"
+            title = getString(R.string.nlic_core_auto_toggle)
+            summary = getString(R.string.nlic_core_auto_desc)
+            isChecked = autoEnabled
+            isEnabled = !connecting && BuildConfig.NLIC_LIBBOX_INCLUDED && byedpiVpnMode &&
+                allNodes.isNotEmpty()
+            setOnPreferenceChangeListener { _, value ->
+                prefs.edit().putBoolean(key, value as Boolean).commit()
                 render()
                 true
             }
         })
 
         val bayEligible = if (autoEnabled) {
-            saved.allNodes.any { node ->
+            allNodes.any { node ->
                 LICBay.plan(node).canWrapTcp &&
-                    SingBoxConfigCompiler.compile(node) is
-                        SingBoxConfigCompiler.Result.Compiled
+                    SingBoxConfigCompiler.compile(node) is SingBoxConfigCompiler.Result.Compiled
             }
-        } else selectedNode != null && LICBay.plan(selectedNode).canWrapTcp
+        } else selectedNode != null && LICBay.plan(selectedNode).canWrapTcp &&
+            SingBoxConfigCompiler.compile(selectedNode) is SingBoxConfigCompiler.Result.Compiled
 
-        section.addPreference(SwitchPreferenceCompat(context).apply {
-            key = "nlic_core_auto"
-            title = getString(R.string.nlic_core_auto_toggle)
-            summary = getString(R.string.nlic_core_auto_desc)
-            isChecked = prefs.getBoolean(key, false)
-            isEnabled = BuildConfig.NLIC_LIBBOX_INCLUDED && byedpiVpnMode &&
-                saved.allNodes.isNotEmpty()
-            setOnPreferenceChangeListener { _, newValue ->
-                prefs.edit().putBoolean(key, newValue as Boolean).commit()
+        enhancements.addPreference(SwitchPreferenceCompat(context).apply {
+            key = "nlic_core_bay"
+            title = getString(R.string.nlic_core_bay_toggle)
+            summary = getString(if (bayEligible) R.string.nlic_core_bay_desc
+                else R.string.nlic_core_bay_udp)
+            isChecked = bayEnabled
+            // Always allow disabling an incompatible previously saved choice.
+            isEnabled = !connecting && (bayEnabled ||
+                (BuildConfig.NLIC_LIBBOX_INCLUDED && bayEligible && byedpiVpnMode))
+            setOnPreferenceChangeListener { _, value ->
+                prefs.edit().putBoolean(key, value as Boolean).commit()
                 render()
                 true
             }
         })
-        section.addPreference(SwitchPreferenceCompat(context).apply {
-            key = "nlic_core_bay"
-            title = getString(R.string.nlic_core_bay_toggle)
-            summary = if (bayEligible) getString(R.string.nlic_core_bay_desc)
-                else getString(R.string.nlic_core_bay_udp)
-            isChecked = prefs.getBoolean(key, false)
-            isEnabled = BuildConfig.NLIC_LIBBOX_INCLUDED && bayEligible &&
-                prefs.getBoolean("nlic_core_mode", false)
-            setOnPreferenceChangeListener { _, newValue ->
-                prefs.edit().putBoolean(key, newValue as Boolean).commit()
-                true
-            }
-        })
-
-        section.addPreference(Preference(context).apply {
-            title = getString(R.string.nlic_core_profile_check)
-            summary = if (if (autoEnabled) autoAvailable else canCompile)
-                getString(R.string.nlic_core_profile_ready)
-                else getString(R.string.nlic_core_profile_unsupported)
-            isSelectable = false
-        })
-
-        val groups = saved.groups
-        if (groups.isNotEmpty()) {
-            section.addPreference(Preference(context).apply {
-                title = getString(R.string.nlic_subscriptions_refresh)
-                summary = getString(R.string.nlic_subscriptions_refresh_desc)
-                setOnPreferenceClickListener {
-                    refreshGroups(groups)
-                    true
-                }
-            })
-        }
-
-        section.addPreference(Preference(context).apply {
+        enhancements.addPreference(Preference(context).apply {
             title = getString(R.string.nlic_auto_label)
             summary = getString(R.string.nlic_auto_tcp_only)
-            isEnabled = saved.allNodes.isNotEmpty()
+            isEnabled = !connecting && allNodes.isNotEmpty()
             setOnPreferenceClickListener {
                 AlertDialog.Builder(context)
                     .setTitle(R.string.nlic_auto_label)
@@ -191,50 +256,119 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
                 true
             }
         })
-        section.addPreference(Preference(context).apply {
-            title = getString(R.string.nlic_bay_label)
-            summary = getString(R.string.nlic_bay_phase)
+
+        val advanced = PreferenceCategory(context).apply {
+            title = getString(R.string.nlic_ui_advanced_section)
+        }
+        screen.addPreference(advanced)
+        advanced.addPreference(Preference(context).apply {
+            title = getString(R.string.nlic_core_profile_check)
+            summary = getString(if (if (autoEnabled) autoAvailable else canCompile)
+                R.string.nlic_core_profile_ready else R.string.nlic_core_profile_unsupported)
             isSelectable = false
         })
-        if (saved.allNodes.isNotEmpty()) {
-            val nodesCategory = PreferenceCategory(context).apply {
-                title = getString(R.string.nlic_subscriptions_nodes, saved.allNodes.size)
-            }
-            screen.addPreference(nodesCategory)
-            saved.allNodes.take(150).forEach { node ->
-                val selected = node.id == saved.selectedNodeId
-                nodesCategory.addPreference(Preference(context).apply {
-                    title = (if (selected) "✓ " else "") + node.name
-                    summary = "${node.protocol} · ${node.port} · " +
-                        getString(if (BuildConfig.NLIC_LIBBOX_INCLUDED)
-                            R.string.nlic_core_reconnect
-                        else R.string.nlic_subscriptions_preview_only)
-                    setOnPreferenceClickListener {
-                        try {
-                            SubscriptionVault.select(context, node.id)
-                            render()
-                        } catch (_: Exception) {
-                            showError()
+        advanced.addPreference(Preference(context).apply {
+            title = getString(R.string.nlic_ui_legacy_action)
+            summary = getString(R.string.nlic_ui_legacy_desc)
+            isEnabled = !connecting
+            setOnPreferenceClickListener {
+                AlertDialog.Builder(context)
+                    .setTitle(R.string.nlic_ui_legacy_action)
+                    .setMessage(R.string.nlic_ui_legacy_confirm)
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        lifecycleScope.launch {
+                            ServiceManager.waitStop()
+                            prefs.edit().putBoolean("nlic_core_mode", false).commit()
+                            if (isAdded) render()
                         }
-                        true
                     }
-                })
+                    .setNegativeButton(android.R.string.cancel, null).show()
+                true
             }
-            section.addPreference(Preference(context).apply {
+        })
+        if (allNodes.isNotEmpty() || saved.groups.isNotEmpty()) {
+            advanced.addPreference(Preference(context).apply {
                 title = getString(R.string.nlic_subscriptions_clear)
+                isEnabled = !connecting
                 setOnPreferenceClickListener {
                     AlertDialog.Builder(context)
                         .setTitle(R.string.nlic_subscriptions_clear)
                         .setMessage(R.string.nlic_subscriptions_clear_confirm)
                         .setPositiveButton(android.R.string.ok) { _, _ ->
-                            SubscriptionVault.clear(context)
-                            render()
+                            lifecycleScope.launch {
+                                ServiceManager.waitStop()
+                                prefs.edit().putBoolean("nlic_core_mode", false)
+                                    .putBoolean("nlic_core_auto", false)
+                                    .putBoolean("nlic_core_bay", false).commit()
+                                runCatching { SubscriptionVault.clear(context) }
+                                    .onFailure { showError() }
+                                if (isAdded) render()
+                            }
                         }
-                        .setNegativeButton(android.R.string.cancel, null)
-                        .show()
+                        .setNegativeButton(android.R.string.cancel, null).show()
                     true
                 }
             })
+        }
+        advanced.addPreference(Preference(context).apply {
+            title = getString(R.string.nlic_subscriptions_phase)
+            summary = getString(
+                if (BuildConfig.NLIC_LIBBOX_INCLUDED) R.string.nlic_core_preview_warning
+                else R.string.nlic_subscriptions_phase_desc)
+            isSelectable = false
+        })
+    }
+
+    private fun disconnectCore() {
+        if (connecting) return
+        connecting = true
+        render()
+        lifecycleScope.launch {
+            try {
+                ServiceManager.waitStop()
+                // A future manually selected node must never silently launch
+                // the experimental core from the app's legacy main screen.
+                requireContext().getPreferences().edit()
+                    .putBoolean("nlic_core_mode", false).commit()
+            } finally {
+                connecting = false
+                if (isAdded) render()
+            }
+        }
+    }
+
+    private fun connectCore() {
+        if (connecting) return
+        val app = requireContext().applicationContext
+        app.getPreferences().edit().putBoolean("nlic_core_mode", true).commit()
+        connecting = true
+        render()
+        lifecycleScope.launch {
+            var connected = false
+            var cancelled = false
+            try {
+                ServiceManager.waitStop()
+                connected = ServiceManager.waitStart(app, Mode.VPN)
+                if (isAdded) Toast.makeText(requireContext(),
+                    if (connected) R.string.nlic_core_connected else R.string.nlic_core_connect_failed,
+                    Toast.LENGTH_LONG).show()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                cancelled = true
+                throw e
+            } catch (_: Exception) {
+                if (isAdded) Toast.makeText(requireContext(),
+                    R.string.nlic_core_connect_failed, Toast.LENGTH_LONG).show()
+            } finally {
+                // A failed start must not leave a persistent "Core enabled"
+                // preference that breaks every subsequent legacy VPN startup.
+                // On lifecycle cancellation, connection state is uncertain:
+                // leave the engine in charge rather than toggling under it.
+                if (!connected && !cancelled) {
+                    app.getPreferences().edit().putBoolean("nlic_core_mode", false).commit()
+                }
+                connecting = false
+                if (isAdded) render()
+            }
         }
     }
 

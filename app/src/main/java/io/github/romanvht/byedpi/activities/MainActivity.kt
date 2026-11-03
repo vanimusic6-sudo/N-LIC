@@ -25,6 +25,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
 import io.github.romanvht.byedpi.R
+import io.github.romanvht.byedpi.BuildConfig
 import io.github.romanvht.byedpi.data.*
 import io.github.romanvht.byedpi.databinding.ActivityMainBinding
 import io.github.romanvht.byedpi.services.ServiceManager
@@ -191,6 +192,15 @@ class MainActivity : BaseActivity() {
                 binding.statusButtonCard.strokeColor = android.graphics.Color.argb(100, 0, 0, 0)
             } else {
                 binding.statusButtonCard.strokeWidth = 0
+            }
+        }
+
+        // Some resource configurations use a compact alternative home layout.
+        // ViewBinding therefore exposes this optional button as nullable.
+        binding.nlicCoreButton?.apply {
+            visibility = if (BuildConfig.NLIC_LIBBOX_INCLUDED) View.VISIBLE else View.GONE
+            setOnClickListener {
+                startActivity(Intent(this@MainActivity, SubscriptionLabActivity::class.java))
             }
         }
 

@@ -1,15 +1,11 @@
 package io.github.romanvht.byedpi.subscription
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
-import android.os.Build
 import android.util.Log
 import java.io.File
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
-import java.net.NetworkInterface
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -41,6 +37,7 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
     private var server: Any? = null
     private var workspaceDir: File? = null
     private var serverClass: Class<*>? = null
+    private val networkMonitor = CoreNetworkMonitor(context)
 
     @Synchronized
     fun start(config: String) {
@@ -59,9 +56,10 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
             set(setup, "workingPath", workspace.absolutePath)
             set(setup, "tempPath", context.cacheDir.absolutePath)
             set(setup, "debug", false)
-            set(setup, "logMaxLines", 128)
-            set(setup, "appVersion", "nlic-1.9.1")
-            set(setup, "appMarketingVersion", "1.9.1")
+            set(setup, "logMaxLines", 128L)
+            set(setup, "commandServerSecret", java.util.UUID.randomUUID().toString())
+            set(setup, "appVersion", "nlic-1.9.2")
+            set(setup, "appMarketingVersion", "1.9.2")
             val libbox = Class.forName(LIBBOX + "Libbox")
             libbox.getMethod("setup", setupClass).invoke(null, setup)
 
@@ -69,7 +67,7 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
             val handlerType = Class.forName(LIBBOX + "CommandServerHandler")
             val platform = Proxy.newProxyInstance(
                 platformType.classLoader, arrayOf(platformType),
-                PlatformHandler(context),
+                PlatformHandler(networkMonitor),
             )
             val handler = Proxy.newProxyInstance(
                 handlerType.classLoader, arrayOf(handlerType),
@@ -98,6 +96,8 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
 
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
+        networkMonitor.close()
+        snapshotFile().delete()
         val instance = server ?: return
         val cls = serverClass ?: return
         try {
@@ -140,7 +140,7 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
             }
     }
 
-    private class PlatformHandler(private val context: Context) : InvocationHandler {
+    private class PlatformHandler(private val monitor: CoreNetworkMonitor) : InvocationHandler {
         override fun invoke(proxy: Any, method: Method, args: Array<out Any?>?): Any? =
             when (method.name) {
                 "usePlatformAutoDetectInterfaceControl" -> false
@@ -149,19 +149,11 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
                     "Second TUN disallowed: N-LIC VpnService must own the tunnel"
                 )
                 "startDefaultInterfaceMonitor" -> {
-                    val listener = args?.firstOrNull()
-                    if (listener != null) {
-                        runCatching {
-                            val name = currentInterfaceName(context)
-                            val iface = name?.let(NetworkInterface::getByName)
-                            listener.javaClass.methods.firstOrNull {
-                                it.name == "updateDefaultInterface"
-                            }?.invoke(listener, name.orEmpty(), iface?.index ?: -1, false, false)
-                        }
-                    }
+                    args?.firstOrNull()?.let(monitor::start)
                     null
                 }
-                "getInterfaces" -> emptyIterator("NetworkInterfaceIterator")
+                "closeDefaultInterfaceMonitor" -> { monitor.close(); null }
+                "getInterfaces" -> monitor.interfaces()
                 "readWIFIState", "localDNSTransport", "findConnectionOwner" -> null
                 "underNetworkExtension", "includeAllNetworks" -> false
                 "usePlatformShell", "usePlatformBridge", "usePlatformAutoRedirect" -> false
@@ -169,29 +161,7 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
                 else -> defaultValue(method.returnType)
             }
 
-        private fun emptyIterator(type: String): Any? {
-            val clazz = runCatching { Class.forName(LIBBOX + type) }.getOrNull()
-                ?: return null
-            return Proxy.newProxyInstance(clazz.classLoader, arrayOf(clazz)) { _, method, _ ->
-                defaultValue(method.returnType)
-            }
-        }
 
-        private fun currentInterfaceName(context: Context): String? {
-            return try {
-                val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
-                    as? ConnectivityManager ?: return null
-                val network = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    manager.activeNetwork
-                } else null
-                if (network == null) return null
-                val caps = manager.getNetworkCapabilities(network) ?: return null
-                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return null
-                manager.getLinkProperties(network)?.interfaceName
-            } catch (_: Exception) {
-                null
-            }
-        }
     }
 }
 

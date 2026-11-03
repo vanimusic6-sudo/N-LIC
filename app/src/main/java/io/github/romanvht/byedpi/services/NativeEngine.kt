@@ -104,8 +104,8 @@ internal class NativeEngine(
             val autoEnabled = preferences.getBoolean("nlic_core_auto", false)
             val bayEnabled = preferences.getBoolean("nlic_core_bay", false)
             val bayHost = host ?: defaultHost
-            check(!bayEnabled || bayHost in listOf("127.0.0.1", "::1", "[::1]", "localhost")) {
-                "LIC-Bay requires ByeDPI to listen on loopback"
+            check(!bayEnabled || bayHost == "127.0.0.1") {
+                "LIC-Bay requires ByeDPI to listen on 127.0.0.1"
             }
             check(!bayEnabled || resolvedPort != SingBoxConfigCompiler.PROXY_PORT) {
                 "LIC-Bay port conflicts with LIC-Core"
@@ -131,6 +131,8 @@ internal class NativeEngine(
                 port = SingBoxConfigCompiler.PROXY_PORT,
                 // Avoid leaving mobile IPv6 outside the encrypted VPN tunnel.
                 ipv6 = true,
+                // Explicit DNS destination is captured by HEV and the encrypted outbound.
+                dns = legacy.dns.ifBlank { "1.1.1.1" },
             )
         }
 
@@ -294,7 +296,7 @@ internal class NativeEngine(
     }
 
     suspend fun awaitStarted() {
-        withTimeout(15_000) { started.await() }
+        withTimeout(60_000) { started.await() }
         check(!closing && !exited.isCompleted) { failure ?: "Native engine stopped during startup" }
     }
 
