@@ -347,10 +347,16 @@ object ServiceManager {
                     if (application?.getPreferences()?.getBoolean("nlic_core_mode", false) == true) {
                         val code = Regex("LIC-Core / ([A-Z_]+)")
                             .find(e.message.orEmpty())?.groupValues?.getOrNull(1)
+                        val safeStages = setOf(
+                            "SETUP", "CONFIG", "INTERFACES", "COMMAND", "OUTBOUND",
+                            "CREDENTIAL_STORAGE", "BAY_UNREACHABLE", "NO_SERVER",
+                            "TUNNEL_TEST", "ENGINE", "CATALOG", "PREPARE",
+                            "CONFIG_COMPILE", "BAY_PROXY", "BAY_PROXY_EXIT",
+                            "BAY_UPSTREAM", "CORE_START", "CORE_SOCKS",
+                            "REMOTE_TEST", "TUN", "HEV", "HEV_EXIT", "ENGINE_EXIT"
+                        )
                         lastCoreFailureCode = code?.takeIf {
-                            it in setOf("SETUP", "CONFIG", "INTERFACES", "COMMAND",
-                                "OUTBOUND", "CREDENTIAL_STORAGE", "BAY_UNREACHABLE",
-                                "NO_SERVER", "TUNNEL_TEST", "ENGINE")
+                            it in safeStages || it.removeSuffix("_TIMEOUT") in safeStages
                         } ?: "ENGINE"
                         Log.e(TAG, "LIC-Core failed at safe stage $lastCoreFailureCode")
                     } else {
