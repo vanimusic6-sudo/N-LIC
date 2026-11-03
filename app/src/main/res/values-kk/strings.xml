@@ -372,4 +372,11 @@
     <string name="nlic_control_apply">Қолдану және қайта қосылу</string>
     <string name="nlic_control_generic_failure">Әрекет сәтсіз аяқталды. Баптаулар сақталды.</string>
     <string name="nlic_control_bay_risk">⚠ Жергілікті ByeDPI SOCKS құпиясөзсіз жұмыс істейді және басқа қолданбаларға қолжетімді. LIC-Bay әзірге сынаққа арналған.</string>
+    <string name="nlic_core_advice_bay">ByeDPI таңдалған VPN серверіне TCP қоса алмады. LIC-Bay тәсілін тексеріңіз немесе басқа серверді таңдаңыз.</string>
+    <string name="nlic_core_advice_socks">Жергілікті sing-box SOCKS5 іске қосылмады не авторизация өтпеді. Бұл сервер жылдамдығына байланысты емес.</string>
+    <string name="nlic_core_advice_https">Жергілікті ядро жұмыс істейді, бірақ VPN арқылы HTTPS тексерісі өтпеді. TLS/REALITY немесе серверді тексеріңіз.</string>
+    <string name="nlic_core_advice_tun">Android VPN туннелі іске қосылмады. VPN рұқсатын тексеріп, басқа VPN-ды өшіріңіз.</string>
+    <string name="nlic_core_advice_config">Сервер параметрлері қабылданбады. Протоколды, TLS/REALITY және транспортты тексеріңіз.</string>
+    <string name="nlic_core_advice_catalog">Баптауларды немесе шифрланған жазылым қоймасын оқу мүмкін болмады. Қолданбаны жоймаңыз.</string>
+    <string name="nlic_core_advice_engine">Ядро іске қосылмады. Төмендегі қате кезеңін қарап, құпия дерексіз журналды жіберіңіз.</string>
 </resources>
