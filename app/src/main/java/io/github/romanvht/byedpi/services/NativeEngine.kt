@@ -120,7 +120,9 @@ internal class NativeEngine(
                 "Selected server uses unsupported or insecure transport"
             }
             return legacy.copy(
-                args = listOf("--nlic-libbox") + legacy.args,
+                // Carry the explicit Bay choice through the native process IPC.
+                args = listOf("--nlic-libbox",
+                    if (bayEnabled) "--nlic-bay" else "--nlic-direct") + legacy.args,
                 host = "127.0.0.1",
                 port = SingBoxConfigCompiler.PROXY_PORT,
                 // Avoid leaving mobile IPv6 outside the encrypted VPN tunnel.
