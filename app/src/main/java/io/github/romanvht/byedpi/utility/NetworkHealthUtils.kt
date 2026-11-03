@@ -67,8 +67,21 @@ internal object NetworkHealthUtils {
                 NetworkCapabilities.NET_CAPABILITY_VALIDATED
             ) == true
         }
-        // No ambiguous choice of Wi-Fi when a mobile carrier is also active.
-        return validated.singleOrNull() ?: physical.singleOrNull()
+        // If more than one physical network is visible while a VPN is the
+        // Android default, only use an unambiguously matched transport from
+        // the same validated physical candidates. Never route to a guessed
+        // network merely because mobile data is enabled.
+        val selectedType = NetworkEnvironment.capture(context).type
+        val matched = validated.filter { candidate ->
+            val caps = manager.getNetworkCapabilities(candidate) ?: return@filter false
+            when (selectedType) {
+                AccessType.WIFI -> caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                AccessType.CELLULAR -> caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                AccessType.ETHERNET -> caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+                else -> false
+            }
+        }
+        return validated.singleOrNull() ?: matched.singleOrNull() ?: physical.singleOrNull()
     }
 
     suspend fun run(context: Context, compareSocks: Boolean = true): NetworkHealthReport = withContext(Dispatchers.IO) {

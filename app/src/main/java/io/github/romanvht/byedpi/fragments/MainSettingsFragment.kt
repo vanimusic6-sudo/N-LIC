@@ -15,6 +15,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import android.net.VpnService
 import io.github.romanvht.byedpi.services.NativeEngine
 import io.github.romanvht.byedpi.services.ServiceManager
+import io.github.romanvht.byedpi.services.appStatus
+import io.github.romanvht.byedpi.data.AppStatus
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.Log
@@ -206,7 +208,8 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
 
     private fun showNetworkHealth() {
         val context = requireContext()
-        val vpnActive = NativeEngine.running(context)?.first == Mode.VPN
+        val vpnActive = NativeEngine.running(context)?.first == Mode.VPN ||
+            (appStatus.first == AppStatus.Running && appStatus.second == Mode.VPN)
         val physicalAvailable = runCatching {
             NetworkHealthUtils.underlyingNetwork(context) != null
         }.getOrDefault(false)
@@ -281,8 +284,8 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
                     NetworkHealthUtils.addProxyComparison(app, requireNotNull(report))
                 } ?: report
             }
-            if (!isAdded) return@launch
             dialog.dismiss()
+            if (!isAdded) return@launch
             val text = buildString {
                 report?.let { appendLine(it.asText()) }
                 failure?.let { appendLine(it) }
