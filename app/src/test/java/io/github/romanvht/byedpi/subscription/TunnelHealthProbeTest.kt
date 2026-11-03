@@ -38,6 +38,36 @@ class TunnelHealthProbeTest {
         } finally { executor.shutdownNow() }
     }
 
+    @Test fun `private SOCKS listener performs username password handshake`() {
+        val executor = Executors.newSingleThreadExecutor()
+        try {
+            ServerSocket(0).use { server ->
+                val client = executor.submit<Boolean> {
+                    server.accept().use { socket ->
+                        socket.soTimeout = 2_000
+                        val input = DataInputStream(socket.getInputStream())
+                        val greeting = ByteArray(3).also(input::readFully)
+                        assertArrayEquals(byteArrayOf(5, 1, 2), greeting)
+                        val output = socket.getOutputStream()
+                        output.write(byteArrayOf(5, 2))
+                        output.flush()
+                        assertEquals(1, input.readUnsignedByte())
+                        val user = ByteArray(input.readUnsignedByte()).also(input::readFully)
+                        val pass = ByteArray(input.readUnsignedByte()).also(input::readFully)
+                        assertEquals("nlic", String(user, Charsets.US_ASCII))
+                        assertEquals("private-pass", String(pass, Charsets.US_ASCII))
+                        output.write(byteArrayOf(1, 0))
+                        output.flush()
+                        true
+                    }
+                }
+                assertTrue(TunnelHealthProbe.checkLocal("127.0.0.1",
+                    server.localPort, LocalSocksAuth("nlic", "private-pass")))
+                assertTrue(client.get(3, TimeUnit.SECONDS))
+            }
+        } finally { executor.shutdownNow() }
+    }
+
     @Test fun `proxy refusal cannot be reported as a healthy tunnel`() {
         ServerSocket(0).use { server ->
             val port = server.localPort
