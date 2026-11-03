@@ -220,7 +220,7 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
                     )
                     Toast.makeText(requireContext(), R.string.toast_copied, Toast.LENGTH_SHORT).show()
                 }
-                .setNegativeButton(android.R.string.close, null)
+                .setNegativeButton(android.R.string.cancel, null)
                 .show()
         }
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener {

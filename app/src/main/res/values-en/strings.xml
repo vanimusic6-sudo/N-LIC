@@ -257,4 +257,7 @@
     <string name="nlic_network_profiles_desc">Optional: remember the last manually chosen command for each network type and apply it on the next connection. Never switches during a video. Unknown networks use the standard command.</string>
     <string name="nlic_mobile_dns64_auto">Mobile: DNS64/NAT64</string>
     <string name="nlic_mobile_dns64_auto_desc">On IPv6/NAT64 mobile links, use the carrier resolver when no custom DNS was selected. This preserves DNS64 translation. Wi-Fi and custom DNS are unchanged. Can be disabled.</string>
+    <string name="nlic_network_health">Mobile connection diagnostics</string>
+    <string name="nlic_network_health_desc">Read-only TCP tests for YouTube and Telegram, plus 16/256 KiB downloads. Requests go directly through your provider outside the local VPN. Only when tapped.</string>
+    <string name="nlic_network_health_running">Checking current physical network, TCP connectivity and download completion...</string>
 </resources>

@@ -257,4 +257,7 @@
     <string name="nlic_network_profiles_desc">Міндетті емес: әр желі түрі үшін қолмен таңдалған соңғы пәрменді сақтап, келесі қосылуда қолданады. Бейне кезінде ауыстырмайды. Белгісіз желіде әдеттегі пәрмен қолданылады.</string>
     <string name="nlic_mobile_dns64_auto">Мобильді желі: DNS64/NAT64</string>
     <string name="nlic_mobile_dns64_auto_desc">Жеке DNS таңдалмаса, IPv6/NAT64 мобильді желісінде оператор DNS серверін пайдаланады. Wi-Fi және жеке DNS өзгермейді. Өшіруге болады.</string>
+    <string name="nlic_network_health">Мобильді байланыс диагностикасы</string>
+    <string name="nlic_network_health_desc">YouTube және Telegram TCP тексеруі, 16/256 КиБ жүктеу салыстыруы. Сұраулар жергілікті VPN-ді айналып өтіп, операторға тікелей жіберіледі. Тек басқан кезде.</string>
+    <string name="nlic_network_health_running">Ағымдағы физикалық желі, TCP байланысы және жүктеу тексерілуде...</string>
 </resources>
