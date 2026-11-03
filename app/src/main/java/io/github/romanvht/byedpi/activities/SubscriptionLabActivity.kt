@@ -236,7 +236,12 @@ class SubscriptionLabActivity : BaseActivity() {
         val nodes = withContext(Dispatchers.IO) {
             val body = SubscriptionFetcher.fetch(url)
             val hostLabel = URI(url).host ?: "Subscription"
-            val parsed = SubscriptionImport.parse(body, hostLabel)
+            val parsed = if (body.trimStart().startsWith("{") ||
+                body.trimStart().startsWith("[")) {
+                VPNFileImport.parse("$hostLabel.json", body)
+            } else {
+                SubscriptionImport.parse(body, hostLabel)
+            }
             require(parsed.isNotEmpty()) { "NO_NODES" }
             SubscriptionVault.updateGroup(applicationContext,
                 SubscriptionGroup(hostLabel, url, parsed, System.currentTimeMillis()))
@@ -269,9 +274,13 @@ class SubscriptionLabActivity : BaseActivity() {
         for (group in groups.take(30)) {
             val updated = runCatching {
                 withContext(Dispatchers.IO) {
-                    val nodes = SubscriptionImport.parse(
-                        SubscriptionFetcher.fetch(group.url), group.title
-                    )
+                    val body = SubscriptionFetcher.fetch(group.url)
+                    val nodes = if (body.trimStart().startsWith("{") ||
+                        body.trimStart().startsWith("[")) {
+                        VPNFileImport.parse("${group.title}.json", body)
+                    } else {
+                        SubscriptionImport.parse(body, group.title)
+                    }
                     if (nodes.isNotEmpty()) {
                         SubscriptionVault.updateGroup(applicationContext,
                             group.copy(nodes = nodes, refreshedAt = System.currentTimeMillis()))
