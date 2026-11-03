@@ -195,10 +195,13 @@ class MainActivity : BaseActivity() {
             }
         }
 
-        binding.nlicCoreButton.visibility =
-            if (BuildConfig.NLIC_LIBBOX_INCLUDED) View.VISIBLE else View.GONE
-        binding.nlicCoreButton.setOnClickListener {
-            startActivity(Intent(this, SubscriptionLabActivity::class.java))
+        // Some resource configurations use a compact alternative home layout.
+        // ViewBinding therefore exposes this optional button as nullable.
+        binding.nlicCoreButton?.apply {
+            visibility = if (BuildConfig.NLIC_LIBBOX_INCLUDED) View.VISIBLE else View.GONE
+            setOnClickListener {
+                startActivity(Intent(this@MainActivity, SubscriptionLabActivity::class.java))
+            }
         }
 
         binding.settingsButton.setOnClickListener {
