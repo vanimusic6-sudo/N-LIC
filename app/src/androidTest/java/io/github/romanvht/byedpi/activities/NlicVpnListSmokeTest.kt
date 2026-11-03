@@ -6,7 +6,13 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.google.android.material.textfield.MaterialAutoCompleteTextView
+import com.google.android.material.button.MaterialButton
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.matcher.RootMatchers.isDialog
+import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.withText
 import io.github.romanvht.byedpi.R
 import io.github.romanvht.byedpi.subscription.SubscriptionImport
 import io.github.romanvht.byedpi.subscription.SubscriptionVault
@@ -33,19 +39,23 @@ class NlicVpnListSmokeTest {
         ActivityScenario.launch(SubscriptionLabActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 assertNotNull(activity.findViewById<TextView>(R.id.nlic_status_label))
-                val picker = activity.findViewById<MaterialAutoCompleteTextView>(
-                    R.id.nlic_server_picker
+                val button = activity.findViewById<MaterialButton>(
+                    R.id.nlic_server_picker_button
                 )
-                assertNotNull(picker)
-                assertTrue(picker.adapter.count >= 1)
-                picker.showDropDown()
+                assertNotNull(button)
+                assertTrue(button.isEnabled)
+                button.performClick()
             }
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            onView(withText("CI-SMOKE  ·  VLESS"))
+                .inRoot(isDialog())
+                .check(matches(isDisplayed()))
+                .perform(click())
             scenario.onActivity { activity ->
-                val picker = activity.findViewById<MaterialAutoCompleteTextView>(
-                    R.id.nlic_server_picker
+                val button = activity.findViewById<MaterialButton>(
+                    R.id.nlic_server_picker_button
                 )
-                picker.dismissDropDown()
+                assertTrue(button.text.contains("CI-SMOKE"))
                 assertTrue(activity.findViewById<TextView>(R.id.nlic_server_hint)
                     .text.isNotBlank())
             }
