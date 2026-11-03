@@ -372,4 +372,11 @@
     <string name="nlic_control_apply">Apply and reconnect</string>
     <string name="nlic_control_generic_failure">Action failed. Your settings were kept; check the connection and try again.</string>
     <string name="nlic_control_bay_risk">⚠ Local ByeDPI SOCKS has no password and can be accessed by other apps. LIC-Bay is experimental only.</string>
+    <string name="nlic_core_advice_bay">ByeDPI could not open TCP to the selected VPN server. Check your LIC-Bay strategy or try another server. Disable LIC-Bay to compare.</string>
+    <string name="nlic_core_advice_socks">The internal sing-box SOCKS5 listener failed to start or authenticate. This is a local engine problem, not server speed.</string>
+    <string name="nlic_core_advice_https">The local engine responds, but HTTPS through the remote VPN could not be verified. Check TLS/REALITY or another server.</string>
+    <string name="nlic_core_advice_tun">The engine reached Android VPN setup, but the system tunnel failed. Check VPN permission and stop other VPNs.</string>
+    <string name="nlic_core_advice_config">The native engine rejected the server settings. Check protocol, TLS/REALITY and supported transport.</string>
+    <string name="nlic_core_advice_catalog">Could not read settings or the encrypted subscription vault. Do not uninstall before checking your subscription data.</string>
+    <string name="nlic_core_advice_engine">Core startup failed. The safe stage code below identifies where; a redacted log is needed for the exact cause.</string>
 </resources>
