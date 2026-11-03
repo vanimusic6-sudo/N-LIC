@@ -90,6 +90,19 @@ class SubscriptionLabActivity : BaseActivity() {
             val panel = findViewById<View>(R.id.nlic_advanced_panel)
             panel.visibility = if (panel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         }
+        findViewById<MaterialButton>(R.id.nlic_privacy).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.nlic_privacy_title)
+                .setMessage(R.string.nlic_privacy_confirmation)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    runCatching {
+                        startActivity(android.content.Intent("android.settings.VPN_SETTINGS"))
+                    }.onFailure {
+                        toast(R.string.nlic_privacy_unavailable)
+                    }
+                }
+                .setNegativeButton(android.R.string.cancel, null).show()
+        }
         findViewById<MaterialButton>(R.id.nlic_help).setOnClickListener {
             AlertDialog.Builder(this).setTitle(R.string.nlic_ui_help)
                 .setMessage(R.string.nlic_ui_help_steps)
