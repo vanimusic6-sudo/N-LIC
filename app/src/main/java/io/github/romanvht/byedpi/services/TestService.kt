@@ -349,7 +349,10 @@ class TestService : Service() {
         val content = if (userCommands) prefs.getStringNotNull("byedpi_proxytest_commands", "")
         else assets.open("proxytest_strategies.list").bufferedReader().use { it.readText() }
         // Escape quote delimiters before substituting imported SNI into strategy templates.
-        val escapedSni = sniValue.replace("\\", "\\\\").replace("\"", "\\\"")
+        val safeSni = sniValue.trim().take(253).takeIf {
+            it.matches(Regex("[A-Za-z0-9.-]{1,253}")) && !it.startsWith(".") && !it.endsWith(".")
+        } ?: "www.iana.org"
+        val escapedSni = safeSni.replace("\\", "\\\\").replace("\"", "\\\"")
         val commands = content.replace("{sni}", "\"${escapedSni}\"").lines().map { it.trim() }.filter { it.isNotEmpty() }.take(200)
         val host = prefs.getStringNotNull("byedpi_proxy_ip", "127.0.0.1")
         val port = prefs.getIntStringNotNull("byedpi_proxy_port", 1080)
