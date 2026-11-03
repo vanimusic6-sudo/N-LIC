@@ -20,7 +20,7 @@ import kotlin.coroutines.coroutineContext
  * Small, bounded reachability probes. These are *not* proofs of evasion:
  * a legitimate HTTP 200 may still be a captive portal or an unknown block page.
  */
-class SiteCheckUtils(
+internal class SiteCheckUtils(
     private val proxyIp: String,
     private val proxyPort: Int
 ) {
