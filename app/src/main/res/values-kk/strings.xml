@@ -310,4 +310,10 @@
     <string name="nlic_core_profile_unsupported">Сервер таңдалмады немесе параметрлері қолдау таппайды. Қосылу өшірулі.</string>
     <string name="nlic_core_auto_toggle">LIC-Auto · жұмыс істейтін VPN серверін автоматты таңдау</string>
     <string name="nlic_core_auto_desc">LIC-Core режимінде sing-box 12-ге дейін шифрланған VPN серверін HTTPS арқылы тексеріп, кідірісі аз серверді таңдайды. 10 минут сайын қайта тексереді және белсенді қосылымдарды үзбейді. Core Preview қажет.</string>
+    <string name="nlic_core_connect">Қосылу / баптауларды қолдану</string>
+    <string name="nlic_core_connecting">VPN қосылымы тексерілуде…</string>
+    <string name="nlic_core_connect_desc">Таңдалған сервермен, LIC-Auto және LIC-Bay арқылы VPN желісіне қайта қосылады. Дайындық туннель арқылы HTTPS сұрауымен тексеріледі.</string>
+    <string name="nlic_core_connected">VPN қосылды · сервер арқылы HTTPS тексерілді</string>
+    <string name="nlic_core_connect_failed">VPN тексерілмеді. Серверді тексеріңіз немесе LIC-Bay мүмкіндігін өшіріп, қайталаңыз.</string>
+    <string name="nlic_core_disconnect">VPN желісін ажырату</string>
 </resources>

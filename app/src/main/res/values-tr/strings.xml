@@ -310,4 +310,10 @@
     <string name="nlic_core_profile_unsupported">Sunucu seçilmedi veya ayarları desteklenmiyor. Bağlantı kapalı.</string>
     <string name="nlic_core_auto_toggle">LIC-Auto · çalışan VPN sunucusunu otomatik seç</string>
     <string name="nlic_core_auto_desc">LIC-Core modunda sing-box en fazla 12 şifreli VPN sunucusunu HTTPS ile test eder ve en az gecikmeli çalışan sunucuyu seçer. 10 dakikada bir kontrol eder; mevcut bağlantıları kesmez. Core Preview gerektirir.</string>
+    <string name="nlic_core_connect">Bağlan / ayarları uygula</string>
+    <string name="nlic_core_connecting">VPN bağlantısı denetleniyor…</string>
+    <string name="nlic_core_connect_desc">Seçilen sunucu, LIC-Auto ve LIC-Bay ile VPN bağlantısını yeniden kurar. Hazır olma durumu tünel üzerinden HTTPS isteğiyle doğrulanır.</string>
+    <string name="nlic_core_connected">VPN bağlı · sunucu üzerinden HTTPS doğrulandı</string>
+    <string name="nlic_core_connect_failed">VPN doğrulanamadı. Sunucuyu kontrol edin veya LIC-Bay özelliğini kapatıp yeniden deneyin.</string>
+    <string name="nlic_core_disconnect">VPN bağlantısını kes</string>
 </resources>

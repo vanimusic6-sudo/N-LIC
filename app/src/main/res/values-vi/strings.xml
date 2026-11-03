@@ -311,4 +311,10 @@
     <string name="nlic_core_profile_unsupported">Chưa chọn máy chủ hoặc thông số chưa được hỗ trợ. Không thể kết nối.</string>
     <string name="nlic_core_auto_toggle">LIC-Auto · tự chọn máy chủ VPN hoạt động</string>
     <string name="nlic_core_auto_desc">Trong LIC-Core, sing-box kiểm tra tối đa 12 máy chủ VPN mã hóa qua HTTPS, chọn máy chủ khả dụng có độ trễ thấp hơn và thử lại sau mỗi 10 phút. Không ngắt kết nối hiện tại. Cần Core Preview.</string>
+    <string name="nlic_core_connect">Kết nối / áp dụng cài đặt</string>
+    <string name="nlic_core_connecting">Đang kiểm tra kết nối VPN…</string>
+    <string name="nlic_core_connect_desc">Kết nối lại VPN bằng máy chủ đã chọn, LIC-Auto và LIC-Bay. Trạng thái sẵn sàng được xác minh bằng yêu cầu HTTPS qua đường hầm.</string>
+    <string name="nlic_core_connected">Đã kết nối VPN · đã xác minh HTTPS qua máy chủ</string>
+    <string name="nlic_core_connect_failed">Không thể xác minh VPN. Kiểm tra máy chủ hoặc tắt LIC-Bay rồi thử lại.</string>
+    <string name="nlic_core_disconnect">Ngắt kết nối VPN</string>
 </resources>
