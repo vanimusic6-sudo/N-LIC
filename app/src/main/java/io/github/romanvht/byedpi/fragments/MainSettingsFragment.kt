@@ -1,6 +1,12 @@
 package io.github.romanvht.byedpi.fragments
 
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.Log
@@ -55,6 +61,12 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
                         prefs.edit { putString(key, prefs.getCmdArgs()) }
                     }
                 }
+                true
+            }
+
+        findPreferenceNotNull<Preference>("nlic_network_health")
+            .setOnPreferenceClickListener {
+                showNetworkHealth()
                 true
             }
 
@@ -182,6 +194,39 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
             batteryOptimization.summary = getString(R.string.battery_optimization_summary)
         }
 
+    }
+
+    private fun showNetworkHealth() {
+        val context = requireContext()
+        val dialog = AlertDialog.Builder(context)
+            .setTitle(R.string.nlic_network_health)
+            .setMessage(R.string.nlic_network_health_running)
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        dialog.show()
+        val job = viewLifecycleOwner.lifecycleScope.launch {
+            val report = NetworkHealthUtils.run(context.applicationContext)
+            if (!isAdded) return@launch
+            dialog.dismiss()
+            val reportText = report.asText()
+            AlertDialog.Builder(requireContext())
+                .setTitle(R.string.nlic_network_health)
+                .setMessage(reportText)
+                .setPositiveButton(R.string.diagnostic_copy) { _, _ ->
+                    val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE)
+                        as ClipboardManager
+                    clipboard.setPrimaryClip(
+                        ClipData.newPlainText("N-LIC physical network report", reportText)
+                    )
+                    Toast.makeText(requireContext(), R.string.toast_copied, Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener {
+            job.cancel()
+            dialog.dismiss()
+        }
     }
 
     private val dnsPresets: List<Pair<String, String>>

@@ -59,6 +59,13 @@
             android:defaultValue="false" />
 
         <SwitchPreference
+            android:key="nlic_restart_on_network_change"
+            android:icon="@drawable/ic_autorenew"
+            android:title="@string/nlic_restart_on_network_change"
+            android:summary="@string/nlic_restart_on_network_change_desc"
+            android:defaultValue="false" />
+
+        <SwitchPreference
             android:key="nlic_mobile_dns64_auto"
             android:icon="@drawable/ic_dns"
             android:title="@string/nlic_mobile_dns64_auto"
@@ -141,6 +148,12 @@
             android:title="@string/command_line_editor"
             app:useSimpleSummaryProvider="true"
             app:fragment="io.github.romanvht.byedpi.fragments.ByeDpiCMDSettingsFragment" />
+
+        <Preference
+            android:key="nlic_network_health"
+            android:icon="@drawable/ic_network"
+            android:title="@string/nlic_network_health"
+            android:summary="@string/nlic_network_health_desc" />
 
         <Preference
             android:key="proxy_test"

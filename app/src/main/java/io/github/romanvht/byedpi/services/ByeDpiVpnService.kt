@@ -143,6 +143,9 @@ class ByeDpiVpnService : VpnService() {
 
             "whitelist" -> {
                 for (packageName in configuration.apps) {
+                    // The N-LIC UID must never enter its own TUN: its
+                    // native SOCKS outbound sockets would recursively loop.
+                    if (packageName == applicationContext.packageName) continue
                     try {
                         builder.addAllowedApplication(packageName)
                     } catch (e: Exception) {

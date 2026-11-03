@@ -4,11 +4,19 @@ import android.app.Application
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
 import android.util.Log
 import io.github.romanvht.byedpi.R
 import io.github.romanvht.byedpi.data.*
+import io.github.romanvht.byedpi.utility.AccessType
+import io.github.romanvht.byedpi.utility.NetworkEnvironment
+import io.github.romanvht.byedpi.utility.LinkChangePolicy
+import io.github.romanvht.byedpi.utility.getPreferences
 import io.github.romanvht.byedpi.utility.createPauseNotification
 import io.github.romanvht.byedpi.utility.registerNotificationChannel
 import kotlinx.coroutines.*
@@ -29,6 +37,80 @@ object ServiceManager {
     private val mutex = Mutex()
     private var application: Application? = null
     private var session: Session? = null
+    private var networkListener: ConnectivityManager.NetworkCallback? = null
+    private var observedAccessType: AccessType = AccessType.UNKNOWN
+    private var transitionJob: Job? = null
+
+    /**
+     * Optional low-frequency network listener: only active while our VPN runs.
+     * Avoid reconnecting for insignificant capability events or transient
+     * UNKNOWN readings. Never restart a Proxy-mode Helping session.
+     */
+    private fun beginNetworkObservation(app: Application) {
+        if (networkListener != null ||
+            !app.getPreferences().getBoolean("nlic_restart_on_network_change", false)) return
+        val manager = app.getSystemService(Context.CONNECTIVITY_SERVICE)
+            as? ConnectivityManager ?: return
+        observedAccessType = NetworkEnvironment.capture(app).type
+        val listener = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) = schedule()
+            override fun onLost(network: Network) = schedule()
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = schedule()
+
+            private fun schedule() {
+                transitionJob?.cancel()
+                transitionJob = scope.launch {
+                    delay(1_800)
+                    val currentType = NetworkEnvironment.capture(app).type
+                    val lastType = observedAccessType
+                    if (currentType == AccessType.UNKNOWN) return@launch
+                    observedAccessType = currentType
+                    if (LinkChangePolicy.shouldRestart(
+                            lastType, currentType,
+                            app.getPreferences().getBoolean("nlic_restart_on_network_change", false),
+                            session?.mode == Mode.VPN && session?.stopping == false &&
+                                !TestService.isRunning,
+                        )) {
+                        Log.i(TAG, "Physical network type changed, reconnecting VPN via user opt-in")
+                        restart(app, Mode.VPN)
+                    }
+                }
+            }
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                manager.registerDefaultNetworkCallback(listener)
+            } else {
+                manager.registerNetworkCallback(
+                    NetworkRequest.Builder()
+                        .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                        .build(),
+                    listener,
+                )
+            }
+            networkListener = listener
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not register radio listener", e)
+        }
+    }
+
+    private fun endNetworkObservation() {
+        transitionJob?.cancel()
+        transitionJob = null
+        val listener = networkListener ?: return
+        networkListener = null
+        application?.let { app ->
+            try {
+                val manager = app.getSystemService(Context.CONNECTIVITY_SERVICE)
+                    as? ConnectivityManager
+                manager?.unregisterNetworkCallback(listener)
+            } catch (_: Exception) {
+                // It may have been removed after the app process lost its network.
+            }
+        }
+        observedAccessType = AccessType.UNKNOWN
+    }
+
 
     private class Session(val mode: Mode, val engine: NativeEngine) {
         val configuration = CompletableDeferred<Configuration>()
@@ -161,6 +243,7 @@ object ServiceManager {
 
         val current = Session(mode, NativeEngine(app, mode))
         session = current
+        if (mode == Mode.VPN) beginNetworkObservation(app)
         configure(current, app)
         publish(mode, AppStatus.Running, STARTED_BROADCAST)
         (app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(PAUSE_NOTIFICATION_ID)
@@ -197,6 +280,7 @@ object ServiceManager {
         if (session != null || TestService.isRunning) return
         val running = NativeEngine.running(app)
         if (running == null) {
+            endNetworkObservation()
             app.stopService(Intent(app, ByeDpiVpnService::class.java))
             app.stopService(Intent(app, ByeDpiProxyService::class.java))
             val notifications = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -207,6 +291,7 @@ object ServiceManager {
         }
         val current = Session(running.first, NativeEngine(app, running.first, running.second))
         session = current
+        if (running.first == Mode.VPN) beginNetworkObservation(app)
         publish(current.mode, AppStatus.Running, STARTED_BROADCAST)
         monitor(current, launchService = false)
     }
@@ -272,6 +357,7 @@ object ServiceManager {
     private fun finish(current: Session, failed: Boolean) {
         current.engine.onStopping = null
         if (session === current) {
+            endNetworkObservation()
             session = null
             publish(current.mode, AppStatus.Halted, if (failed) FAILED_BROADCAST else STOPPED_BROADCAST)
         }
