@@ -336,4 +336,5 @@
     <string name="nlic_ui_legacy_action">Quay lại ByeDPI cũ</string>
     <string name="nlic_ui_legacy_desc">Ngắt VPN và tắt LIC-Core. Giữ lại thuê bao.</string>
     <string name="nlic_ui_legacy_confirm">Ngắt VPN hiện tại và quay lại ByeDPI cũ? Có thể truy cập internet ngoài VPN trong thời gian ngắn.</string>
+    <string name="nlic_ui_open_center">LIC-Core · Máy chủ và VPN</string>
 </resources>
