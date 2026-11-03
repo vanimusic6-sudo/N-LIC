@@ -42,6 +42,10 @@ internal object SingBoxConfigCompiler {
         if (bayPort !in 1..65535 || bayPort == PROXY_PORT) {
             return Result.Unsupported("Invalid or conflicting LIC-Bay port")
         }
+        if (node.protocol == "WIREGUARD") {
+            if (bay == Bay.ON) return Result.Unsupported("WireGuard UDP cannot use TCP-only LIC-Bay")
+            return compileWireGuard(node, localPassword)
+        }
         return try {
             val outbound = decodeOutbound(node) ?: return Result.Unsupported(
                 "This configuration or transport is not supported by LIC-Core yet"
@@ -133,7 +137,8 @@ internal object SingBoxConfigCompiler {
         localPassword: String? = null,
     ): Result {
         if (nodes.isEmpty()) return Result.Unsupported("No subscription nodes")
-        val candidates = nodes.distinctBy { it.id }.asSequence()
+        val candidates = nodes.distinctBy { it.id }
+            .filter { it.protocol != "WIREGUARD" }.asSequence()
         val valid = candidates.mapNotNull { node ->
             val result = compile(node, bay, bayPort, localPassword)
             if (result !is Result.Compiled) return@mapNotNull null
@@ -173,6 +178,9 @@ internal object SingBoxConfigCompiler {
     }
 
     private fun decodeOutbound(node: SubscriptionNode): JsonObject? {
+        if (node.originalUri.startsWith("nlicjson://")) {
+            return VPNFileImport.parseSecureJson(node)
+        }
         val proto = node.protocol.uppercase()
         val core = JsonObject().apply {
             addProperty("type", when (proto) {
@@ -182,6 +190,7 @@ internal object SingBoxConfigCompiler {
                 "SHADOWSOCKS" -> "shadowsocks"
                 "HYSTERIA2", "HY2" -> "hysteria2"
                 "TUIC" -> "tuic"
+                "ANYTLS" -> "anytls"
                 else -> return null
             })
             addProperty("server", node.host)
@@ -195,6 +204,7 @@ internal object SingBoxConfigCompiler {
             "SHADOWSOCKS" -> shadowsocks(node.originalUri, core)
             "HYSTERIA2", "HY2" -> hysteria2(node.originalUri, core)
             "TUIC" -> tuic(node.originalUri, core)
+            "ANYTLS" -> anytls(node.originalUri, core)
             else -> null
         }
     }
@@ -339,6 +349,64 @@ internal object SingBoxConfigCompiler {
             query["alpn"] ?: "h3") ?: return null
         out.add("tls", tls)
         return out
+    }
+
+    private fun anytls(source: String, out: JsonObject): JsonObject? {
+        val uri = URI(source)
+        val password = uri.userInfo ?: return null
+        if (password.isBlank()) return null
+        val query = args(uri.rawQuery)
+        if (requestsInsecureTls(query)) return null
+        val security = query["security"] ?: "tls"
+        if (security != "tls") return null
+        out.addProperty("password", password)
+        out.add("tls", tls("tls", query["sni"] ?: uri.host,
+            query["fp"], null, null, query["alpn"]) ?: return null)
+        return out
+    }
+
+    /**
+     * WireGuard has been an *endpoint*, not an outbound, since sing-box 1.13.
+     * Do not paste a whole provider profile into the runtime config. Rebuild
+     * the single allowed peer from validated wg-quick keys.
+     */
+    private fun compileWireGuard(node: SubscriptionNode, auth: String?): Result {
+        return try {
+            if (auth != null && (auth.length !in 24..128 ||
+                    !auth.all { it in "0123456789abcdef" })) {
+                return Result.Unsupported("Invalid local SOCKS password")
+            }
+            val wg = VPNFileImport.readWireGuard(node)
+                ?: return Result.Unsupported("Invalid WireGuard file")
+            val root = JsonObject()
+            root.add("log", JsonObject().apply { addProperty("level", "warn") })
+            root.add("dns", JsonObject().apply {
+                add("servers", JsonArray().apply { add(JsonObject().apply {
+                    addProperty("type", "local")
+                    addProperty("tag", "lic-bootstrap-dns")
+                }) })
+            })
+            root.add("inbounds", JsonArray().apply { add(JsonObject().apply {
+                addProperty("type", "socks")
+                addProperty("tag", LOCAL_SOCKS_TAG)
+                addProperty("listen", "127.0.0.1")
+                addProperty("listen_port", PROXY_PORT)
+                if (auth != null) add("users", JsonArray().apply { add(JsonObject().apply {
+                    addProperty("username", "nlic")
+                    addProperty("password", auth)
+                }) })
+            }) })
+            root.add("outbounds", JsonArray())
+            root.add("endpoints", JsonArray().apply { add(wg.endpoint) })
+            root.add("route", JsonObject().apply {
+                addProperty("final", PROXY_TAG)
+                addProperty("auto_detect_interface", false)
+                addProperty("default_domain_resolver", "lic-bootstrap-dns")
+            })
+            Result.Compiled(root.toString(), "WIREGUARD")
+        } catch (_: Exception) {
+            Result.Unsupported("Invalid WireGuard profile")
+        }
     }
 
     private fun applyTransport(network: String, query: Map<String, String>, out: JsonObject): Boolean {
