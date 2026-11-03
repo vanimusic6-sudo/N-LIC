@@ -20,6 +20,11 @@ class SiteCheckUtils(
     private val proxyIp: String,
     private val proxyPort: Int
 ) {
+    companion object {
+        // Check reachability without downloading entire videos/pages on mobile data.
+        private const val RESPONSE_SAMPLE_BYTES = 4096
+        private const val MAX_TIMEOUT_SECONDS = 15L
+    }
 
     suspend fun checkSitesAsync(
         sites: List<String>,
@@ -29,7 +34,7 @@ class SiteCheckUtils(
         fullLog: Boolean,
         onSiteChecked: (suspend (String, Int, Int) -> Unit)? = null
     ): List<Pair<String, Int>> {
-        val semaphore = Semaphore(concurrentRequests)
+        val semaphore = Semaphore(concurrentRequests.coerceIn(1, 50))
         return withContext(Dispatchers.IO) {
             sites.map { site ->
                 async {
@@ -51,77 +56,70 @@ class SiteCheckUtils(
         requestsCount: Int,
         timeout: Long
     ): Int = withContext(Dispatchers.IO) {
-        var responseCount = 0
+        var reachableCount = 0
 
         val formattedUrl = if (site.startsWith("http://") || site.startsWith("https://")) site
         else "https://$site"
 
         val url = try {
-            URL(formattedUrl)
+            URL(formattedUrl).also {
+                require(it.protocol == "http" || it.protocol == "https")
+            }
         } catch (_: Exception) {
-            Log.e("SiteChecker", "Invalid URL: $formattedUrl")
+            Log.e("SiteChecker", "Invalid proxy test URL")
             return@withContext 0
         }
 
         val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress(proxyIp, proxyPort))
+        val timeoutMs = (timeout.coerceIn(1L, MAX_TIMEOUT_SECONDS) * 1000L).toInt()
 
-        repeat(requestsCount) { attempt ->
+        repeat(requestsCount.coerceIn(1, 20)) { attempt ->
             coroutineContext.ensureActive()
-            Log.i("SiteChecker", "Attempt ${attempt + 1}/$requestsCount for $site")
+            Log.i("SiteChecker", "Attempt ${attempt + 1}/$requestsCount for ${url.host}")
 
             var connection: HttpURLConnection? = null
             try {
                 connection = url.openConnection(proxy) as HttpURLConnection
-                connection.connectTimeout = (timeout * 1000).toInt()
-                connection.readTimeout = (timeout * 1000).toInt()
+                connection.connectTimeout = timeoutMs
+                connection.readTimeout = timeoutMs
                 connection.instanceFollowRedirects = true
                 connection.setRequestProperty("Connection", "close")
 
-                val responseCode = connection.responseCode
-                val declaredLength = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                    connection.contentLengthLong
-                } else {
-                    connection.contentLength.toLong()
-                }
+                val status = connection.responseCode
+                var sampledBytes = 0
+                var readFailed = false
 
-                var actualLength = 0L
-                try {
-                    val inputStream = if (responseCode in 200..299) connection.inputStream else connection.errorStream
-                    if (inputStream != null) {
-                        val buffer = ByteArray(8192)
-                        var bytesRead: Int
-
-                        val limit = if (declaredLength > 0) declaredLength else 1024L * 1024
-
-                        while (actualLength < limit) {
-                            coroutineContext.ensureActive()
-                            val remaining = limit - actualLength
-                            val toRead = if (remaining > buffer.size) buffer.size else remaining.toInt()
-                            bytesRead = inputStream.read(buffer, 0, toRead)
-                            if (bytesRead == -1) break
-                            actualLength += bytesRead
+                // Non-2xx statuses (including 403/451) cannot count as successes.
+                // No need to read a large error page just to reject it.
+                if (status in 200..299 && status != 204 && status != 205) {
+                    try {
+                        connection.inputStream.use { input ->
+                            val bytes = input.read(ByteArray(RESPONSE_SAMPLE_BYTES))
+                            if (bytes > 0) sampledBytes = bytes
                         }
+                    } catch (_: IOException) {
+                        readFailed = true
                     }
-                } catch (_: IOException) {
-                    // Stream reading failed
                 }
 
-                if (declaredLength <= 0L || actualLength >= declaredLength) {
-                    Log.i("SiteChecker", "Response for $site: $responseCode, Declared: $declaredLength, Actual: $actualLength")
-                    responseCount++
-                } else {
-                    Log.w("SiteChecker", "Block detected for $site, Declared: $declaredLength, Actual: $actualLength")
+                coroutineContext.ensureActive()
+                val verdict = HttpProbeChecks.evaluate(status, sampledBytes, readFailed)
+                if (verdict == HttpProbeVerdict.REACHABLE) {
+                    reachableCount++
                 }
-
+                Log.i(
+                    "SiteChecker",
+                    "Probe ${url.host}: HTTP $status, bytes=$sampledBytes, verdict=$verdict"
+                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.e("SiteChecker", "Error accessing $site: ${e.message}")
+                Log.e("SiteChecker", "Error accessing ${url.host}: ${e.javaClass.simpleName}")
             } finally {
                 connection?.disconnect()
             }
         }
 
-        responseCount
+        reachableCount
     }
 }
