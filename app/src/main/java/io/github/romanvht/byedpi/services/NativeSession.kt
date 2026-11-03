@@ -419,12 +419,19 @@ internal class NativeSession(
 
     /** Real outbound HTTPS validation BEFORE adding Android routes. */
     private suspend fun awaitRemoteReadiness(host: String, port: Int, auth: LocalSocksAuth) {
-        repeat(3) { attempt ->
+        // Do not declare a working encrypted VPN dead solely because one
+        // CDN blocks a captive-portal test path. Require a real validated TLS
+        // + 204 response from either of two fixed public endpoints.
+        val targets = listOf(
+            "www.gstatic.com", "cp.cloudflare.com",
+            "www.gstatic.com", "cp.cloudflare.com",
+        )
+        for ((index, target) in targets.withIndex()) {
             val ok = withContext(Dispatchers.IO) {
-                TunnelHealthProbe.check(host, port, auth)
+                TunnelHealthProbe.check(host, port, auth, target)
             }
             if (ok) return
-            if (attempt < 2) delay(400)
+            if (index < targets.lastIndex) delay(300)
         }
         error("LIC-Core could not validate HTTPS through the selected server")
     }
