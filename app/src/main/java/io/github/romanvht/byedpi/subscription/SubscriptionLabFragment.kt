@@ -112,6 +112,30 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
             summary = getString(R.string.nlic_bay_phase)
             isSelectable = false
         })
+        val picked = saved.allNodes.firstOrNull { it.id == saved.selectedNodeId }
+        if (picked != null) {
+            section.addPreference(Preference(context).apply {
+                title = getString(R.string.nlic_outbound_check)
+                summary = getString(R.string.nlic_outbound_check_summary)
+                setOnPreferenceClickListener {
+                    val status = try {
+                        val direct = SingBoxOutboundCompiler.compile(picked, licBay = false)
+                        val bay = SingBoxOutboundCompiler.compile(picked, licBay = true)
+                        if (direct.config.has("tls") && bay.usesLicBay) {
+                            getString(R.string.nlic_outbound_supported)
+                        } else getString(R.string.nlic_outbound_unsupported)
+                    } catch (_: Exception) {
+                        getString(R.string.nlic_outbound_unsupported)
+                    }
+                    AlertDialog.Builder(context)
+                        .setTitle(R.string.nlic_outbound_check)
+                        .setMessage(status)
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show()
+                    true
+                }
+            })
+        }
         if (saved.allNodes.isNotEmpty()) {
             val nodesCategory = PreferenceCategory(context).apply {
                 title = getString(R.string.nlic_subscriptions_nodes, saved.allNodes.size)

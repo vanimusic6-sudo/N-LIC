@@ -296,4 +296,8 @@
     <string name="nlic_auto_ineligible">This endpoint did not pass both TCP tests or uses UDP. It was not selected.</string>
     <string name="nlic_bay_label">LIC-Bay · VPN connection protection</string>
     <string name="nlic_bay_phase">Planned: route only the VPN outer TCP transport through ByeDPI SOCKS. Not enabled yet; UDP needs a separate design.</string>
+    <string name="nlic_outbound_check">Validate VPN profile readiness</string>
+    <string name="nlic_outbound_check_summary">Validate VLESS/REALITY or Trojan parameters and LIC-Bay detour without sending secrets.</string>
+    <string name="nlic_outbound_supported">TCP/TLS profile is supported by the sing-box config compiler, and LIC-Bay detour was generated. This does NOT mean VPN can connect: libbox is not integrated yet.</string>
+    <string name="nlic_outbound_unsupported">Unsupported transport/parameters or failed security validation. No VPN connection was attempted.</string>
 </resources>

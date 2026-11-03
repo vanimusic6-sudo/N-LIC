@@ -297,4 +297,8 @@
     <string name="nlic_auto_ineligible">Máy chủ này không vượt qua cả hai bài kiểm tra TCP hoặc dùng UDP.</string>
     <string name="nlic_bay_label">LIC-Bay · bảo vệ kết nối VPN</string>
     <string name="nlic_bay_phase">Dự kiến: chuyển TCP ngoài của VPN qua ByeDPI SOCKS. Chưa hoạt động; UDP cần giải pháp riêng.</string>
+    <string name="nlic_outbound_check">Kiểm tra tính tương thích VPN</string>
+    <string name="nlic_outbound_check_summary">Kiểm tra VLESS/REALITY, Trojan và LIC-Bay mà không gửi khóa bí mật.</string>
+    <string name="nlic_outbound_supported">Có thể tạo cấu hình TCP/TLS và LIC-Bay. VPN chưa hoạt động vì libbox chưa được tích hợp.</string>
+    <string name="nlic_outbound_unsupported">Thông số không hỗ trợ hoặc xác thực bảo mật không thành công. Chưa thử kết nối VPN.</string>
 </resources>

@@ -296,4 +296,8 @@
     <string name="nlic_auto_ineligible">Этот сервер не прошёл оба TCP-теста или использует UDP. Подключение не выбрано.</string>
     <string name="nlic_bay_label">LIC-Bay · защита VPN-соединения</string>
     <string name="nlic_bay_phase">Проектируется: пропускать только внешний TCP-транспорт VPN через ByeDPI SOCKS. Пока не включено; UDP-протоколы требуют отдельного решения.</string>
+    <string name="nlic_outbound_check">Проверить готовность VPN-профиля</string>
+    <string name="nlic_outbound_check_summary">Проверить параметры VLESS/REALITY или Trojan и возможность LIC-Bay. Без передачи ключей по сети.</string>
+    <string name="nlic_outbound_supported">Параметры TCP/TLS профиля поддерживаются генератором sing-box, схема LIC-Bay сформирована. Это НЕ означает, что VPN подключается: ядро libbox ещё не внедрено.</string>
+    <string name="nlic_outbound_unsupported">Профиль использует неподдерживаемый транспорт/параметры либо не прошёл проверку безопасности. VPN не запускался.</string>
 </resources>
