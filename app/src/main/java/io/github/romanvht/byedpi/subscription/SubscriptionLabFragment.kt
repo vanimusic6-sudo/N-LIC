@@ -165,9 +165,16 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
             setSelection(text.length)
         }
         val pad = (20 * resources.displayMetrics.density).toInt()
+        val contentContainer = android.widget.FrameLayout(context).apply {
+            setPadding(pad, pad / 2, pad, pad / 2)
+            addView(entry, android.widget.FrameLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+            ))
+        }
         val dialog = AlertDialog.Builder(context)
             .setTitle(titleId)
-            .setView(entry, pad, pad / 2, pad, pad / 2)
+            .setView(contentContainer)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val value = entry.text.toString().trim()
                 if (value.isNotEmpty()) submit(value)
