@@ -159,7 +159,8 @@ internal object SingBoxOutboundCompiler {
             val key = decode(part.substringBefore('=')).lowercase()
             val value = decode(part.substringAfter('=', ""))
             require(key.isNotBlank() && key.length <= 64 && value.length <= 1024 &&
-                map.putIfAbsent(key, value) == null) { "Invalid or duplicate query parameter" }
+                !map.containsKey(key)) { "Invalid or duplicate query parameter" }
+            map[key] = value
         }
         return map
     }
