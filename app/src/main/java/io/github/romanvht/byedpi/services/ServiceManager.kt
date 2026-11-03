@@ -41,6 +41,11 @@ object ServiceManager {
     private var observedAccessType: AccessType = AccessType.UNKNOWN
     private var transitionJob: Job? = null
 
+    // This field is intentionally process-local and contains only a fixed
+    // diagnostic code. Never persist a native exception or subscription URI.
+    @Volatile var lastCoreFailureCode: String? = null
+        private set
+
     /**
      * Optional low-frequency network listener: only active while our VPN runs.
      * Avoid reconnecting for insignificant capability events or transient
@@ -243,9 +248,13 @@ object ServiceManager {
 
         val current = Session(mode, NativeEngine(app, mode))
         session = current
+        if (app.getPreferences().getBoolean("nlic_core_mode", false)) {
+            lastCoreFailureCode = null
+        }
         if (mode == Mode.VPN) beginNetworkObservation(app)
         configure(current, app)
-        publish(mode, AppStatus.Running, STARTED_BROADCAST)
+        // STARTING is not CONNECTED: only publish RUNNING after the native
+        // engine passes its authenticated readiness probe.
         (app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(PAUSE_NOTIFICATION_ID)
         monitor(current, launchService = true)
         try {
@@ -292,7 +301,8 @@ object ServiceManager {
         val current = Session(running.first, NativeEngine(app, running.first, running.second))
         session = current
         if (running.first == Mode.VPN) beginNetworkObservation(app)
-        publish(current.mode, AppStatus.Running, STARTED_BROADCAST)
+        // A recovered process may still be initializing. Query its native
+        // session first; never infer a working VPN from service presence.
         monitor(current, launchService = false)
     }
 
@@ -324,6 +334,7 @@ object ServiceManager {
                     }
                 }
                 if (!current.stopping) {
+                    lastCoreFailureCode = null
                     publish(current.mode, AppStatus.Running, STARTED_BROADCAST)
                     current.started.complete(true)
                 }
@@ -332,7 +343,20 @@ object ServiceManager {
                 failed = !current.stopping
             } catch (e: Exception) {
                 failed = !current.stopping
-                if (failed) Log.e(TAG, "Native service failed", e)
+                if (failed) {
+                    if (application?.getPreferences()?.getBoolean("nlic_core_mode", false) == true) {
+                        val code = Regex("LIC-Core / ([A-Z_]+)")
+                            .find(e.message.orEmpty())?.groupValues?.getOrNull(1)
+                        lastCoreFailureCode = code?.takeIf {
+                            it in setOf("SETUP", "CONFIG", "INTERFACES", "COMMAND",
+                                "OUTBOUND", "CREDENTIAL_STORAGE", "BAY_UNREACHABLE",
+                                "NO_SERVER", "TUNNEL_TEST", "ENGINE")
+                        } ?: "ENGINE"
+                        Log.e(TAG, "LIC-Core failed at safe stage $lastCoreFailureCode")
+                    } else {
+                        Log.e(TAG, "Native service failed", e)
+                    }
+                }
             } finally {
                 current.configured.complete(false)
                 withContext(NonCancellable) {
