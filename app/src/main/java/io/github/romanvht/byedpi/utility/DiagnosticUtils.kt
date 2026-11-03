@@ -38,6 +38,13 @@ object DiagnosticUtils {
             appendLine(value(context, R.string.diagnostic_kernel_version, Os.uname().release))
             appendLine(value(context, R.string.diagnostic_app_version, BuildConfig.VERSION_NAME))
 
+            val network = NetworkEnvironment.capture(context)
+            appendLine("Underlying transport: ${network.type.name}")
+            appendLine("Underlying IPv4 present: ${network.hasIpv4}, IPv6 present: ${network.hasIpv6}")
+            appendLine("Reported link MTU: ${network.physicalMtu}")
+            appendLine("N-LIC TUN MTU policy: ${AccessPolicy.tunMtu(network, preferences.getBoolean("nlic_mobile_safe_mtu", true))}")
+            appendLine("Cellular IPv6 auto-capture: ${preferences.getBoolean("nlic_mobile_ipv6_auto", true)}")
+
             appendLine()
             appendLine(context.getString(R.string.diagnostic_app_settings))
             appendLine(value(context, R.string.diagnostic_command_line, state(context, cmdEnabled)))

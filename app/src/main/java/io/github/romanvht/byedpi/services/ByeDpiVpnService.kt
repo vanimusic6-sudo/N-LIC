@@ -111,7 +111,8 @@ class ByeDpiVpnService : VpnService() {
         builder.addAddress("10.10.10.10", 32)
             .addRoute("0.0.0.0", 0)
 
-        if (configuration.ipv6) {
+        val mobileIpv6 = getPreferences().getBoolean("nlic_mobile_ipv6_auto", true)
+        if (AccessPolicy.shouldCaptureIpv6(configuration.ipv6, underlyingLink, mobileIpv6)) {
             builder.addAddress("fd00::1", 128)
                 .addRoute("::", 0)
         }

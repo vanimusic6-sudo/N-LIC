@@ -66,6 +66,13 @@ internal object AccessPolicy {
             else MOBILE_TUN_MTU
         } else LEGACY_TUN_MTU
 
+    /** IPv6-only carrier paths must not silently bypass the VPN's TLS proxy. */
+    fun shouldCaptureIpv6(
+        userEnabled: Boolean,
+        underlying: AccessSnapshot,
+        mobileAutoEnabled: Boolean,
+    ): Boolean = userEnabled || (underlying.isCellular && underlying.hasIpv6 && mobileAutoEnabled)
+
     fun resultsFileName(type: AccessType) =
         "proxy_test_results_${type.name.lowercase()}.json"
 }

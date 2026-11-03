@@ -25,13 +25,16 @@ Neither an aggressive fake TTL nor more split flags can solve all of these.
    known working Wi-Fi virtual tunnel MTU unchanged. HEV and Android TUN
    must agree. This is an experimental performance measure, not a reliable
    speed optimization across every carrier.
-3. Do not falsely advertise unmetered connectivity on cellular.
-4. Separate saved strategy results by connection type, preventing a
+3. On mobile links with IPv6, capture IPv6 packets in the N-LIC VPN instead of
+   allowing the default IPv4-only VPN configuration to bypass processing.
+   This is configurable and can be disabled if a particular carrier breaks.
+4. Do not falsely advertise unmetered connectivity on cellular.
+5. Separate saved strategy results by connection type, preventing a
    Wi-Fi winner from being treated as a mobile-data winner.
-5. Use a mobile-first 16-profile catalog with conservative TLS-only profiles,
+6. Use a mobile-first 16-profile catalog with conservative TLS-only profiles,
    staged fallback, and rare TTL-dependent profiles last. Never silently
    change a user's active command or reconnect ongoing streams.
-6. If transport switches during a scan, stop early rather than blend Wi-Fi
+7. If transport switches during a scan, stop early rather than blend Wi-Fi
    success and mobile failures into a misleading ranking.
 
 ## Technical boundaries

@@ -28,6 +28,15 @@ class NetworkEnvironmentTest {
         assertTrue(link.hasIpv6)
     }
 
+    @Test fun `capture cellular IPv6 without changing WiFi manual choice`() {
+        val mobile6 = AccessSnapshot(AccessType.CELLULAR, 1500, false, true)
+        val wifi6 = AccessSnapshot(AccessType.WIFI, 1500, true, true)
+        assertTrue(AccessPolicy.shouldCaptureIpv6(false, mobile6, true))
+        assertFalse(AccessPolicy.shouldCaptureIpv6(false, mobile6, false))
+        assertFalse(AccessPolicy.shouldCaptureIpv6(false, wifi6, true))
+        assertTrue(AccessPolicy.shouldCaptureIpv6(true, wifi6, false))
+    }
+
     @Test fun `different radios use separate results files without identifiers`() {
         assertEquals("proxy_test_results_wifi.json", AccessPolicy.resultsFileName(AccessType.WIFI))
         assertEquals("proxy_test_results_cellular.json", AccessPolicy.resultsFileName(AccessType.CELLULAR))
