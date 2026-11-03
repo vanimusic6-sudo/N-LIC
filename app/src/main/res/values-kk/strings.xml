@@ -335,4 +335,5 @@
     <string name="nlic_ui_legacy_action">Қалыпты ByeDPI режиміне оралу</string>
     <string name="nlic_ui_legacy_desc">VPN өшіріліп, LIC-Core сөнеді. Жазылымдар сақталады.</string>
     <string name="nlic_ui_legacy_confirm">VPN өшіріліп, қалыпты ByeDPI режиміне оралсын ба? Интернет VPN-сыз уақытша қолжетімді болуы мүмкін.</string>
+    <string name="nlic_ui_open_center">LIC-Core · Серверлер және VPN</string>
 </resources>
