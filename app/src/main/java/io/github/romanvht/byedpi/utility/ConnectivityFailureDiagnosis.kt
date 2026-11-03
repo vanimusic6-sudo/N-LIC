@@ -23,10 +23,10 @@ internal object ConnectivityFailureDiagnosis {
             }.lowercase()
         return when {
             listOf("eacces", "eperm", "permission denied", "operation not permitted")
-                .any(details::contains) -> "SOCKET_ACCESS_DENIED"
+                .any { details.contains(it) } -> "SOCKET_ACCESS_DENIED"
             listOf("enetunreach", "enetworkunreachable", "network is unreachable",
                 "network unreachable", "enetdown", "network is down", "no route to host",
-                "ehostunreach", "host is unreachable").any(details::contains) -> "NO_NETWORK_ROUTE"
+                "ehostunreach", "host is unreachable").any { details.contains(it) } -> "NO_NETWORK_ROUTE"
             "econnrefused" in details || "connection refused" in details -> "TCP_REFUSED"
             "econnreset" in details || "connection reset" in details -> "TCP_RESET"
             error is IOException -> "NETWORK_IO_FAILURE"
