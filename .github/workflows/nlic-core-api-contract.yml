@@ -25,6 +25,8 @@ jobs:
           curl --fail --location --retry 3 --connect-timeout 15 --max-time 240 \
             -o libbox.aar https://github.com/singbox-android/libbox/releases/download/1.14.3/libbox.aar
           echo "6f1f295b1d988d4875546a48cb90a90e2b5f70ca10432f1a8d95e757a76f01d9  libbox.aar" | sha256sum -c
+          echo '----- Native ABI inventory'
+          unzip -Z1 libbox.aar | grep -E '(^jni/|^libs/)' | head -40
           unzip -p libbox.aar classes.jar > libbox-classes.jar
           jar tf libbox-classes.jar | grep -E '(Libbox|CommandServer|PlatformInterface|SetupOptions|OverrideOptions|NetworkInterface|StringIterator)' | head -60
           for cls in io.nekohasekai.libbox.Libbox io.nekohasekai.libbox.CommandServer io.nekohasekai.libbox.SetupOptions io.nekohasekai.libbox.PlatformInterface io.nekohasekai.libbox.CommandServerHandler io.nekohasekai.libbox.OverrideOptions io.nekohasekai.libbox.NetworkInterface io.nekohasekai.libbox.InterfaceUpdateListener io.nekohasekai.libbox.StringIterator io.nekohasekai.libbox.NetworkInterfaceIterator; do
