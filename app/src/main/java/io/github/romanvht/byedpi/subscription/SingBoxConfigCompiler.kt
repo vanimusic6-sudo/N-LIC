@@ -96,6 +96,58 @@ internal object SingBoxConfigCompiler {
         }
     }
 
+    /**
+     * LIC-Auto stage 2: real sing-box URLTest across authenticated encrypted
+     * outbounds. Tests run ONLY while the user has activated LIC-Core, and
+     * existing established connections are never forcibly interrupted.
+     *
+     * A 204 test checks tunnel functionality/latency, not throughput.
+     */
+    fun compileAuto(
+        nodes: List<SubscriptionNode>,
+        bay: Bay = Bay.OFF,
+        bayPort: Int = 1080,
+    ): Result {
+        if (nodes.isEmpty()) return Result.Unsupported("No subscription nodes")
+        val candidates = nodes.distinctBy { it.id }.take(12)
+        val valid = candidates.mapNotNull { node ->
+            val result = compile(node, bay, bayPort)
+            if (result !is Result.Compiled) return@mapNotNull null
+            val root = JsonParser.parseString(result.config).asJsonObject
+            node to root
+        }
+        if (valid.isEmpty()) {
+            return Result.Unsupported("No compatible servers for LIC-Auto and LIC-Bay")
+        }
+        val root = valid.first().second.deepCopy()
+        val outbounds = JsonArray()
+        val tags = JsonArray()
+        for ((node, config) in valid) {
+            val outbound = config.getAsJsonArray("outbounds")[0].asJsonObject.deepCopy()
+            val tag = "lic-node-${node.id.take(16)}"
+            outbound.addProperty("tag", tag)
+            tags.add(tag)
+            outbounds.add(outbound)
+        }
+        if (bay == Bay.ON) {
+            // Every TCP candidate shares ONE local ByeDPI outbound.
+            outbounds.add(valid.first().second.getAsJsonArray("outbounds")[1].deepCopy())
+        }
+        outbounds.add(JsonObject().apply {
+            addProperty("type", "urltest")
+            addProperty("tag", "lic-auto")
+            add("outbounds", tags)
+            addProperty("url", "https://www.gstatic.com/generate_204")
+            addProperty("interval", "10m")
+            addProperty("tolerance", 120)
+            addProperty("idle_timeout", "30m")
+            addProperty("interrupt_exist_connections", false)
+        })
+        root.add("outbounds", outbounds)
+        root.getAsJsonObject("route").addProperty("final", "lic-auto")
+        return Result.Compiled(root.toString(), "URLTEST")
+    }
+
     private fun decodeOutbound(node: SubscriptionNode): JsonObject? {
         val proto = node.protocol.uppercase()
         val core = JsonObject().apply {
