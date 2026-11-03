@@ -12,6 +12,10 @@ import androidx.lifecycle.lifecycleScope
 import androidx.preference.Preference
 import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceFragmentCompat
+import androidx.preference.SwitchPreferenceCompat
+import android.content.SharedPreferences
+import io.github.romanvht.byedpi.BuildConfig
+import io.github.romanvht.byedpi.utility.getPreferences
 import io.github.romanvht.byedpi.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -40,7 +44,10 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
 
         section.addPreference(Preference(context).apply {
             title = getString(R.string.nlic_subscriptions_phase)
-            summary = getString(R.string.nlic_subscriptions_phase_desc)
+            summary = getString(
+                if (BuildConfig.NLIC_LIBBOX_INCLUDED) R.string.nlic_core_preview_warning
+                else R.string.nlic_subscriptions_phase_desc
+            )
             isSelectable = false
         })
         if (!SubscriptionVault.available()) {
@@ -80,6 +87,54 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
             })
             return
         }
+
+        val prefs = context.getPreferences()
+        val selectedNode = saved.allNodes.firstOrNull { it.id == saved.selectedNodeId }
+        val canCompile = selectedNode?.let {
+            SingBoxConfigCompiler.compile(it) is SingBoxConfigCompiler.Result.Compiled
+        } == true
+        val byedpiVpnMode = prefs.getString("byedpi_mode", "vpn") == "vpn"
+
+        section.addPreference(SwitchPreferenceCompat(context).apply {
+            key = "nlic_core_mode"
+            title = getString(R.string.nlic_core_toggle)
+            summary = when {
+                !BuildConfig.NLIC_LIBBOX_INCLUDED -> getString(R.string.nlic_core_missing)
+                !byedpiVpnMode -> getString(R.string.nlic_core_requires_vpn)
+                !canCompile -> getString(R.string.nlic_core_choose_supported)
+                else -> getString(R.string.nlic_core_reconnect)
+            }
+            isChecked = prefs.getBoolean(key, false)
+            isEnabled = BuildConfig.NLIC_LIBBOX_INCLUDED && byedpiVpnMode && canCompile
+            setOnPreferenceChangeListener { _, newValue ->
+                prefs.edit().putBoolean(key, newValue as Boolean).commit()
+                render()
+                true
+            }
+        })
+
+        val bayEligible = selectedNode != null &&
+            LICBay.plan(selectedNode).canWrapTcp
+        section.addPreference(SwitchPreferenceCompat(context).apply {
+            key = "nlic_core_bay"
+            title = getString(R.string.nlic_core_bay_toggle)
+            summary = if (bayEligible) getString(R.string.nlic_core_bay_desc)
+                else getString(R.string.nlic_core_bay_udp)
+            isChecked = prefs.getBoolean(key, false)
+            isEnabled = BuildConfig.NLIC_LIBBOX_INCLUDED && bayEligible &&
+                prefs.getBoolean("nlic_core_mode", false)
+            setOnPreferenceChangeListener { _, newValue ->
+                prefs.edit().putBoolean(key, newValue as Boolean).commit()
+                true
+            }
+        })
+
+        section.addPreference(Preference(context).apply {
+            title = getString(R.string.nlic_core_profile_check)
+            summary = if (canCompile) getString(R.string.nlic_core_profile_ready)
+                else getString(R.string.nlic_core_profile_unsupported)
+            isSelectable = false
+        })
 
         val groups = saved.groups
         if (groups.isNotEmpty()) {
@@ -122,7 +177,9 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
                 nodesCategory.addPreference(Preference(context).apply {
                     title = (if (selected) "✓ " else "") + node.name
                     summary = "${node.protocol} · ${node.port} · " +
-                        getString(R.string.nlic_subscriptions_preview_only)
+                        getString(if (BuildConfig.NLIC_LIBBOX_INCLUDED)
+                            R.string.nlic_core_reconnect
+                        else R.string.nlic_subscriptions_preview_only)
                     setOnPreferenceClickListener {
                         try {
                             SubscriptionVault.select(context, node.id)
