@@ -335,4 +335,5 @@
     <string name="nlic_ui_legacy_action">Eski ByeDPI moduna dön</string>
     <string name="nlic_ui_legacy_desc">VPN bağlantısını kesip LIC-Core modunu kapatır. Abonelikler kalır.</string>
     <string name="nlic_ui_legacy_confirm">VPN bağlantısı kesilip eski ByeDPI moduna dönülsün mü? VPN dışında kısa süreli internet erişimi mümkün olabilir.</string>
+    <string name="nlic_ui_open_center">LIC-Core · Sunucular ve VPN</string>
 </resources>
