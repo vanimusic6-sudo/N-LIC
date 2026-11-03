@@ -7,15 +7,17 @@ import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
 /** Checks the encrypted outbound, sending the target hostname inside SOCKS5. */
+internal data class LocalSocksAuth(val username: String, val password: String)
+
 internal object TunnelHealthProbe {
     private const val TARGET = "www.gstatic.com"
     private const val TIMEOUT = 1_500
 
-    fun check(host: String, port: Int): Boolean = try {
+    fun check(host: String, port: Int, auth: LocalSocksAuth? = null): Boolean = try {
         Socket().use { socket ->
             socket.connect(InetSocketAddress(host, port), TIMEOUT)
             socket.soTimeout = TIMEOUT
-            connectDomain(socket, TARGET, 443)
+            connectDomain(socket, TARGET, 443, auth)
             val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
             (factory.createSocket(socket, TARGET, 443, true) as SSLSocket).use { tls ->
                 tls.soTimeout = TIMEOUT
@@ -62,16 +64,51 @@ internal object TunnelHealthProbe {
         }
     }
 
-    internal fun connectDomain(socket: Socket, host: String, port: Int) {
+    /**
+     * Readiness probe for an authenticated local SOCKS5 server. Does not
+     * contact an external endpoint and never logs the random secret.
+     */
+    fun checkLocal(host: String, port: Int, auth: LocalSocksAuth?): Boolean = try {
+        Socket().use { socket ->
+            socket.connect(InetSocketAddress(host, port), TIMEOUT)
+            socket.soTimeout = TIMEOUT
+            negotiate(socket, auth)
+            true
+        }
+    } catch (_: Exception) {
+        false
+    }
+
+    internal fun negotiate(socket: Socket, auth: LocalSocksAuth?) {
+        val output = socket.getOutputStream()
+        val input = DataInputStream(socket.getInputStream())
+        val method = if (auth == null) 0 else 2
+        output.write(byteArrayOf(5, 1, method.toByte()))
+        output.flush()
+        check(input.readUnsignedByte() == 5 && input.readUnsignedByte() == method) {
+            "SOCKS authentication method not supported"
+        }
+        if (auth != null) {
+            val user = auth.username.toByteArray(Charsets.US_ASCII)
+            val pass = auth.password.toByteArray(Charsets.US_ASCII)
+            require(user.size in 1..255 && pass.size in 1..255)
+            output.write(byteArrayOf(1, user.size.toByte()))
+            output.write(user)
+            output.write(pass.size)
+            output.write(pass)
+            output.flush()
+            check(input.readUnsignedByte() == 1 && input.readUnsignedByte() == 0) {
+                "SOCKS credentials were rejected"
+            }
+        }
+    }
+
+    internal fun connectDomain(socket: Socket, host: String, port: Int, auth: LocalSocksAuth? = null) {
         val domain = host.toByteArray(Charsets.US_ASCII)
         require(domain.size in 1..255 && port in 1..65535)
         val output = socket.getOutputStream()
         val input = DataInputStream(socket.getInputStream())
-        output.write(byteArrayOf(5, 1, 0))
-        output.flush()
-        check(input.readUnsignedByte() == 5 && input.readUnsignedByte() == 0) {
-            "SOCKS authentication failed"
-        }
+        negotiate(socket, auth)
         output.write(byteArrayOf(5, 1, 0, 3, domain.size.toByte()))
         output.write(domain)
         output.write(byteArrayOf((port ushr 8).toByte(), port.toByte()))
