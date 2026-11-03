@@ -357,9 +357,9 @@ class TestService : Service() {
         val host = prefs.getStringNotNull("byedpi_proxy_ip", "127.0.0.1")
         val port = prefs.getIntStringNotNull("byedpi_proxy_port", 1080)
         val delaySec = prefs.getIntStringNotNull("byedpi_proxytest_delay", 1).coerceIn(0, 10)
-        val requestsCount = prefs.getIntStringNotNull("byedpi_proxytest_requests", 1).coerceIn(1, 20)
+        val requestsCount = prefs.getIntStringNotNull("byedpi_proxytest_requests", 2).coerceIn(1, 20)
         val requestTimeout = prefs.getLongStringNotNull("byedpi_proxytest_timeout", 5).coerceIn(1L, 15L)
-        val requestLimit = prefs.getIntStringNotNull("byedpi_proxytest_limit", 20).coerceIn(1, 50)
+        val requestLimit = prefs.getIntStringNotNull("byedpi_proxytest_limit", 6).coerceIn(1, 50)
         DomainListUtils.syncLists(this)
         return TestSettings(DomainListUtils.getActiveDomains(this).toList(), commands, host, port,
             delaySec, requestsCount, requestTimeout, requestLimit)
