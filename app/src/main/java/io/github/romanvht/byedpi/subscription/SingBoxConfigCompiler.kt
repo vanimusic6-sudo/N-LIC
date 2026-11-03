@@ -46,6 +46,16 @@ internal object SingBoxConfigCompiler {
                 addProperty("level", "warn")
                 addProperty("disabled", false)
             })
+            // sing-box 1.14 requires a domain resolver for proxy server hostnames.
+            // Only the encrypted outbound's bootstrap hostname uses local DNS.
+            root.add("dns", JsonObject().apply {
+                add("servers", JsonArray().apply {
+                    add(JsonObject().apply {
+                        addProperty("type", "local")
+                        addProperty("tag", "lic-bootstrap-dns")
+                    })
+                })
+            })
             root.add("inbounds", JsonArray().apply {
                 add(JsonObject().apply {
                     addProperty("type", "mixed")
@@ -73,6 +83,7 @@ internal object SingBoxConfigCompiler {
             root.add("route", JsonObject().apply {
                 addProperty("final", PROXY_TAG)
                 addProperty("auto_detect_interface", false)
+                addProperty("default_domain_resolver", "lic-bootstrap-dns")
             })
             Result.Compiled(root.toString(), protocol)
         } catch (_: Exception) {
@@ -91,6 +102,7 @@ internal object SingBoxConfigCompiler {
                 "VMESS" -> "vmess"
                 "SHADOWSOCKS" -> "shadowsocks"
                 "HYSTERIA2", "HY2" -> "hysteria2"
+                "TUIC" -> "tuic"
                 else -> return null
             })
             addProperty("server", node.host)
@@ -103,6 +115,7 @@ internal object SingBoxConfigCompiler {
             "VMESS" -> vmess(node.originalUri, core)
             "SHADOWSOCKS" -> shadowsocks(node.originalUri, core)
             "HYSTERIA2", "HY2" -> hysteria2(node.originalUri, core)
+            "TUIC" -> tuic(node.originalUri, core)
             else -> null
         }
     }
@@ -216,6 +229,25 @@ internal object SingBoxConfigCompiler {
                 addProperty("password", query["obfs-password"])
             })
         }
+        return out
+    }
+
+    private fun tuic(source: String, out: JsonObject): JsonObject? {
+        val uri = URI(source)
+        val info = uri.userInfo ?: return null
+        val uuid = info.substringBefore(':', "")
+        val password = info.substringAfter(':', "")
+        if (runCatching { UUID.fromString(uuid) }.isFailure || password.isEmpty()) return null
+        val query = args(uri.rawQuery)
+        if (query["insecure"] == "1" || query["allowInsecure"] == "1") return null
+        val congestion = query["congestion_control"] ?: query["congestionControl"] ?: "cubic"
+        if (congestion !in setOf("cubic", "new_reno", "bbr")) return null
+        out.addProperty("uuid", uuid)
+        out.addProperty("password", password)
+        out.addProperty("congestion_control", congestion)
+        val tls = tls("tls", query["sni"] ?: uri.host, null, null, null,
+            query["alpn"] ?: "h3") ?: return null
+        out.add("tls", tls)
         return out
     }
 
