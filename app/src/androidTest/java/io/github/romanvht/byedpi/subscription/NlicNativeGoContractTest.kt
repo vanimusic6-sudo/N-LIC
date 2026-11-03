@@ -63,13 +63,22 @@ class NlicNativeGoContractTest {
             "ANYTLS" to SingBoxConfigCompiler.compile(
                 anytls, SingBoxConfigCompiler.Bay.OFF, 1080, password),
             "WIREGUARD" to SingBoxConfigCompiler.compile(
-                wg, SingBoxConfigCompiler.Bay.OFF, 1080, password)
+                wg, SingBoxConfigCompiler.Bay.OFF, 1080, password),
+            "WIREGUARD_BAY_UDP" to SingBoxConfigCompiler.compile(
+                wg, SingBoxConfigCompiler.Bay.ON, 1080, password),
+            "HYSTERIA2_BAY_UDP" to SingBoxConfigCompiler.compile(
+                requireNotNull(SubscriptionImport.parseNode(
+                    "hysteria2://pass@test.example:443?sni=test.example"
+                )), SingBoxConfigCompiler.Bay.ON, 1080, password)
         )
         for ((name, result) in candidates) {
             val compiled = result as? SingBoxConfigCompiler.Result.Compiled
                 ?: throw AssertionError("$name: Kotlin compiler rejected a valid fixture")
             try {
-                check.invoke(null, compiled.config)
+                // Validate the exact JSON passed to libbox's native
+                // service, including TUN + encrypted DoH, not merely the
+                // old HEV SOCKS-only compatibility profile.
+                check.invoke(null, NativeTunConfig.compile(compiled.config, 1400))
             } catch (error: java.lang.reflect.InvocationTargetException) {
                 // Only fixture configs are checked; no real subscription URI
                 // or passwords from the user's device are involved.
