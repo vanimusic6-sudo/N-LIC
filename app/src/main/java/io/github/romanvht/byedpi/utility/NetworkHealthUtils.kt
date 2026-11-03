@@ -67,19 +67,31 @@ internal object NetworkHealthUtils {
                 NetworkCapabilities.NET_CAPABILITY_VALIDATED
             ) == true
         }
-        // No ambiguous choice of Wi-Fi when a mobile carrier is also active.
-        return validated.singleOrNull() ?: physical.singleOrNull()
+        // If more than one physical network is visible while a VPN is the
+        // Android default, only use an unambiguously matched transport from
+        // the same validated physical candidates. Never route to a guessed
+        // network merely because mobile data is enabled.
+        val selectedType = NetworkEnvironment.capture(context).type
+        val matched = validated.filter { candidate ->
+            val caps = manager.getNetworkCapabilities(candidate) ?: return@filter false
+            when (selectedType) {
+                AccessType.WIFI -> caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                AccessType.CELLULAR -> caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                AccessType.ETHERNET -> caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+                else -> false
+            }
+        }
+        return validated.singleOrNull() ?: matched.singleOrNull() ?: physical.singleOrNull()
     }
 
-    suspend fun run(context: Context): NetworkHealthReport = withContext(Dispatchers.IO) {
+    suspend fun run(context: Context, compareSocks: Boolean = true): NetworkHealthReport = withContext(Dispatchers.IO) {
         val snapshot = NetworkEnvironment.capture(context)
         val network = try { underlyingNetwork(context) } catch (_: SecurityException) { null }
         if (network == null) {
             return@withContext NetworkHealthReport(
                 snapshot,
                 emptyList(),
-                listOf("Android did not expose a unique active physical network. " +
-                    "Disable other VPN clients or switch off Wi-Fi before testing mobile data."),
+                listOf(visibilityReason(context)),
             )
         }
         coroutineContext.ensureActive()
@@ -98,7 +110,16 @@ internal object NetworkHealthUtils {
         coroutineContext.ensureActive()
         val large = checkDownload(network, MAX_DOWNLOAD_BYTES, "Cloudflare 256 KiB")
         val checks = listOf(youtube, youtubeApi, telegram, telegramAlt, small, large)
-        val notes = NetworkHealthInterpretation.describe(youtubeApi, telegram, small, large).toMutableList()
+        val notes = NetworkHealthInterpretation.describe(youtubeApi, telegram, small, large)
+        val base = NetworkHealthReport(snapshot, checks, notes)
+        if (compareSocks) addProxyComparison(context, base) else base
+    }
+
+    suspend fun addProxyComparison(
+        context: Context,
+        direct: NetworkHealthReport,
+    ): NetworkHealthReport = withContext(Dispatchers.IO) {
+        if (direct.checks.isEmpty() || direct.proxyChecks.isNotEmpty()) return@withContext direct
         val localProxy = if (NativeEngine.running(context) != null) {
             val (host, portText) = context.getPreferences().getProxyIpAndPort()
             val hostAddress = when (host) {
@@ -118,12 +139,49 @@ internal object NetworkHealthUtils {
             val largeProxied = checkDownload(
                 null, MAX_DOWNLOAD_BYTES, "N-LIC SOCKS / Cloudflare 256 KiB", localProxy
             )
-            notes.addAll(NetworkHealthInterpretation.comparePaths(
-                telegram, telegramProxied, large, largeProxied
-            ))
             listOf(telegramProxied, largeProxied)
         }
-        NetworkHealthReport(snapshot, checks, notes, viaProxy)
+        if (viaProxy.isEmpty()) return@withContext direct
+        val telegramDirect = direct.checks.firstOrNull { it.target == "Telegram DC2 / TCP 443" }
+        val largeDirect = direct.checks.firstOrNull { it.target == "Cloudflare 256 KiB" }
+        val extraNotes = if (telegramDirect == null || largeDirect == null) emptyList() else {
+            NetworkHealthInterpretation.comparePaths(
+                telegramDirect, viaProxy[0], largeDirect, viaProxy[1],
+            )
+        }
+        direct.copy(
+            notes = direct.notes + extraNotes,
+            proxyChecks = viaProxy,
+        )
+    }
+
+    /**
+     * No SSID, carrier identifier or address is exposed. A VPN can be the
+     * visible default while Android hides every physical network from this UID.
+     */
+    private fun visibilityReason(context: Context): String {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return "ConnectivityManager unavailable: unable to run direct network tests."
+        return try {
+            val caps = cm.allNetworks.mapNotNull(cm::getNetworkCapabilities)
+            val physical = caps.filter {
+                !it.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+                    it.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            }
+            val vpnVisible = caps.any { it.hasTransport(NetworkCapabilities.TRANSPORT_VPN) }
+            val cellularVisible = physical.count { it.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) }
+            val wifiVisible = physical.count { it.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) }
+            buildString {
+                append("Android did not expose one usable physical network to N-LIC. ")
+                append("Visible VPN: $vpnVisible; physical networks: ${physical.size}; ")
+                append("cellular: $cellularVisible; Wi-Fi: $wifiVisible. ")
+                append("If N-LIC is connected, run the new diagnostic with a temporary ")
+                append("VPN disconnect and automatic restore. Otherwise turn off Wi-Fi ")
+                append("and verify that mobile data is actually connected.")
+            }
+        } catch (_: SecurityException) {
+            "Android denied access to network capabilities; direct diagnostics require VPN disconnection."
+        }
     }
 
     private fun checkTcp(network: Network, host: String, label: String): ConnectionCheck {

@@ -47,11 +47,19 @@ internal object AccessPolicy {
     fun select(
         candidates: List<AccessCandidate>,
         activeCandidate: AccessCandidate? = null,
+        vpnUnderlyingType: AccessType? = null,
     ): AccessSnapshot {
         fun snap(c: AccessCandidate) =
             AccessSnapshot(c.type, c.mtu, c.ipv4, c.ipv6, c.nat64)
         if (activeCandidate != null && activeCandidate.type != AccessType.UNKNOWN) {
             return snap(activeCandidate)
+        }
+        // A VPN default Network can expose the underlying physical transport
+        // in NetworkCapabilities. Use that only when it is unambiguous AND a
+        // corresponding real non-VPN Network was returned by ConnectivityManager.
+        // Never invent a physical network based on the VPN flags alone.
+        if (vpnUnderlyingType != null && vpnUnderlyingType != AccessType.UNKNOWN) {
+            candidates.firstOrNull { it.type == vpnUnderlyingType }?.let { return snap(it) }
         }
         val validated = candidates.filter { it.type != AccessType.UNKNOWN && it.validated }
         if (validated.map { it.type }.distinct().size == 1) {
@@ -98,7 +106,17 @@ internal object NetworkEnvironment {
         val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
             as? ConnectivityManager ?: return AccessSnapshot(AccessType.UNKNOWN)
         return try {
-            val activeNetwork = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) manager.activeNetwork else null
+            val activeNetwork = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) manager.activeNetwork else null
+            val activeCaps = activeNetwork?.let(manager::getNetworkCapabilities)
+            val vpnHint = if (activeCaps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true) {
+                val wifi = activeCaps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                val mobile = activeCaps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                when {
+                    wifi && !mobile -> AccessType.WIFI
+                    mobile && !wifi -> AccessType.CELLULAR
+                    else -> null
+                }
+            } else null
             var activeCandidate: AccessCandidate? = null
             val candidates = manager.allNetworks.mapNotNull { network ->
                 val caps = manager.getNetworkCapabilities(network) ?: return@mapNotNull null
@@ -127,7 +145,7 @@ internal object NetworkEnvironment {
                         links?.nat64Prefix != null,
                 ).also { if (network == activeNetwork) activeCandidate = it }
             }
-            AccessPolicy.select(candidates, activeCandidate)
+            AccessPolicy.select(candidates, activeCandidate, vpnHint)
         } catch (_: SecurityException) {
             AccessSnapshot(AccessType.UNKNOWN)
         }

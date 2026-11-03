@@ -262,4 +262,10 @@
     <string name="nlic_network_health_running">Проверяем доступность TCP и передачу данных в текущей сети. Результат позволит отличить блокировку IP от проблем с потоками.</string>
     <string name="nlic_restart_on_network_change">Переподключаться при смене Wi-Fi ↔ мобильной сети</string>
     <string name="nlic_restart_on_network_change_desc">Необязательно: при подтверждённой смене сети автоматически перезапускать N-LIC VPN, чтобы применить подходящие настройки. Текущие соединения прервутся. В режиме Proxy не применяется.</string>
+    <string name="nlic_network_health_paused_title">Android скрывает физическую сеть</string>
+    <string name="nlic_network_health_paused_warning">N-LIC сейчас работает как VPN, а Android не предоставляет доступ к физическому соединению для диагностики. Временно отключить именно N-LIC, проверить сеть напрямую и затем восстановить VPN? На время проверки N-LIC будет отключён: другие приложения тоже могут выходить в интернет без его фильтрации, а текущие соединения прервутся. Другие VPN-приложения затронуты не будут.</string>
+    <string name="nlic_network_health_paused_confirm">Отключить, проверить и вернуть</string>
+    <string name="nlic_network_health_timeout">Проверка превысила лимит времени. Проверь мобильные данные и попробуй снова.</string>
+    <string name="nlic_network_health_restored">N-LIC VPN восстановлен после диагностики.</string>
+    <string name="nlic_network_health_restore_failed">Не удалось автоматически восстановить N-LIC VPN. Переподключись вручную в приложении.</string>
 </resources>

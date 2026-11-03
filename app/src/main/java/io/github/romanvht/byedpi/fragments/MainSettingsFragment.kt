@@ -7,6 +7,16 @@ import android.content.Context
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import android.net.VpnService
+import io.github.romanvht.byedpi.services.NativeEngine
+import io.github.romanvht.byedpi.services.ServiceManager
+import io.github.romanvht.byedpi.services.appStatus
+import io.github.romanvht.byedpi.data.AppStatus
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.Log
@@ -198,25 +208,102 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
 
     private fun showNetworkHealth() {
         val context = requireContext()
-        val dialog = AlertDialog.Builder(context)
+        val vpnActive = NativeEngine.running(context)?.first == Mode.VPN ||
+            (appStatus.first == AppStatus.Running && appStatus.second == Mode.VPN)
+        val physicalAvailable = runCatching {
+            NetworkHealthUtils.underlyingNetwork(context) != null
+        }.getOrDefault(false)
+
+        if (vpnActive && !physicalAvailable) {
+            // A VPN may be the only Network visible to our UID. Ask BEFORE
+            // disconnecting; restoring the same N-LIC mode is non-optional.
+            AlertDialog.Builder(context)
+                .setTitle(R.string.nlic_network_health_paused_title)
+                .setMessage(R.string.nlic_network_health_paused_warning)
+                .setPositiveButton(R.string.nlic_network_health_paused_confirm) { _, _ ->
+                    runNetworkHealth(temporarilyStopVpn = true)
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        } else {
+            runNetworkHealth(temporarilyStopVpn = false)
+        }
+    }
+
+    private fun runNetworkHealth(temporarilyStopVpn: Boolean) {
+        val app = requireContext().applicationContext
+        val dialog = AlertDialog.Builder(requireContext())
             .setTitle(R.string.nlic_network_health)
             .setMessage(R.string.nlic_network_health_running)
             .setNegativeButton(android.R.string.cancel, null)
+            .setCancelable(false)
             .create()
         dialog.show()
         val job = viewLifecycleOwner.lifecycleScope.launch {
-            val report = NetworkHealthUtils.run(context.applicationContext)
-            if (!isAdded) return@launch
+            var stopped = false
+            var restored = !temporarilyStopVpn
+            var report: io.github.romanvht.byedpi.utility.NetworkHealthReport? = null
+            var failure: String? = null
+            try {
+                if (temporarilyStopVpn) {
+                    // Mark restoration required before invoking stop, because
+                    // cancellation may happen at any suspension point.
+                    stopped = true
+                    ServiceManager.waitStop()
+                    delay(1_000) // Give Android time to update default Network.
+                }
+                report = withTimeoutOrNull(105_000) {
+                    NetworkHealthUtils.run(app, compareSocks = !temporarilyStopVpn)
+                }
+                if (report == null) failure = getString(R.string.nlic_network_health_timeout)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                failure = e.message?.take(120) ?: "Network diagnostic failed"
+                Log.w(TAG, "Physical network diagnostic failed", e)
+            } finally {
+                if (stopped) {
+                    // Even when the user cancels the scan or navigates away,
+                    // always attempt to restore their previously running VPN.
+                    withContext(NonCancellable) {
+                        restored = try {
+                            if (VpnService.prepare(app) == null) {
+                                withTimeoutOrNull(25_000) {
+                                    ServiceManager.waitStart(app, Mode.VPN)
+                                } == true
+                            } else false
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Could not restore N-LIC VPN after diagnostics", e)
+                            false
+                        }
+                    }
+                }
+            }
+            if (temporarilyStopVpn && restored && report != null) {
+                report = withTimeoutOrNull(18_000) {
+                    NetworkHealthUtils.addProxyComparison(app, requireNotNull(report))
+                } ?: report
+            }
             dialog.dismiss()
-            val reportText = report.asText()
+            if (!isAdded) return@launch
+            val text = buildString {
+                report?.let { appendLine(it.asText()) }
+                failure?.let { appendLine(it) }
+                if (temporarilyStopVpn) {
+                    appendLine(getString(
+                        if (restored) R.string.nlic_network_health_restored
+                        else R.string.nlic_network_health_restore_failed
+                    ))
+                }
+            }
             AlertDialog.Builder(requireContext())
                 .setTitle(R.string.nlic_network_health)
-                .setMessage(reportText)
+                .setMessage(text)
                 .setPositiveButton(R.string.diagnostic_copy) { _, _ ->
                     val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE)
                         as ClipboardManager
                     clipboard.setPrimaryClip(
-                        ClipData.newPlainText("N-LIC physical network report", reportText)
+                        ClipData.newPlainText("N-LIC physical network report", text)
                     )
                     Toast.makeText(requireContext(), R.string.toast_copied, Toast.LENGTH_SHORT).show()
                 }

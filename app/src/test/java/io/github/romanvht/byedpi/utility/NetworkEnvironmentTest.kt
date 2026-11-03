@@ -24,6 +24,19 @@ class NetworkEnvironmentTest {
         assertEquals(AccessType.WIFI, AccessPolicy.select(listOf(wifi, mobile), wifi).type)
     }
 
+    @Test fun `use matching real cellular Network when VPN exposes underlying mobile transport`() {
+        val wifi = AccessCandidate(AccessType.WIFI, true, 1500, true, true)
+        val mobile = AccessCandidate(AccessType.CELLULAR, true, 1450, false, true)
+        assertEquals(
+            AccessType.CELLULAR,
+            AccessPolicy.select(listOf(wifi, mobile), vpnUnderlyingType = AccessType.CELLULAR).type,
+        )
+        assertEquals(
+            AccessType.UNKNOWN,
+            AccessPolicy.select(emptyList(), vpnUnderlyingType = AccessType.CELLULAR).type,
+        )
+    }
+
     @Test fun `mobile frames use bounded mtu while wifi retains known good baseline`() {
         assertEquals(8500, AccessPolicy.tunMtu(AccessSnapshot(AccessType.WIFI, 1500)))
         assertEquals(1400, AccessPolicy.tunMtu(AccessSnapshot(AccessType.CELLULAR, 1500)))
