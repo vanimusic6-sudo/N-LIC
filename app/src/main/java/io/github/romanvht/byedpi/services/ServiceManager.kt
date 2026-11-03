@@ -118,6 +118,10 @@ object ServiceManager {
 
 
     private class Session(val mode: Mode, val engine: NativeEngine) {
+        // Snapshot the intended runtime before the UI resets the core-mode
+        // preference after a failed start. Otherwise failure classification
+        // races with the preference rollback and always falls to ENGINE.
+        var expectedCore: Boolean = false
         val configuration = CompletableDeferred<Configuration>()
         val configured = CompletableDeferred<Boolean>()
         val started = CompletableDeferred<Boolean>()
@@ -278,7 +282,9 @@ object ServiceManager {
     private fun configure(current: Session, app: Application) {
         if (current.configuration.isCompleted || current.started.isCompleted) return
         try {
-            current.configuration.complete(NativeEngine.configuration(app))
+            val config = NativeEngine.configuration(app)
+            current.expectedCore = config.args.firstOrNull() == "--nlic-libbox"
+            current.configuration.complete(config)
         } catch (e: Exception) {
             current.configuration.completeExceptionally(e)
         }
@@ -344,7 +350,8 @@ object ServiceManager {
             } catch (e: Exception) {
                 failed = !current.stopping
                 if (failed) {
-                    if (application?.getPreferences()?.getBoolean("nlic_core_mode", false) == true) {
+                    if (current.expectedCore ||
+                        e.message.orEmpty().contains("LIC-Core / ")) {
                         val code = Regex("LIC-Core / ([A-Z_]+)")
                             .find(e.message.orEmpty())?.groupValues?.getOrNull(1)
                         val safeStages = setOf(
@@ -352,7 +359,8 @@ object ServiceManager {
                             "CREDENTIAL_STORAGE", "BAY_UNREACHABLE", "NO_SERVER",
                             "TUNNEL_TEST", "ENGINE", "CATALOG", "PREPARE",
                             "CONFIG_COMPILE", "BAY_PROXY", "BAY_PROXY_EXIT",
-                            "BAY_UPSTREAM", "CORE_START", "CORE_SOCKS",
+                            "BAY_UPSTREAM", "BAY_UDP", "BAY_UDP_UNAVAILABLE",
+                            "BAY_UNSUPPORTED", "CORE_START", "CORE_SOCKS",
                             "REMOTE_TEST", "TUN", "HEV", "HEV_EXIT", "ENGINE_EXIT"
                         )
                         lastCoreFailureCode = code?.takeIf {
