@@ -183,7 +183,9 @@ internal object SingBoxConfigCompiler {
         val security = query["security"] ?: "none"
         val network = query["type"] ?: "tcp"
         if (query["encryption"]?.let { it != "none" } == true) return null
-        if (query["allowInsecure"] == "1" || query["insecure"] == "1") return null
+        // VLESS itself provides no encryption. Do not advertise plaintext
+        // VLESS as a protected VPN or accept an insecure TLS override.
+        if (security == "none" || requestsInsecureTls(query)) return null
         out.addProperty("uuid", uuid)
         val flow = query["flow"].orEmpty()
         if (flow.isNotEmpty()) {
@@ -205,7 +207,7 @@ internal object SingBoxConfigCompiler {
         val password = uri.userInfo ?: return null
         if (password.isBlank()) return null
         val query = args(uri.rawQuery)
-        if (query["allowInsecure"] == "1" || query["insecure"] == "1") return null
+        if (requestsInsecureTls(query)) return null
         out.addProperty("password", password)
         val security = query["security"] ?: "tls"
         val tls = tls(security, query["sni"] ?: uri.host,
@@ -230,7 +232,13 @@ internal object SingBoxConfigCompiler {
         val aid = obj.get("aid")?.asString?.toIntOrNull() ?: 0
         if (aid !in 0..1) return null
         out.addProperty("alter_id", aid)
-        val tlsMode = if (obj.get("tls")?.asString.equals("tls", true)) "tls" else "none"
+        val tlsField = obj.get("tls")?.asString?.lowercase().orEmpty()
+        // Unknown TLS settings must never silently become a cleartext transport.
+        if (tlsField !in setOf("", "none", "tls")) return null
+        if (listOf("allowInsecure", "insecure", "skip-cert-verify").any { key ->
+                obj.get(key)?.asString?.trim()?.lowercase() in INSECURE_VALUES
+            }) return null
+        val tlsMode = if (tlsField == "tls") "tls" else "none"
         if (tlsMode == "tls") {
             val tls = tls(tlsMode, obj.get("sni")?.asString?.takeIf(String::isNotEmpty)
                 ?: nodeHost(out), obj.get("fp")?.asString, null, null, obj.get("alpn")?.asString)
@@ -274,7 +282,7 @@ internal object SingBoxConfigCompiler {
         val password = uri.userInfo ?: return null
         if (password.isEmpty()) return null
         val query = args(uri.rawQuery)
-        if (query["insecure"] == "1" || query["allowInsecure"] == "1") return null
+        if (requestsInsecureTls(query)) return null
         out.addProperty("password", password)
         val tls = tls("tls", query["sni"] ?: uri.host, null, null, null,
             query["alpn"] ?: "h3") ?: return null
@@ -297,7 +305,7 @@ internal object SingBoxConfigCompiler {
         val password = info.substringAfter(':', "")
         if (runCatching { UUID.fromString(uuid) }.isFailure || password.isEmpty()) return null
         val query = args(uri.rawQuery)
-        if (query["insecure"] == "1" || query["allowInsecure"] == "1") return null
+        if (requestsInsecureTls(query)) return null
         val congestion = query["congestion_control"] ?: query["congestionControl"] ?: "cubic"
         if (congestion !in setOf("cubic", "new_reno", "bbr")) return null
         out.addProperty("uuid", uuid)
@@ -372,6 +380,13 @@ internal object SingBoxConfigCompiler {
         }
         return tls
     }
+
+    private val INSECURE_VALUES = setOf("1", "true", "yes", "on")
+
+    private fun requestsInsecureTls(query: Map<String, String>): Boolean =
+        listOf("allowInsecure", "insecure", "skip-cert-verify", "skipCertVerify").any { key ->
+            query[key]?.trim()?.lowercase() in INSECURE_VALUES
+        }
 
     private fun nodeHost(out: JsonObject) = out.get("server")?.asString.orEmpty()
 
