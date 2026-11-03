@@ -25,6 +25,12 @@
             android:summary="%s"
             android:defaultValue="system" />
 
+        <Preference
+            android:key="nlic_subscription_manager"
+            android:icon="@drawable/ic_vpn_key"
+            android:title="@string/nlic_subscriptions_title"
+            android:summary="@string/nlic_subscriptions_phase_desc" />
+
         <ListPreference
             android:key="byedpi_mode"
             android:icon="@drawable/ic_vpn_key"

@@ -26,6 +26,7 @@ import androidx.preference.*
 import io.github.romanvht.byedpi.R
 import io.github.romanvht.byedpi.BuildConfig
 import io.github.romanvht.byedpi.activities.TestActivity
+import io.github.romanvht.byedpi.activities.SubscriptionLabActivity
 import io.github.romanvht.byedpi.data.Mode
 import io.github.romanvht.byedpi.data.PrivateDnsState
 import io.github.romanvht.byedpi.utility.*
@@ -71,6 +72,12 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
                         prefs.edit { putString(key, prefs.getCmdArgs()) }
                     }
                 }
+                true
+            }
+
+        findPreferenceNotNull<Preference>("nlic_subscription_manager")
+            .setOnPreferenceClickListener {
+                startActivity(Intent(requireContext(), SubscriptionLabActivity::class.java))
                 true
             }
 

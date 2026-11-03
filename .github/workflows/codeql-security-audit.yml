@@ -9,6 +9,7 @@ on:
       - fix/nlic-physical-diagnostics-20261103
       - fix/nlic-diagnostics-default-route-20261103
       - fix/nlic-carrier-connectivity-gate-20261103
+      - feature/nlic-subscription-core-20261103
   pull_request:
     branches:
       - master
