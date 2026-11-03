@@ -104,7 +104,7 @@ class SingBoxConfigCompilerTest {
             "vless://$uuid@one.example:443?security=tls&sni=one.example",
             "trojan://secret@two.example:443?security=tls&sni=two.example",
             "hysteria2://key@three.example:443?sni=three.example",
-        ).mapNotNull(SubscriptionImport::parseNode)
+        ).mapNotNull { SubscriptionImport.parseNode(it) }
         val r = SingBoxConfigCompiler.compileAuto(nodes)
         assertTrue(r is SingBoxConfigCompiler.Result.Compiled)
         val json = JsonParser.parseString((r as SingBoxConfigCompiler.Result.Compiled).config)
@@ -122,7 +122,7 @@ class SingBoxConfigCompilerTest {
             "hysteria2://key@one.example:443?sni=one.example",
             "vless://$uuid@two.example:443?security=tls&sni=two.example",
             "trojan://pass@three.example:443?security=tls&sni=three.example",
-        ).mapNotNull(SubscriptionImport::parseNode)
+        ).mapNotNull { SubscriptionImport.parseNode(it) }
         val r = SingBoxConfigCompiler.compileAuto(nodes, SingBoxConfigCompiler.Bay.ON, 12080)
             as SingBoxConfigCompiler.Result.Compiled
         val json = JsonParser.parseString(r.config).asJsonObject
