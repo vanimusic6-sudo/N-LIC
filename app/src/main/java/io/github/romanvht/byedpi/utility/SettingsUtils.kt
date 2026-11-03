@@ -91,10 +91,27 @@ object SettingsUtils {
         }
     }
 
+    private const val MAX_IMPORT_BYTES = 2 * 1024 * 1024
+
+    /** Reject oversized or hostile settings imports before decoding JSON in memory. */
+    private fun readLimitedSettings(stream: java.io.InputStream): String {
+        val out = java.io.ByteArrayOutputStream()
+        val chunk = ByteArray(8192)
+        var total = 0
+        while (true) {
+            val read = stream.read(chunk)
+            if (read < 0) break
+            total += read
+            require(total <= MAX_IMPORT_BYTES) { "N-LIC settings import too large" }
+            out.write(chunk, 0, read)
+        }
+        return out.toString(Charsets.UTF_8.name())
+    }
+
     fun readSettings(context: Context, uri: Uri): AppSettings? {
         return try {
             val json = context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                inputStream.bufferedReader().readText()
+                readLimitedSettings(inputStream)
             } ?: return null
 
             parseSettings(context, json)
@@ -106,7 +123,7 @@ object SettingsUtils {
 
     fun readSettings(context: Context, file: File): AppSettings? {
         return try {
-            parseSettings(context, file.readText())
+            file.inputStream().use { stream -> parseSettings(context, readLimitedSettings(stream)) }
         } catch (e: Exception) {
             importFailed(context, e)
             null
@@ -210,6 +227,11 @@ object SettingsUtils {
                                 }
                             }
                         }
+                    // Imported files must never silently enable network
+                    // interception at app launch or reboot. Users can opt in
+                    // again from the normal application settings UI.
+                    putBoolean("autostart", false)
+                    putBoolean("auto_connect", false)
                 }
             }
 
