@@ -264,7 +264,6 @@ class SubscriptionLabFragment : PreferenceFragmentCompat() {
                 }.toTypedArray()
                 AlertDialog.Builder(requireContext())
                     .setTitle(R.string.nlic_auto_results)
-                    .setMessage(R.string.nlic_auto_tcp_only)
                     .setItems(labels) { _, index ->
                         val result = checks[index]
                         if (result.successes == result.attempts && result.attempts > 0) {

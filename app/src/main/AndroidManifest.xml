@@ -69,6 +69,11 @@
             android:exported="false" />
 
         <activity
+            android:name=".activities.SubscriptionLabActivity"
+            android:label="@string/nlic_subscriptions_title"
+            android:exported="false" />
+
+        <activity
             android:name=".activities.TestActivity"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:label="@string/title_test"

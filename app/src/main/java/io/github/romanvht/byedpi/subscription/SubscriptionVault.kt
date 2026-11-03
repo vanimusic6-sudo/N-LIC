@@ -100,6 +100,16 @@ internal object SubscriptionVault {
         write(context, old.copy(groups = existing + group))
     }
 
+    @Synchronized fun clear(context: Context) {
+        // Deleting both ciphertext and Keystore key makes previous local
+        // subscription secrets unavailable even if file blocks survive.
+        File(context.filesDir, FILE).delete()
+        if (available()) {
+            val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            if (store.containsAlias(KEY_ALIAS)) store.deleteEntry(KEY_ALIAS)
+        }
+    }
+
     fun select(context: Context, nodeId: String) {
         val data = read(context)
         require(data.allNodes.any { it.id == nodeId }) { "Unknown node" }
