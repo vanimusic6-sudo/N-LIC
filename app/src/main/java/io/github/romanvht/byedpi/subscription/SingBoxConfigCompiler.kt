@@ -29,7 +29,10 @@ internal object SingBoxConfigCompiler {
         data class Unsupported(val reason: String) : Result()
     }
 
-    fun compile(node: SubscriptionNode, bay: Bay = Bay.OFF): Result {
+    fun compile(node: SubscriptionNode, bay: Bay = Bay.OFF, bayPort: Int = 1080): Result {
+        if (bayPort !in 1..65535 || bayPort == PROXY_PORT) {
+            return Result.Unsupported("Invalid or conflicting LIC-Bay port")
+        }
         return try {
             val outbound = decodeOutbound(node) ?: return Result.Unsupported(
                 "This configuration or transport is not supported by LIC-Core yet"
@@ -75,7 +78,7 @@ internal object SingBoxConfigCompiler {
                     addProperty("type", "socks")
                     addProperty("tag", BAY_TAG)
                     addProperty("server", "127.0.0.1")
-                    addProperty("server_port", 1080)
+                    addProperty("server_port", bayPort)
                     addProperty("version", "5")
                 })
             }
