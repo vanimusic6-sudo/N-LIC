@@ -43,7 +43,7 @@ fun createConnectionNotification(
     mode: Mode,
 ): Notification =
     NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(R.drawable.ic_notification)
+        .setSmallIcon(R.drawable.nlic_notification)
         .setSilent(true)
         .setContentTitle(context.getString(title))
         .setContentText(context.getString(content))
@@ -85,7 +85,7 @@ fun createPauseNotification(
     mode: Mode,
 ): Notification =
     NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(R.drawable.ic_notification)
+        .setSmallIcon(R.drawable.nlic_notification)
         .setSilent(true)
         .setContentTitle(context.getString(title))
         .setContentText(context.getString(content))

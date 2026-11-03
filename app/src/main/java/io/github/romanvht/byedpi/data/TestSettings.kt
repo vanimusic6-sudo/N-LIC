@@ -9,4 +9,5 @@ data class TestSettings(
     val requestsCount: Int,
     val requestTimeout: Long,
     val requestLimit: Int,
+    val mediaTestUrl: String? = null,
 )

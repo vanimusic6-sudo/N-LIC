@@ -271,17 +271,35 @@ class TestService : Service() {
                         "::", "[::]" -> "::1"
                         else -> configuration.host
                     }
+                    // Opt-in: a real 256 KiB media range, not a tiny homepage.
+                    // URL is never copied into results or logs.
+                    settings.mediaTestUrl?.let { mediaUrl ->
+                        val mediaResult = StreamProbeUtils(host, configuration.port)
+                            .test(mediaUrl, settings.requestTimeout)
+                        withContext(Dispatchers.Main.immediate) {
+                            strategy.streamProbe = mediaResult
+                            publish(strategies)
+                        }
+                    }
                     SiteCheckUtils(host, configuration.port).checkSitesAsync(
                         sites = settings.sites,
                         requestsCount = settings.requestsCount,
                         requestTimeout = settings.requestTimeout,
                         concurrentRequests = settings.requestLimit,
                         fullLog = true,
-                        onSiteChecked = { site, successCount, countRequests ->
+                        onSiteDiagnostics = { site, summary ->
                             withContext(Dispatchers.Main.immediate) {
-                                strategy.currentProgress += countRequests
-                                strategy.successCount += successCount
-                                strategy.siteResults.add(SiteResult(site, successCount, countRequests))
+                                strategy.currentProgress += settings.requestsCount
+                                strategy.successCount += summary.successCount
+                                strategy.siteResults.add(
+                                    SiteResult(
+                                        site = site,
+                                        successCount = summary.successCount,
+                                        totalCount = settings.requestsCount,
+                                        verdictCounts = summary.verdictCounts.mapKeys { it.key.name },
+                                        medianSuccessLatencyMs = summary.medianSuccessLatencyMs,
+                                    )
+                                )
                                 publish(strategies)
                             }
                         }
@@ -318,17 +336,18 @@ class TestService : Service() {
     private suspend fun stopEngine() = withContext(NonCancellable) {
         engineMutex.withLock {
             val current = engine ?: return@withLock
-            var stopFailed = false
-            while (true) {
+            try {
+                // A broken native worker must not freeze all strategy tests forever.
+                withTimeout(8_000L) { current.stop() }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to stop proxy test engine; forcing shutdown", e)
                 try {
-                    current.stop()
-                    engine = null
-                    break
-                } catch (e: Exception) {
-                    if (!stopFailed) Log.e(TAG, "Failed to stop proxy test engine", e)
-                    stopFailed = true
-                    delay(500)
+                    current.abort()
+                } catch (abortError: Exception) {
+                    Log.e(TAG, "Forced native engine shutdown failed", abortError)
                 }
+            } finally {
+                engine = null
             }
         }
     }
@@ -339,16 +358,29 @@ class TestService : Service() {
         val sniValue = prefs.getStringNotNull("byedpi_proxytest_sni", "google.com")
         val content = if (userCommands) prefs.getStringNotNull("byedpi_proxytest_commands", "")
         else assets.open("proxytest_strategies.list").bufferedReader().use { it.readText() }
-        val commands = content.replace("{sni}", "\"${sniValue}\"").lines().map { it.trim() }.filter { it.isNotEmpty() }
+        // Escape quote delimiters before substituting imported SNI into strategy templates.
+        val safeSni = sniValue.trim().take(253).takeIf {
+            it.matches(Regex("[A-Za-z0-9.-]{1,253}")) && !it.startsWith(".") && !it.endsWith(".")
+        } ?: "www.iana.org"
+        val escapedSni = safeSni.replace("\\", "\\\\").replace("\"", "\\\"")
+        val commands = content.replace("{sni}", "\"${escapedSni}\"").lines().map { it.trim() }.filter { it.isNotEmpty() }.take(200)
         val host = prefs.getStringNotNull("byedpi_proxy_ip", "127.0.0.1")
         val port = prefs.getIntStringNotNull("byedpi_proxy_port", 1080)
-        val delaySec = prefs.getIntStringNotNull("byedpi_proxytest_delay", 1).coerceAtLeast(0)
-        val requestsCount = prefs.getIntStringNotNull("byedpi_proxytest_requests", 1).coerceAtLeast(1)
-        val requestTimeout = prefs.getLongStringNotNull("byedpi_proxytest_timeout", 5).coerceAtLeast(1)
-        val requestLimit = prefs.getIntStringNotNull("byedpi_proxytest_limit", 20).coerceAtLeast(1)
+        val delaySec = prefs.getIntStringNotNull("byedpi_proxytest_delay", 1).coerceIn(0, 10)
+        val requestsCount = prefs.getIntStringNotNull("byedpi_proxytest_requests", 2).coerceIn(1, 20)
+        val requestTimeout = prefs.getLongStringNotNull("byedpi_proxytest_timeout", 5).coerceIn(1L, 15L)
+        val requestLimit = prefs.getIntStringNotNull("byedpi_proxytest_limit", 6).coerceIn(1, 50)
+        val streamEnabled = prefs.getBoolean("byedpi_stream_probe_enable", false)
+        val streamUrl = if (streamEnabled) prefs.getStringNotNull("byedpi_stream_probe_url", "").trim()
+            .takeIf { it.isNotEmpty() } else null
+        // Signed googlevideo URLs are bearer-token URLs. Never retain them once
+        // transferred into the short-lived test session.
+        if (streamUrl != null) prefs.edit(commit = true) { remove("byedpi_stream_probe_url") }
         DomainListUtils.syncLists(this)
-        return TestSettings(DomainListUtils.getActiveDomains(this).toList(), commands, host, port,
-            delaySec, requestsCount, requestTimeout, requestLimit)
+        return TestSettings(
+            DomainListUtils.getActiveDomains(this).toList(), commands, host, port,
+            delaySec, requestsCount, requestTimeout, requestLimit, streamUrl
+        )
     }
 
     private fun resetStrategyResult(strategy: StrategyResult, settings: TestSettings) {

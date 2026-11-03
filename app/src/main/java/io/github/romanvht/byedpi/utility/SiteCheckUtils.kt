@@ -16,10 +16,19 @@ import java.net.Proxy
 import java.net.URL
 import kotlin.coroutines.coroutineContext
 
-class SiteCheckUtils(
+/**
+ * Small, bounded reachability probes. These are *not* proofs of evasion:
+ * a legitimate HTTP 200 may still be a captive portal or an unknown block page.
+ */
+internal class SiteCheckUtils(
     private val proxyIp: String,
     private val proxyPort: Int
 ) {
+    companion object {
+        private const val RESPONSE_SAMPLE_BYTES = 4096
+        private const val MAX_TIMEOUT_SECONDS = 15L
+        private const val MAX_ATTEMPTS = 20
+    }
 
     suspend fun checkSitesAsync(
         sites: List<String>,
@@ -27,19 +36,20 @@ class SiteCheckUtils(
         requestTimeout: Long,
         concurrentRequests: Int = 20,
         fullLog: Boolean,
-        onSiteChecked: (suspend (String, Int, Int) -> Unit)? = null
+        onSiteChecked: (suspend (String, Int, Int) -> Unit)? = null,
+        onSiteDiagnostics: (suspend (String, ProbeSummary) -> Unit)? = null,
     ): List<Pair<String, Int>> {
-        val semaphore = Semaphore(concurrentRequests)
+        val semaphore = Semaphore(concurrentRequests.coerceIn(1, 50))
+        val count = requestsCount.coerceIn(1, MAX_ATTEMPTS)
         return withContext(Dispatchers.IO) {
             sites.map { site ->
                 async {
                     semaphore.withPermit {
-                        val successCount = checkSiteAccess(site, requestsCount, requestTimeout)
+                        val summary = checkSiteAccess(site, count, requestTimeout)
                         coroutineContext.ensureActive()
-                        if (fullLog) {
-                            onSiteChecked?.invoke(site, successCount, requestsCount)
-                        }
-                        site to successCount
+                        if (fullLog) onSiteChecked?.invoke(site, summary.successCount, count)
+                        onSiteDiagnostics?.invoke(site, summary)
+                        site to summary.successCount
                     }
                 }
             }.awaitAll()
@@ -49,79 +59,75 @@ class SiteCheckUtils(
     private suspend fun checkSiteAccess(
         site: String,
         requestsCount: Int,
-        timeout: Long
-    ): Int = withContext(Dispatchers.IO) {
-        var responseCount = 0
-
-        val formattedUrl = if (site.startsWith("http://") || site.startsWith("https://")) site
-        else "https://$site"
-
+        timeout: Long,
+    ): ProbeSummary = withContext(Dispatchers.IO) {
+        val formattedUrl = if (site.startsWith("http://", true) || site.startsWith("https://", true)) {
+            site
+        } else {
+            "https://$site"
+        }
         val url = try {
-            URL(formattedUrl)
+            URL(formattedUrl).also {
+                require(it.protocol == "http" || it.protocol == "https")
+                require(it.host.isNotBlank())
+            }
         } catch (_: Exception) {
-            Log.e("SiteChecker", "Invalid URL: $formattedUrl")
-            return@withContext 0
+            Log.w("SiteChecker", "Invalid proxy test URL (target omitted)")
+            return@withContext ProbeDiagnostics.summary(
+                List(requestsCount) { ProbeVerdict.UNKNOWN_FAILURE }, emptyList()
+            )
         }
 
         val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress(proxyIp, proxyPort))
+        val timeoutMs = (timeout.coerceIn(1L, MAX_TIMEOUT_SECONDS) * 1000L).toInt()
+        val verdicts = ArrayList<ProbeVerdict>(requestsCount)
+        val successesMs = ArrayList<Long>(requestsCount)
 
-        repeat(requestsCount) { attempt ->
+        repeat(requestsCount) {
             coroutineContext.ensureActive()
-            Log.i("SiteChecker", "Attempt ${attempt + 1}/$requestsCount for $site")
-
             var connection: HttpURLConnection? = null
+            val startNanos = System.nanoTime()
             try {
                 connection = url.openConnection(proxy) as HttpURLConnection
-                connection.connectTimeout = (timeout * 1000).toInt()
-                connection.readTimeout = (timeout * 1000).toInt()
-                connection.instanceFollowRedirects = true
+                connection.connectTimeout = timeoutMs
+                connection.readTimeout = timeoutMs
+                // A redirect to a block page or captive portal is NOT success
+                // at the original destination. Never silently follow it.
+                connection.instanceFollowRedirects = false
+                connection.useCaches = false
                 connection.setRequestProperty("Connection", "close")
 
-                val responseCode = connection.responseCode
-                val declaredLength = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                    connection.contentLengthLong
-                } else {
-                    connection.contentLength.toLong()
-                }
-
-                var actualLength = 0L
-                try {
-                    val inputStream = if (responseCode in 200..299) connection.inputStream else connection.errorStream
-                    if (inputStream != null) {
-                        val buffer = ByteArray(8192)
-                        var bytesRead: Int
-
-                        val limit = if (declaredLength > 0) declaredLength else 1024L * 1024
-
-                        while (actualLength < limit) {
-                            coroutineContext.ensureActive()
-                            val remaining = limit - actualLength
-                            val toRead = if (remaining > buffer.size) buffer.size else remaining.toInt()
-                            bytesRead = inputStream.read(buffer, 0, toRead)
-                            if (bytesRead == -1) break
-                            actualLength += bytesRead
+                val status = connection.responseCode
+                var sample = byteArrayOf()
+                var readFailed = false
+                if (status in 200..299 && status != 204 && status != 205) {
+                    try {
+                        connection.inputStream.use { input ->
+                            val buffer = ByteArray(RESPONSE_SAMPLE_BYTES)
+                            val bytes = input.read(buffer)
+                            if (bytes > 0) sample = buffer.copyOf(bytes)
                         }
+                    } catch (_: IOException) {
+                        readFailed = true
                     }
-                } catch (_: IOException) {
-                    // Stream reading failed
                 }
-
-                if (declaredLength <= 0L || actualLength >= declaredLength) {
-                    Log.i("SiteChecker", "Response for $site: $responseCode, Declared: $declaredLength, Actual: $actualLength")
-                    responseCount++
-                } else {
-                    Log.w("SiteChecker", "Block detected for $site, Declared: $declaredLength, Actual: $actualLength")
+                coroutineContext.ensureActive()
+                val verdict = ProbeDiagnostics.classifyResponse(status, sample, readFailed)
+                verdicts.add(verdict)
+                if (verdict == ProbeVerdict.REACHABLE) {
+                    successesMs.add((System.nanoTime() - startNanos) / 1_000_000L)
                 }
-
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.e("SiteChecker", "Error accessing $site: ${e.message}")
+                verdicts.add(ProbeDiagnostics.classifyException(e))
             } finally {
                 connection?.disconnect()
             }
         }
-
-        responseCount
+        val summary = ProbeDiagnostics.summary(verdicts, successesMs)
+        // Diagnostic counts only; no URL path, query, body or proxy arguments.
+        Log.d("SiteChecker", "Probe ${url.host}: ${summary.verdictCounts}")
+        summary
     }
 }

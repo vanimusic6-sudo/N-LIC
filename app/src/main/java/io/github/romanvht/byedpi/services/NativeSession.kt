@@ -219,7 +219,9 @@ internal class NativeSession(
                         appendLine("  udp: udp")
                     }
                     tunnelThread = runNative("HEV") { TProxyService.startTunnel(tunnelConfig, fd.fd) }
+                    // Do not publish RUNNING when the native tunnel exited immediately.
                     delay(100)
+                    check(tunnelThread?.isAlive == true) { "HEV tunnel exited during startup" }
                 }
                 if (state != EngineProtocol.STATE_STOPPING) {
                     state = EngineProtocol.STATE_RUNNING

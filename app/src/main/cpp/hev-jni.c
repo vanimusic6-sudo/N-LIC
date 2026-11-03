@@ -21,6 +21,11 @@ static void load_tunnel(void) {
 
 JNIEXPORT jint JNICALL
 Java_io_github_romanvht_byedpi_core_TProxyService_startTunnel(JNIEnv *env, __attribute__((unused)) jobject thiz, jstring config, jint fd) {
+    // A malformed FD or extremely large YAML must not reach the native parser.
+    if (!config || fd < 0) return -1;
+    jsize config_len_jni = (*env)->GetStringUTFLength(env, config);
+    if (config_len_jni < 1 || config_len_jni > 512 * 1024) return -1;
+
     pthread_once(&tunnel_once, load_tunnel);
     if (!tunnel_main || !tunnel_quit) {
         LOG(LOG_S, "tunnel entry points unavailable");
@@ -31,7 +36,7 @@ Java_io_github_romanvht_byedpi_core_TProxyService_startTunnel(JNIEnv *env, __att
     if (!config_str) {
         return -1;
     }
-    unsigned int config_len = (unsigned int) (*env)->GetStringUTFLength(env, config);
+    unsigned int config_len = (unsigned int)config_len_jni;
     int result = tunnel_main((const unsigned char *) config_str, config_len, fd);
     (*env)->ReleaseStringUTFChars(env, config, config_str);
     return result;

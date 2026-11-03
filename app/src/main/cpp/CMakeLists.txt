@@ -8,9 +8,9 @@ list(REMOVE_ITEM BYE_DPI_SRC ${CMAKE_CURRENT_SOURCE_DIR}/byedpi/win_service.c)
 add_library(byedpi SHARED ${BYE_DPI_SRC} byedpi-jni.c hev-jni.c)
 target_include_directories(byedpi PRIVATE byedpi)
 
-target_compile_options(byedpi PRIVATE -std=c99 -O2 -Wall -Wno-unused -Wextra -Wno-unused-parameter -pedantic)
+target_compile_options(byedpi PRIVATE -std=c99 -O2 -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wall -Wno-unused -Wextra -Wno-unused-parameter -pedantic)
 target_compile_definitions(byedpi PRIVATE ANDROID_APP)
 
 target_link_libraries(byedpi PRIVATE android log dl)
-target_link_options(byedpi PRIVATE "-Wl,--wrap=daemon")
+target_link_options(byedpi PRIVATE "-Wl,--wrap=daemon" "-Wl,-z,relro" "-Wl,-z,now")
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,max-page-size=16384")

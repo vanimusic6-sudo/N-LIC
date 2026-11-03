@@ -168,6 +168,7 @@ class TestActivity : BaseActivity() {
                     strategy.totalRequests = value.totalRequests
                     strategy.currentProgress = value.currentProgress
                     strategy.isCompleted = value.isCompleted
+                    strategy.streamProbe = value.streamProbe
                     strategy.siteResults.clear()
                     strategy.siteResults.addAll(value.siteResults)
                     if (!reorder) strategyAdapter.updateStrategy(strategy)
@@ -219,6 +220,9 @@ class TestActivity : BaseActivity() {
                 sb.appendLine("${site.site} - ${site.successCount}/${site.totalCount}")
             }
 
+            strategy.streamProbe?.let { stream ->
+                sb.appendLine("Media sample: ${stream.outcome}; bytes=${stream.bytesRead}; bytes_per_sec=${stream.transferBytesPerSecond ?: 0}")
+            }
             sb.appendLine("\n${strategy.successCount}/${strategy.totalRequests}")
             sb.appendLine("-------------")
         }

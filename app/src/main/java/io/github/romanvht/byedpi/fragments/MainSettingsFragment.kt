@@ -57,11 +57,6 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
                 true
             }
 
-        findPreferenceNotNull<Preference>("storage_access")
-            .setOnPreferenceClickListener {
-                PermissionUtils.requestStorageAccess(this)
-                true
-            }
 
         findPreferenceNotNull<Preference>("donate")
             .setOnPreferenceClickListener {
@@ -116,7 +111,6 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
         val applistType = findPreferenceNotNull<ListPreference>("applist_type")
         val selectedApps = findPreferenceNotNull<Preference>("selected_apps")
         val batteryOptimization = findPreferenceNotNull<Preference>("battery_optimization")
-        val storageAccess = findPreferenceNotNull<Preference>("storage_access")
 
         val uiSettings = findPreferenceNotNull<Preference>("byedpi_ui_settings")
         val cmdSettings = findPreferenceNotNull<Preference>("byedpi_cmd_settings")
@@ -174,11 +168,6 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
             batteryOptimization.summary = getString(R.string.battery_optimization_summary)
         }
 
-        if (PermissionUtils.hasStorageAccess(requireContext())) {
-            storageAccess.summary = getString(R.string.storage_access_allowed_summary)
-        } else {
-            storageAccess.summary = getString(R.string.storage_access_summary)
-        }
     }
 
     private val dnsPresets: List<Pair<String, String>>

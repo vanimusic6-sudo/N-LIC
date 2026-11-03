@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="byedpi_docs">https://github.com/hufrea/byedpi/blob/main/README.md</string>
-    <string name="app_name">ByeByeDPI</string>
+    <string name="app_name">N-LIC</string>
     <string name="cmd_documentation">Tài liệu</string>
     <string name="toggle_connect">Bật/Tắt</string>
     <string name="vpn_connect">Kết nối</string>
@@ -56,13 +56,13 @@
     <string name="byedpi_tlsrec_enabled_setting">Chia TLS record</string>
     <string name="byedpi_tlsrec_position_setting">Vị trí chia TLS record</string>
     <string name="byedpi_tlsrec_at_sni_setting">Chia TLS record tại SNI</string>
-    <string name="version">ByeByeDPI</string>
+    <string name="version">N-LIC</string>
     <string name="source_code_link">Mã nguồn</string>
     <string name="byedpi_readme_link">Ý nghĩa của các tham số?</string>
     <string name="failed_to_start">Không thể khởi động %1$s</string>
     <string name="vpn_channel_name">VPN</string>
     <string name="proxy_channel_name">Proxy</string>
-    <string name="notification_title">ByeByeDPI</string>
+    <string name="notification_title">N-LIC</string>
     <string name="vpn_notification_content">VPN đang chạy</string>
     <string name="proxy_notification_content">Proxy đang chạy</string>
     <string name="general_category">Chung</string>
@@ -95,7 +95,7 @@
     <string name="automation">Tự động hóa</string>
     <string name="autostart_settings">Tự động khởi động dịch vụ khi bật thiết bị</string>
     <string name="autohide_settings">Tự động ẩn ứng dụng sau khi tự khởi động</string>
-    <string name="autoconnect_settings">Tự động kết nối khi ByeByeDPI khởi động</string>
+    <string name="autoconnect_settings">Tự động kết nối khi N-LIC khởi động</string>
     <string name="applist_setting">Bộ lọc ứng dụng</string>
     <string name="apps_select">Chọn ứng dụng</string>
     <string name="search_apps">Tìm kiếm ứng dụng</string>
@@ -243,4 +243,11 @@
     <string name="file_picker_unavailable">Thiết bị không có trình chọn tệp hệ thống. Hãy cấp quyền truy cập tệp cho ứng dụng để tiếp tục.</string>
     <string name="grant_access">Cấp quyền</string>
     <string name="storage_access_not_granted">Chưa cấp quyền truy cập tệp</string>
+    <string name="nlic_shortcut_confirm_title">Xác nhận thao tác N-LIC</string>
+    <string name="nlic_shortcut_confirm_message">Thực hiện thao tác từ lối tắt? Cần xác nhận để điều khiển kết nối mạng.</string>
+    <string name="nlic_upstream_credits">ByeByeDPI gốc · romanvht, hufrea, heiher</string>
+    <string name="stream_probe_enable">Kiểm tra luồng video (256 KiB)</string>
+    <string name="stream_probe_enable_desc">Kiểm tra tải xuống qua SOCKS5 (tùy chọn), phát hiện tốc độ thấp hoặc luồng bị ngắt sau một số kilobyte đầu tiên.</string>
+    <string name="stream_probe_url">Liên kết HTTPS của video để kiểm tra</string>
+    <string name="stream_probe_url_desc">Dán liên kết googlevideo.com/videoplayback còn hiệu lực hoặc https://speed.cloudflare.com/__down?bytes=262144. URL được xóa khi bắt đầu kiểm tra và không được lưu trong kết quả.</string>
 </resources>
