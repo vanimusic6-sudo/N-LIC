@@ -2,7 +2,7 @@ name: N-LIC UI runtime smoke (Android emulator)
 
 on:
   push:
-    branches: [fix/nlic-core-bay-ui-security-20261103, feature/nlic-2-adaptive-vpn-ui-import-20261104]
+    branches: [fix/nlic-core-bay-ui-security-20261103, feature/nlic-2-adaptive-vpn-ui-import-20261104, fix/nlic-native-core-protocol-compat-20261104]
     paths:
       - app/**
       - .github/workflows/nlic-ui-emulator-smoke.yml
@@ -52,7 +52,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1" "ndk;27.2.12479018"
+          # The Android SDK mirror occasionally returns truncated ZIPs.
+          # Split large NDK download from smaller components and retry.
+          for attempt in 1 2 3; do
+            if sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1"; then break; fi
+            if [[ "$attempt" == 3 ]]; then exit 1; fi
+            rm -rf "${ANDROID_HOME}/.temp" || true
+            sleep 8
+          done
+          for attempt in 1 2 3; do
+            if sdkmanager --install "ndk;27.2.12479018"; then break; fi
+            if [[ "$attempt" == 3 ]]; then exit 1; fi
+            rm -rf "${ANDROID_HOME}/.temp" || true
+            sleep 12
+          done
           chmod +x ./gradlew
 
       - name: Download verified sing-box native AAR for x86_64 emulator
