@@ -242,7 +242,10 @@ internal object VPNFileImport {
             address.contains(':') -> mask in 0..128 &&
                 address.all { it in "0123456789abcdefABCDEF:." }
             else -> mask in 0..32 && address.split('.').size == 4 &&
-                address.split('.').all { it.toIntOrNull() in 0..255 }
+                address.split('.').all {
+                    val byte = it.toIntOrNull()
+                    byte != null && byte in 0..255 && it.isNotEmpty()
+                }
         }
     }
 
