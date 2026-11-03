@@ -258,7 +258,7 @@
     <string name="nlic_mobile_dns64_auto">Mobil ağ: DNS64/NAT64</string>
     <string name="nlic_mobile_dns64_auto_desc">Özel DNS seçilmediyse IPv6/NAT64 mobil ağlarda operatör DNS çözümleyicisini kullanır. Wi-Fi ve özel DNS değişmez. Kapatılabilir.</string>
     <string name="nlic_network_health">Mobil bağlantı tanılaması</string>
-    <string name="nlic_network_health_desc">YouTube ve Telegram TCP testleri, 16/256 KiB indirme karşılaştırması. İstekler yerel VPN dışından doğrudan operatöre gider. Yalnızca düğmeye basıldığında.</string>
+    <string name="nlic_network_health_desc">YouTube ve Telegram TCP testleri ve 16/256 KiB indirmeler. Android fiziksel ağı gizlerse sistemin varsayılan yolu kullanılır ve bu açıkça belirtilir. Yalnızca isteğinizle.</string>
     <string name="nlic_network_health_running">Mevcut fiziksel ağ, TCP bağlantısı ve indirme tamamlanması kontrol ediliyor...</string>
     <string name="nlic_restart_on_network_change">Wi-Fi ↔ mobil ağ değiştiğinde yeniden bağlan</string>
     <string name="nlic_restart_on_network_change_desc">İsteğe bağlı: fiziksel ağ değişince doğru ayarları uygulamak için N-LIC VPN bağlantısını yeniden başlatır. Mevcut bağlantılar kesilir. Proxy modunu etkilemez.</string>

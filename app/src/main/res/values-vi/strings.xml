@@ -259,7 +259,7 @@
     <string name="nlic_mobile_dns64_auto">Mạng di động: DNS64/NAT64</string>
     <string name="nlic_mobile_dns64_auto_desc">Trên mạng di động IPv6/NAT64, sử dụng DNS của nhà mạng nếu bạn chưa chọn DNS riêng để giữ khả năng chuyển đổi DNS64. Wi-Fi và DNS tùy chỉnh không thay đổi. Có thể tắt.</string>
     <string name="nlic_network_health">Chẩn đoán kết nối di động</string>
-    <string name="nlic_network_health_desc">Kiểm tra TCP tới YouTube và Telegram, so sánh tải xuống 16/256 KiB. Yêu cầu đi trực tiếp qua nhà mạng, ngoài VPN cục bộ. Chỉ chạy khi bạn nhấn.</string>
+    <string name="nlic_network_health_desc">Kiểm tra TCP tới YouTube và Telegram và tải 16/256 KiB. Nếu Android ẩn mạng vật lý, bài kiểm tra sử dụng tuyến mặc định hệ thống và ghi rõ điều này. Chỉ chạy khi bạn nhấn.</string>
     <string name="nlic_network_health_running">Đang kiểm tra mạng vật lý, kết nối TCP và tải xuống...</string>
     <string name="nlic_restart_on_network_change">Kết nối lại khi chuyển Wi-Fi ↔ dữ liệu di động</string>
     <string name="nlic_restart_on_network_change_desc">Tùy chọn: khởi động lại VPN N-LIC khi mạng vật lý thay đổi để áp dụng cài đặt phù hợp. Các kết nối hiện tại sẽ bị ngắt. Không ảnh hưởng chế độ Proxy.</string>
