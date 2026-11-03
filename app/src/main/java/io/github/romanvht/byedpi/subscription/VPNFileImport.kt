@@ -7,7 +7,6 @@ import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.security.MessageDigest
-import java.util.Base64
 
 /**
  * Deliberately narrow, *data-only* import. A file can never replace
@@ -103,7 +102,8 @@ internal object VPNFileImport {
         }
     }
 
-    fun parseSecureJson(node: SubscriptionNode): JsonObject? = try {
+    fun parseSecureJson(node: SubscriptionNode): JsonObject? {
+        return try {
         if (node.protocol !in setOf("VLESS", "VMESS", "TROJAN",
                 "SHADOWSOCKS", "HYSTERIA2", "TUIC", "ANYTLS")) return null
         val raw = URLDecoder.decode(node.originalUri.substringAfter("nlicjson://"), "UTF-8")
@@ -114,7 +114,8 @@ internal object VPNFileImport {
             obj.get("server_port")?.asInt != node.port ||
             recursiveInsecure(obj)) return null
         obj
-    } catch (_: Exception) { null }
+        } catch (_: Exception) { null }
+    }
 
     private fun importWireGuard(name: String, data: String): SubscriptionNode? {
         val profile = wireguard(data) ?: return null
@@ -131,7 +132,8 @@ internal object VPNFileImport {
      * local hooks, duplicate keys, external include files and non-full-tunnel
      * AllowedIPs rather than silently routing plaintext outside the tunnel.
      */
-    fun wireguard(text: String): WireGuardProfile? = try {
+    fun wireguard(text: String): WireGuardProfile? {
+        return try {
         if (text.length !in 60..65_536) return null
         val iface = linkedMapOf<String, String>()
         val peer = linkedMapOf<String, String>()
@@ -179,7 +181,7 @@ internal object VPNFileImport {
             addProperty("tag", SingBoxConfigCompiler.PROXY_TAG)
             addProperty("system", false)
             addProperty("mtu", mtu)
-            add("address", JsonArray().apply { addr.forEach(::add) })
+            add("address", JsonArray().apply { addr.forEach { add(it) } })
             addProperty("private_key", privateKey)
             add("peers", JsonArray().apply {
                 add(JsonObject().apply {
@@ -187,13 +189,14 @@ internal object VPNFileImport {
                     addProperty("port", port)
                     addProperty("public_key", publicKey)
                     if (psk != null) addProperty("pre_shared_key", psk)
-                    add("allowed_ips", JsonArray().apply { allowed.forEach(::add) })
+                    add("allowed_ips", JsonArray().apply { allowed.forEach { add(it) } })
                     addProperty("persistent_keepalive_interval", keepalive)
                 })
             })
         }
         WireGuardProfile(host, port, cfg)
-    } catch (_: Exception) { null }
+        } catch (_: Exception) { null }
+    }
 
     fun readWireGuard(node: SubscriptionNode): WireGuardProfile? {
         if (node.protocol != "WIREGUARD" ||
@@ -204,7 +207,8 @@ internal object VPNFileImport {
         }.getOrNull()?.takeIf { it.host == node.host && it.port == node.port }
     }
 
-    private fun splitHostPort(raw: String): Pair<String, Int>? = try {
+    private fun splitHostPort(raw: String): Pair<String, Int>? {
+        return try {
         val host: String
         val port: Int
         if (raw.startsWith("[")) {
@@ -216,10 +220,19 @@ internal object VPNFileImport {
             port = parsed.port
         }
         if (!safeEndpoint(host, port)) null else host to port
-    } catch (_: Exception) { null }
+        } catch (_: Exception) { null }
+    }
 
-    private fun validKey(key: String): Boolean =
-        runCatching { Base64.getDecoder().decode(key).size == 32 }.getOrDefault(false)
+    // Standard WireGuard keys are exactly 32 bytes (43 base64 sextets +
+    // one padding character). Validate canonical padding and alphabet
+    // without java.util.Base64, which is missing on Android API 24/25.
+    private fun validKey(key: String): Boolean {
+        val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+        if (key.length != 44 || key.last() != '=' ||
+            !key.take(43).all { it in alphabet }) return false
+        val finalSextet = alphabet.indexOf(key[42])
+        return finalSextet >= 0 && (finalSextet and 0x3) == 0
+    }
 
     private fun validCidr(raw: String): Boolean {
         val (address, mask) = raw.split('/').takeIf { it.size == 2 }
