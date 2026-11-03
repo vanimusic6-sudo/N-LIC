@@ -22,6 +22,7 @@ import io.github.romanvht.byedpi.utility.checkIpAndPortInArgs
 import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
 import io.github.romanvht.byedpi.subscription.LibboxRuntime
+import io.github.romanvht.byedpi.subscription.CoreStartException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -251,6 +252,20 @@ internal class NativeSession(
                                 engine.startProxy(legacyArgs.toTypedArray())
                             }
                             withTimeout(START_TIMEOUT) { awaitProxy(legacyHost, legacyPort) }
+                            // Fast, explicit validation of SOCKS5 detour: it must
+                            // reach the selected server BEFORE sing-box uses it.
+                            // In URLTest mode let the core test candidates itself.
+                            if (!autoEnabled) {
+                                val selected = saved.allNodes.firstOrNull {
+                                    it.id == saved.selectedNodeId
+                                } ?: error("LIC-Core / NO_SERVER")
+                                val bayWorking = withContext(Dispatchers.IO) {
+                                    TunnelHealthProbe.checkBay(
+                                        legacyPort, selected.host, selected.port
+                                    )
+                                }
+                                check(bayWorking) { "LIC-Core / BAY_UNREACHABLE" }
+                            }
                         }
                         val box = LibboxRuntime(service)
                         boxEngine = box
@@ -294,11 +309,20 @@ internal class NativeSession(
                 throw e
             } catch (e: Throwable) {
                 if (config.args.firstOrNull() == "--nlic-libbox") {
-                    // libbox/native exceptions may embed the full outbound JSON
-                    // (including subscription credentials). Never send them to
-                    // logcat or to the service's untrusted UI error surface.
-                    Log.e(TAG, "LIC-Core startup failed (${e.javaClass.simpleName}); details withheld")
-                    fail("LIC-Core could not establish an encrypted connection")
+                    // Libbox exceptions may include credentials and server URI.
+                    // Surface an explicit SAFE stage code, never exception text.
+                    val stage = when (e) {
+                        is CoreStartException -> e.stage
+                        is IllegalStateException -> when (e.message) {
+                            "LIC-Core / BAY_UNREACHABLE" -> "BAY_UNREACHABLE"
+                            "LIC-Core / NO_SERVER" -> "NO_SERVER"
+                            "LIC-Core could not validate HTTPS through the selected server" -> "TUNNEL_TEST"
+                            else -> "ENGINE"
+                        }
+                        else -> "ENGINE"
+                    }
+                    Log.e(TAG, "LIC-Core failed at stage $stage (details withheld)")
+                    fail("LIC-Core / $stage")
                 } else {
                     Log.e(TAG, "Failed to start engine", e)
                     fail(e.message ?: "Failed to start engine")
