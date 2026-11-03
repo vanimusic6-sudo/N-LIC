@@ -366,8 +366,11 @@ class SubscriptionLabActivity : BaseActivity() {
             val node = all.getOrNull(position) ?: return@setOnItemClickListener
             runCatching { SubscriptionVault.select(applicationContext, node.id) }
                 .onSuccess {
+                    // Explicitly choosing a server means leaving automatic
+                    // selection. Otherwise the picker appears to ignore taps.
+                    if (auto) prefs.edit().putBoolean("nlic_core_auto", false).commit()
                     // A UDP node cannot use ByeDPI's TCP-only upstream detour.
-                    if (!auto && bay && SingBoxConfigCompiler.compile(
+                    if (bay && SingBoxConfigCompiler.compile(
                             node, SingBoxConfigCompiler.Bay.ON
                         ) !is SingBoxConfigCompiler.Result.Compiled
                     ) {
