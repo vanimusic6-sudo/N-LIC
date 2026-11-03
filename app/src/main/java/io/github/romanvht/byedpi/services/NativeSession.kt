@@ -23,6 +23,7 @@ import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
 import io.github.romanvht.byedpi.subscription.LibboxRuntime
 import io.github.romanvht.byedpi.subscription.CoreStartException
+import io.github.romanvht.byedpi.subscription.NativeTunConfig
 import io.github.romanvht.byedpi.subscription.BayTransport
 import io.github.romanvht.byedpi.subscription.LICBay
 import io.github.romanvht.byedpi.subscription.LocalSocksAuth
@@ -324,10 +325,28 @@ internal class NativeSession(
                                 }
                             }
                         }
+                        // Native-first: sing-box opens ONE Android TUN using
+                        // VpnService.Builder via our PlatformInterface.
+                        // HEV is kept ONLY for the standalone legacy ByeDPI
+                        // mode. This removes the double proxy/TUN loop and
+                        // allows UDP and TCP to be handled by sing-box itself.
+                        val physical = NetworkEnvironment.capture(service)
+                        val mtu = AccessPolicy.tunMtu(
+                            physical,
+                            service.getPreferences().getBoolean("nlic_mobile_safe_mtu", true)
+                        ).coerceIn(1280, 9000)
+                        val compiledTun = NativeTunConfig.compile(plan.config, mtu)
                         corePhase = "CORE_START"
-                        val box = LibboxRuntime(service)
+                        val box = LibboxRuntime(service, openAndroidTun = {
+                            check(tunFd == null) { "Only one VPN TUN per session" }
+                            val open = createTunnel ?: error("Android VPN service missing")
+                            val descriptor = open(config, physical, mtu)
+                            tunFd = descriptor
+                            descriptor.fd
+                        })
                         boxEngine = box
-                        withContext(Dispatchers.IO) { box.start(plan.config) }
+                        withContext(Dispatchers.IO) { box.start(compiledTun) }
+                        check(tunFd != null) { "Android TUN was not opened by libbox" }
                         corePhase = "CORE_SOCKS"
                         withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port, auth) }
                         corePhase = "REMOTE_TEST"
@@ -338,8 +357,9 @@ internal class NativeSession(
                         proxyThread = runNative("ByeDPI") { engine.startProxy(config.args.toTypedArray()) }
                         withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port) }
                     }
-                    corePhase = "TUN"
-                    createTunnel?.let { create ->
+                    if (!coreMode) {
+                        corePhase = "TUN"
+                        createTunnel?.let { create ->
                         val underlyingLink = NetworkEnvironment.capture(service)
                         val tuneMobile = service.getPreferences().getBoolean("nlic_mobile_safe_mtu", true)
                         val mtu = AccessPolicy.tunMtu(underlyingLink, tuneMobile)
@@ -366,6 +386,7 @@ internal class NativeSession(
                         // Do not publish RUNNING when the native tunnel exited immediately.
                         delay(100)
                         check(tunnelThread?.isAlive == true) { "HEV tunnel exited during startup" }
+                        }
                     }
                     if (state != EngineProtocol.STATE_STOPPING) {
                         state = EngineProtocol.STATE_RUNNING
