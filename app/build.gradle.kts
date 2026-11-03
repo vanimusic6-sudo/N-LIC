@@ -43,7 +43,9 @@ android {
 
     defaultConfig {
         applicationId = "io.github.vanimusic6sudo.nlic"
-        minSdk = 21
+        // The pinned third-party libbox AAR declares minSdk 24.
+        // Legacy ByeDPI builds keep Android 5 support.
+        minSdk = if (includeNativeLibbox) 24 else 21
         //noinspection OldTargetApi
         targetSdk = 34
         versionCode = 1828
