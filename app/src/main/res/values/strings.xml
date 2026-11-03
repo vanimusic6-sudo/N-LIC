@@ -371,4 +371,5 @@
     <string name="nlic_control_unsupported">Параметры сервера не поддерживаются. Попробуй другой сервер.</string>
     <string name="nlic_control_apply">Применить и переподключиться</string>
     <string name="nlic_control_generic_failure">Действие не удалось. Настройки сохранены; проверь подключение и попробуй снова.</string>
+    <string name="nlic_control_bay_risk">⚠ Локальный SOCKS ByeDPI не использует пароль и доступен другим приложениям. LIC-Bay пока только для экспериментов.</string>
 </resources>
