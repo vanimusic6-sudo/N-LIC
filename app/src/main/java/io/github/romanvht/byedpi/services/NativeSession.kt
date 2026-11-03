@@ -443,7 +443,11 @@ internal class NativeSession(
         reply(EngineProtocol.FAILED, Bundle().apply {
             putString(EngineProtocol.ERROR, error)
         })
-        terminate()
+        // Messenger is one-way. Killing :native in the same call can race
+        // with delivery to the UI, so the actual safe error phase is lost
+        // and the app displays only ENGINE. Give Binder a bounded 350 ms to
+        // deliver FAILED before terminating the failed service.
+        handler.postDelayed({ terminate() }, 350L)
     }
 
     private fun reply(what: Int, data: Bundle = Bundle()) {
