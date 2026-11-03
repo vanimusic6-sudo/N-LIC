@@ -294,6 +294,16 @@ class TestService : Service() {
                             }
                         }
                     )
+                    // Opt-in: a real 256 KiB media range, not a tiny homepage.
+                    // URL is never copied into results or logs.
+                    settings.mediaTestUrl?.let { mediaUrl ->
+                        val mediaResult = StreamProbeUtils(host, configuration.port)
+                            .test(mediaUrl, settings.requestTimeout)
+                        withContext(Dispatchers.Main.immediate) {
+                            strategy.streamProbe = mediaResult
+                            publish(strategies)
+                        }
+                    }
                     true
                 }
                 try {
@@ -360,9 +370,17 @@ class TestService : Service() {
         val requestsCount = prefs.getIntStringNotNull("byedpi_proxytest_requests", 2).coerceIn(1, 20)
         val requestTimeout = prefs.getLongStringNotNull("byedpi_proxytest_timeout", 5).coerceIn(1L, 15L)
         val requestLimit = prefs.getIntStringNotNull("byedpi_proxytest_limit", 6).coerceIn(1, 50)
+        val streamEnabled = prefs.getBoolean("byedpi_stream_probe_enable", false)
+        val streamUrl = if (streamEnabled) prefs.getStringNotNull("byedpi_stream_probe_url", "").trim()
+            .takeIf { it.isNotEmpty() } else null
+        // Signed googlevideo URLs are bearer-token URLs. Never retain them once
+        // transferred into the short-lived test session.
+        if (streamUrl != null) prefs.edit(commit = true) { remove("byedpi_stream_probe_url") }
         DomainListUtils.syncLists(this)
-        return TestSettings(DomainListUtils.getActiveDomains(this).toList(), commands, host, port,
-            delaySec, requestsCount, requestTimeout, requestLimit)
+        return TestSettings(
+            DomainListUtils.getActiveDomains(this).toList(), commands, host, port,
+            delaySec, requestsCount, requestTimeout, requestLimit, streamUrl
+        )
     }
 
     private fun resetStrategyResult(strategy: StrategyResult, settings: TestSettings) {
