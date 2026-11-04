@@ -22,6 +22,8 @@ import io.github.romanvht.byedpi.utility.checkIpAndPortInArgs
 import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
 import io.github.romanvht.byedpi.subscription.LibboxRuntime
+import io.github.romanvht.byedpi.subscription.XrayRuntime
+import io.github.romanvht.byedpi.subscription.XrayConfigCompiler
 import io.github.romanvht.byedpi.subscription.CoreStartException
 import io.github.romanvht.byedpi.subscription.NativeTunConfig
 import io.github.romanvht.byedpi.subscription.CoreFailureTrace
@@ -74,6 +76,7 @@ internal class NativeSession(
     private var state = EngineProtocol.STATE_IDLE
     private var proxy: ByeDpiProxy? = null
     private var boxEngine: LibboxRuntime? = null
+    private var xrayEngine: XrayRuntime? = null
     private var localAuth: LocalSocksAuth? = null
     private var proxyThread: Thread? = null
     private var tunnelThread: Thread? = null
@@ -120,6 +123,7 @@ internal class NativeSession(
             try {
                 if (tunnelThread != null) TProxyService.stopTunnel()
                 boxEngine?.close()
+                xrayEngine?.close()
                 proxy?.stopProxy()
                 tunnelThread?.join()
                 proxyThread?.join()
@@ -223,7 +227,9 @@ internal class NativeSession(
         startJob = scope.launch {
             // Only fixed phase identifiers appear in logs and UI: neither
             // outbound JSON nor VPN credentials may leave the native process.
-            val coreMode = config.args.firstOrNull() == "--nlic-libbox"
+            val xrayMode = config.args.firstOrNull() == "--nlic-xray"
+            val coreMode = xrayMode ||
+                config.args.firstOrNull() == "--nlic-libbox"
             var corePhase = "PREPARE"
             if (coreMode) CoreFailureTrace.mark(service, corePhase)
             try {
@@ -437,7 +443,8 @@ internal class NativeSession(
             "$name stopped with code ${run()}"
         } catch (e: Throwable) {
             if (name == "ByeDPI-Bay" ||
-                configuration?.args?.firstOrNull() == "--nlic-libbox") {
+                configuration?.args?.firstOrNull() in
+                    setOf("--nlic-libbox", "--nlic-xray")) {
                 // Core may carry an ephemeral SOCKS password in the private
                 // HEV YAML. Never log nested native exception strings.
                 Log.e(TAG, "LIC-Core native task $name exited (${e.javaClass.simpleName}, redacted)")
@@ -449,7 +456,8 @@ internal class NativeSession(
         }
         handler.post {
             if (state != EngineProtocol.STATE_STOPPING) {
-                if (configuration?.args?.firstOrNull() == "--nlic-libbox") {
+                if (configuration?.args?.firstOrNull() in
+                    setOf("--nlic-libbox", "--nlic-xray")) {
                     val code = when (name) {
                         "ByeDPI-Bay" -> "BAY_PROXY_EXIT"
                         "HEV" -> "HEV_EXIT"
@@ -507,7 +515,8 @@ internal class NativeSession(
     private fun fail(error: String) {
         if (state == EngineProtocol.STATE_STOPPING) return
         Log.e(TAG, error)
-        if (configuration?.args?.firstOrNull() == "--nlic-libbox") {
+        if (configuration?.args?.firstOrNull() in
+            setOf("--nlic-libbox", "--nlic-xray")) {
             // The service intentionally exits on a failed health check.
             // Persist only its credential-free code so the UI does not
             // confuse that controlled exit with a Go panic at REMOTE_TEST.
