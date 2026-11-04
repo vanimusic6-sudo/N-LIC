@@ -113,7 +113,8 @@ class SubscriptionLabActivity : BaseActivity() {
         }
         findViewById<MaterialButton>(R.id.nlic_help).setOnClickListener {
             AlertDialog.Builder(this).setTitle(R.string.nlic_ui_help)
-                .setMessage(R.string.nlic_ui_help_steps)
+                .setMessage(if (BuildConfig.NLIC_XRAY_INCLUDED) R.string.nlic_ui_help_steps_xray
+                    else R.string.nlic_ui_help_steps)
                 .setPositiveButton(android.R.string.ok, null).show()
         }
         findViewById<MaterialButton>(R.id.nlic_refresh).setOnClickListener { refreshSubscriptions() }
@@ -430,6 +431,14 @@ class SubscriptionLabActivity : BaseActivity() {
             getString(R.string.nlic_core_advice_native_crash)
         code == "PROTOCOL_UNSUPPORTED" ->
             getString(R.string.nlic_core_advice_config)
+        code == "REMOTE_TLS_CERT" ->
+            getString(R.string.nlic_core_advice_tls_cert)
+        code == "REMOTE_TLS_TIMEOUT" ->
+            getString(R.string.nlic_core_advice_tls_timeout)
+        code == "REMOTE_TLS_PROTOCOL" || code == "REMOTE_TLS_HANDSHAKE" ->
+            getString(R.string.nlic_core_advice_tls_handshake)
+        code == "REMOTE_TLS_EOF" || code == "REMOTE_TLS_IO" ->
+            getString(R.string.nlic_core_advice_tls_eof)
         code.startsWith("BAY_") ->
             getString(R.string.nlic_core_advice_bay)
         code.startsWith("XRAY_") ->
@@ -448,6 +457,10 @@ class SubscriptionLabActivity : BaseActivity() {
     }
 
     private fun render() {
+        findViewById<TextView>(R.id.nlic_supported_protocols).setText(
+            if (BuildConfig.NLIC_XRAY_INCLUDED) R.string.nlic_home_supported_xray_protocols
+            else R.string.nlic_home_supported_protocols
+        )
         val catalog = readCatalog()
         val all = catalog.allNodes
         val selected = all.firstOrNull { it.id == catalog.selectedNodeId }
