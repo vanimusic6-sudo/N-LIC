@@ -60,10 +60,10 @@ int nlic_tls_sni_range(const uint8_t *p,size_t n,
             while(j+3<=list_end) {
                 const size_t typ=p[j],hostlen=u16(p+j+1);j+=3;
                 if(j+hostlen>list_end)return 0;
-                if(typ==0&&hostlen>=6&&j>5&&j+hostlen<e) {
+                if(typ==0&&hostlen>=6&&j>5&&j+hostlen<=e) {
                     *start=j-5;
                     *end=j+hostlen-5;
-                    return *start>1&&*end<rlen;
+                    return *start>1&&*end<=rlen;
                 }
                 j+=hostlen;
             }
