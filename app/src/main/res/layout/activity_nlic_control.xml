@@ -196,6 +196,17 @@
                 android:textSize="15sp"
                 app:cornerRadius="18dp" />
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/nlic_manage_profiles"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="12dp"
+                android:text="@string/nlic_profiles_manage"
+                android:textAllCaps="false"
+                android:textSize="14sp"
+                app:cornerRadius="16dp" />
+
             <TextView
                 android:id="@+id/nlic_server_hint"
                 android:layout_width="match_parent"
@@ -208,7 +219,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:layout_marginTop="12dp">
+                android:layout_marginTop="12dp"
+                android:visibility="gone">
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/nlic_add_subscription"
@@ -237,7 +249,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:orientation="horizontal"
-                android:baselineAligned="false">
+                android:baselineAligned="false"
+                android:visibility="gone">
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/nlic_add_file"
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
@@ -265,6 +278,7 @@
                 android:layout_marginTop="8dp"
                 android:lineSpacingExtra="2dp"
                 android:id="@+id/nlic_supported_protocols"
+                android:visibility="gone"
                 android:text="@string/nlic_home_supported_protocols"
                 android:textSize="12sp"
                 android:textColor="@color/nlic_muted" />
