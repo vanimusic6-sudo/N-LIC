@@ -24,6 +24,7 @@ import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
 import io.github.romanvht.byedpi.subscription.LibboxRuntime
 import io.github.romanvht.byedpi.subscription.XrayRuntime
 import io.github.romanvht.byedpi.subscription.XrayConfigCompiler
+import io.github.romanvht.byedpi.subscription.XrayBayArgs
 import io.github.romanvht.byedpi.subscription.CoreStartException
 import io.github.romanvht.byedpi.subscription.NativeTunConfig
 import io.github.romanvht.byedpi.subscription.CoreFailureTrace
@@ -275,7 +276,12 @@ internal class NativeSession(
                             // Never use a direct fallback if the relay fails.
                             corePhase = "BAY_PROXY"; CoreFailureTrace.mark(service, corePhase)
                             val relayArgs = config.args.drop(3)
-                            if (relayArgs.isEmpty()) throw CoreStartException("BAY_PROFILE")
+                            // Defense in depth: even IPC/tampered
+                            // profiles cannot expose an unauthenticated
+                            // SOCKS5 relay on the physical LAN.
+                            if (!XrayBayArgs.validLoopback(relayArgs, bayPort)) {
+                                throw CoreStartException("BAY_PROFILE")
+                            }
                             val engine = withContext(Dispatchers.IO) { ByeDpiProxy() }
                             proxy = engine
                             proxyThread = runNative("ByeDPI-Bay") {
