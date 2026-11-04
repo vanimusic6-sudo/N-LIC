@@ -37,3 +37,7 @@
 -keep class io.nekohasekai.libbox.** { *; }
 -keep class go.** { *; }
 -keep class io.github.romanvht.byedpi.subscription.LibboxRuntime { *; }
+
+# Xray gomobile JNI reflection
+-keep class libv2ray.** { *; }
+-keep class io.github.romanvht.byedpi.subscription.XrayRuntime { *; }
