@@ -263,9 +263,20 @@ internal class NativeSession(
                         withTimeout(START_TIMEOUT) {
                             awaitProxy(config.host, config.port, auth)
                         }
-                        corePhase = "REMOTE_TEST"; CoreFailureTrace.mark(service, corePhase)
-                        withTimeout(28_000) {
-                            awaitRemoteReadiness(config.host, config.port, auth)
+                        corePhase = "XRAY_HTTPS"; CoreFailureTrace.mark(service, corePhase)
+                        // Native Xray uses its own authenticated core.Dial and
+                        // Go's certificate-validating HTTPS client; if it
+                        // succeeds the tunnel is genuinely reachable. If not,
+                        // the independent SOCKS + Android TLS probe below
+                        // gives a more specific, secret-free failure category.
+                        val nativeHttpsOk = withContext(Dispatchers.IO) {
+                            xray.verifyHttpsViaCore()
+                        }
+                        if (!nativeHttpsOk) {
+                            corePhase = "REMOTE_TEST"; CoreFailureTrace.mark(service, corePhase)
+                            withTimeout(28_000) {
+                                awaitRemoteReadiness(config.host, config.port, auth)
+                            }
                         }
                         val physical = NetworkEnvironment.capture(service)
                         val mtu = AccessPolicy.tunMtu(
