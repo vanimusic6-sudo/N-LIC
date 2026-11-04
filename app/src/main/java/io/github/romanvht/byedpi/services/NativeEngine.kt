@@ -31,6 +31,7 @@ import io.github.romanvht.byedpi.utility.*
 import io.github.romanvht.byedpi.BuildConfig
 import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
+import io.github.romanvht.byedpi.subscription.CoreStartException
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
@@ -60,7 +61,12 @@ internal class NativeEngine(
                 check(BuildConfig.NLIC_LIBBOX_INCLUDED) {
                     "Core preview runtime not bundled"
                 }
-                val catalog = SubscriptionVault.read(context)
+                val catalog = try {
+                    SubscriptionVault.read(context)
+                } catch (_: Exception) {
+                    // No user secrets or Java exception messages in logs/UI.
+                    throw CoreStartException("CATALOG")
+                }
                 val auto = preferences.getBoolean("nlic_core_auto", false)
                 val bay = preferences.getBoolean("nlic_core_bay", false)
                 val bayPort = 11088 // Dedicated loopback port, never a public listener.
@@ -74,8 +80,8 @@ internal class NativeEngine(
                     } ?: error("Select a VPN server first")
                     SingBoxConfigCompiler.compile(node, bayMode, bayPort)
                 }
-                check(chosen is SingBoxConfigCompiler.Result.Compiled) {
-                    "VPN protocol or transport is unsupported"
+                if (chosen !is SingBoxConfigCompiler.Result.Compiled) {
+                    throw CoreStartException("PROTOCOL_UNSUPPORTED")
                 }
                 val bayArgs = if (bay) {
                     val strategy = AdaptiveDpiPolicy.decide(
@@ -87,9 +93,13 @@ internal class NativeEngine(
                     // from an imported config can change the listener or run
                     // external commands. ByeDPI's SOCKS5 UDP is enabled by
                     // default; there is no --no-udp in this dedicated profile.
-                    val proxy = ByeDpiProxyCmdPreferences(
-                        context, strategy, "127.0.0.1", bayPort,
-                    )
+                    val proxy = try {
+                        ByeDpiProxyCmdPreferences(
+                            context, strategy, "127.0.0.1", bayPort,
+                        )
+                    } catch (_: Exception) {
+                        throw CoreStartException("BAY_PROFILE")
+                    }
                     proxy.args.drop(1).also {
                         check(it.none { option ->
                             option == "-U" || option == "--no-udp" ||
