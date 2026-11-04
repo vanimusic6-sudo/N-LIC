@@ -18,6 +18,24 @@ class SubscriptionFetcherTest {
         assertFalse(SubscriptionFetcher.validSubscriptionUrl("https://public.example.org:0/sub"))
     }
 
+    @Test fun `CGNAT documentation benchmarking and special IPv6 DNS answers are rejected`() {
+        val blocked = listOf(
+            "100.64.0.1", "100.127.255.254", "198.18.0.1",
+            "198.19.255.255", "198.51.100.42", "203.0.113.12",
+            "192.0.2.10", "192.88.99.1", "0.1.2.3",
+            "fc00::1", "fd12:3456::1", "2001:db8::1",
+            "2001::1", "3fff::2"
+        )
+        for (ip in blocked) {
+            assertFalse(ip, SubscriptionFetcher.publicAddress(InetAddress.getByName(ip)))
+        }
+        for (ip in listOf("8.8.8.8", "1.1.1.1", "2606:4700:4700::1111")) {
+            assertTrue(ip, SubscriptionFetcher.publicAddress(InetAddress.getByName(ip)))
+        }
+        assertFalse(SubscriptionFetcher.validSubscriptionUrl(
+            "https://[fd12:3456::1]/subscription"))
+    }
+
     @Test fun `an entire DNS response is rejected when any answer is private`() {
         val public = InetAddress.getByName("1.1.1.1")
         val private = InetAddress.getByName("10.0.0.1")
