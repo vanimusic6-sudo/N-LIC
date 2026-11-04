@@ -58,26 +58,56 @@ internal class NativeEngine(
             val isCore = preferences.getBoolean("nlic_core_mode", false) &&
                 preferences.getStringNotNull("byedpi_mode", "vpn") == "vpn"
             if (isCore && BuildConfig.NLIC_XRAY_INCLUDED) {
-                // Xray migration is a separate opt-in native build. Do not
-                // accidentally feed sing-box JSON to the Xray interpreter.
-                // LIC-Auto and LIC-Bay require their own Xray adapters and
-                // therefore fail closed in this first preview.
-                if (preferences.getBoolean("nlic_core_auto", false) ||
-                    preferences.getBoolean("nlic_core_bay", false)) {
-                    throw CoreStartException("XRAY_MODE_UNSUPPORTED")
-                }
                 val catalog = runCatching { SubscriptionVault.read(context) }
                     .getOrElse { throw CoreStartException("CATALOG") }
-                val node = catalog.allNodes.firstOrNull { it.id == catalog.selectedNodeId }
-                    ?: throw CoreStartException("NO_SERVER")
-                if (io.github.romanvht.byedpi.subscription.XrayConfigCompiler.compile(
-                        node, io.github.romanvht.byedpi.subscription.LocalSocksAuth(
-                            "nlic", "a".repeat(48))
-                    ) !is io.github.romanvht.byedpi.subscription.XrayConfigCompiler.Result.Compiled) {
-                    throw CoreStartException("PROTOCOL_UNSUPPORTED")
+                val auto = preferences.getBoolean("nlic_core_auto", false)
+                val bay = preferences.getBoolean("nlic_core_bay", false)
+                val bayPort = io.github.romanvht.byedpi.subscription.XrayConfigCompiler.BAY_PORT
+                val authForValidation =
+                    io.github.romanvht.byedpi.subscription.LocalSocksAuth("nlic", "a".repeat(48))
+                val supports: (io.github.romanvht.byedpi.subscription.SubscriptionNode) -> Boolean =
+                    { node ->
+                        io.github.romanvht.byedpi.subscription.XrayConfigCompiler.compile(
+                            node, authForValidation, if (bay) bayPort else null
+                        ) is io.github.romanvht.byedpi.subscription.XrayConfigCompiler.Result.Compiled
+                    }
+                val eligible = if (auto) {
+                    io.github.romanvht.byedpi.subscription.XrayAutoSelector.candidates(
+                        catalog.allNodes, catalog.selectedNodeId, bay, supports
+                    )
+                } else {
+                    catalog.allNodes.filter {
+                        it.id == catalog.selectedNodeId && supports(it)
+                    }
                 }
+                if (eligible.isEmpty()) throw CoreStartException("PROTOCOL_UNSUPPORTED")
+                val bayArgs = if (bay) {
+                    // Only the pinned local ByeDPI command generator is allowed.
+                    // User subscription entries cannot add proxy flags or
+                    // create an externally listening ByeDPI server.
+                    val strategy = AdaptiveDpiPolicy.decide(
+                        context,
+                        preferences.getBoolean(AdaptiveDpiPolicy.KEY, true),
+                        "-s0+sm",
+                    )?.command ?: "-s0+sm"
+                    val arguments = try {
+                        ByeDpiProxyCmdPreferences(
+                            context, strategy, "127.0.0.1", bayPort,
+                        ).args.drop(1)
+                    } catch (_: Exception) {
+                        throw CoreStartException("BAY_PROFILE")
+                    }
+                    if (arguments.isEmpty() || arguments.any {
+                            it in setOf("-U", "--no-udp", "--transparent", "-E")
+                        }) throw CoreStartException("BAY_PROFILE")
+                    arguments
+                } else emptyList()
                 return Configuration(
-                    args = listOf("--nlic-xray"),
+                    args = listOf(
+                        "--nlic-xray",
+                        if (bay) "--nlic-bay" else "--nlic-direct",
+                        if (auto) "--nlic-auto" else "--nlic-fixed",
+                    ) + bayArgs,
                     host = "127.0.0.1",
                     port = io.github.romanvht.byedpi.subscription.XrayConfigCompiler.SOCKS_PORT,
                     dns = preferences.getStringNotNull("dns_ip", "1.1.1.1")
