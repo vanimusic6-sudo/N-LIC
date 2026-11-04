@@ -384,6 +384,11 @@ object ServiceManager {
                         lastCoreFailureCode = code?.takeIf {
                             it in safeStages || it.removeSuffix("_TIMEOUT") in safeStages
                         } ?: lastCoreFailureCode?.takeIf { it in safeStages }
+                            // A controlled health-check failure also kills :native.
+                            // Never label it a native crash just because its
+                            // IPC error was lost while the service was exiting.
+                            ?: lastNativeStage?.takeIf { it.startsWith("FAILED_") }
+                                ?.removePrefix("FAILED_")?.takeIf { it in safeStages }
                             ?: lastNativeStage?.takeIf { it != "RUNNING" }?.let {
                                 "NATIVE_AT_$it"
                             } ?: "ENGINE"
