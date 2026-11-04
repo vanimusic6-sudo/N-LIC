@@ -25,38 +25,54 @@ internal object TunnelHealthProbe {
 
     // The selected hostname is a fixed allowlisted HTTPS connectivity
     // endpoint, NOT a provider-controlled URL. No cookies or tokens sent.
+    /** This result contains only a phase, never a server/hostname or secret. */
+    internal enum class EgressResult { OK, CONNECT, SOCKS, TLS, HTTP }
+
     fun check(
         host: String, port: Int, auth: LocalSocksAuth? = null,
         target: String = TARGET,
-    ): Boolean = try {
+    ): Boolean = probe(host, port, auth, target) == EgressResult.OK
+
+    internal fun probe(
+        host: String, port: Int, auth: LocalSocksAuth? = null,
+        target: String = TARGET,
+    ): EgressResult {
         val path = requireNotNull(TRUSTED_HTTPS_PROBES[target])
-        Socket().use { socket ->
-            socket.connect(InetSocketAddress(host, port), TIMEOUT)
-            socket.soTimeout = TIMEOUT
-            connectDomain(socket, target, 443, auth)
-            val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
-            (factory.createSocket(socket, target, 443, true) as SSLSocket).use { tls ->
-                tls.soTimeout = TIMEOUT
-                tls.sslParameters = tls.sslParameters.apply {
-                    endpointIdentificationAlgorithm = "HTTPS"
+        var stage = EgressResult.CONNECT
+        return try {
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress(host, port), TIMEOUT)
+                socket.soTimeout = TIMEOUT
+                stage = EgressResult.SOCKS
+                connectDomain(socket, target, 443, auth)
+                stage = EgressResult.TLS
+                val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
+                (factory.createSocket(socket, target, 443, true) as SSLSocket).use { tls ->
+                    tls.soTimeout = TIMEOUT
+                    tls.sslParameters = tls.sslParameters.apply {
+                        endpointIdentificationAlgorithm = "HTTPS"
+                    }
+                    tls.startHandshake()
+                    stage = EgressResult.HTTP
+                    tls.outputStream.write(("GET $path HTTP/1.1\r\n" +
+                        "Host: $target\r\nConnection: close\r\n\r\n")
+                        .toByteArray(Charsets.US_ASCII))
+                    tls.outputStream.flush()
+                    val line = StringBuilder()
+                    val input = tls.inputStream
+                    while (line.length < 128) {
+                        val c = input.read()
+                        if (c < 0 || c == 10) break
+                        line.append(c.toChar())
+                    }
+                    if (acceptsHttpsResponse(line.toString())) EgressResult.OK
+                    else EgressResult.HTTP
                 }
-                tls.startHandshake()
-                tls.outputStream.write(("GET $path HTTP/1.1\r\n" +
-                    "Host: $target\r\nConnection: close\r\n\r\n").toByteArray(Charsets.US_ASCII))
-                tls.outputStream.flush()
-                // A bounded first line suffices; no cookies, body or redirects.
-                val line = StringBuilder()
-                val input = tls.inputStream
-                while (line.length < 128) {
-                    val c = input.read()
-                    if (c < 0 || c == 10) break
-                    line.append(c.toChar())
-                }
-                acceptsHttpsResponse(line.toString())
             }
+        } catch (_: Exception) {
+            // No nested exception text: it can contain SNI, server IP, keys.
+            stage
         }
-    } catch (_: Exception) {
-        false // TLS, credentials and provider errors never escape into logs.
     }
 
     /** A cert-verified HTTPS success (200-399) proves end-to-end egress.
