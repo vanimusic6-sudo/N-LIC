@@ -409,6 +409,10 @@ class SubscriptionLabActivity : BaseActivity() {
     }
 
     private fun failureAdvice(code: String): String = when {
+        code.startsWith("NATIVE_AT_") ->
+            getString(R.string.nlic_core_advice_native_crash)
+        code == "PROTOCOL_UNSUPPORTED" ->
+            getString(R.string.nlic_core_advice_config)
         code.startsWith("BAY_") ->
             getString(R.string.nlic_core_advice_bay)
         code.startsWith("CORE_SOCKS") ->
