@@ -1,0 +1,42 @@
+name: N-LIC V2 Native Validation
+
+on:
+  push:
+    branches: [feature/nlic-v2-ui-core]
+    paths:
+      - 'app/src/main/cpp/nlic-v2/**'
+      - 'tests/nlic-v2/**'
+      - '.github/workflows/nlic-v2-native-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Compile and fuzz native TLS/QUIC parser (ASan/UBSan)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/nlic-v2
+          cc -Iapp/src/main/cpp/nlic-v2 -std=c11 -O1 -g -Wall -Wextra -Wpedantic -Werror \
+             -fsanitize=address,undefined -fno-omit-frame-pointer \
+             -o /tmp/nlic-v2/parser \
+             app/src/main/cpp/nlic-v2/nlic_protocol.c tests/nlic-v2/test_protocol.c
+          ASAN_OPTIONS=detect_leaks=1 /tmp/nlic-v2/parser
+      - name: Compile and test native authenticated SOCKS5 TCP/UDP
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc -std=c11 -O2 -g -Wall -Wextra -Wpedantic -Werror -pthread \
+             -fsanitize=undefined -fno-omit-frame-pointer -DNLIC_STANDALONE \
+             -o /tmp/nlic-v2/proxy \
+             app/src/main/cpp/nlic-v2/nlic_protocol.c \
+             app/src/main/cpp/nlic-v2/nlic_socks.c \
+             app/src/main/cpp/nlic-v2/nlic_udp.c
+          NLIC_TEST_PROXY=/tmp/nlic-v2/proxy python3 tests/nlic-v2/test_native_proxy.py
