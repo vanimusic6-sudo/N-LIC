@@ -15,7 +15,7 @@ int main(void) {
     assert(nlic_tls_split_record(hello,sizeof(hello),output,sizeof(output),3)
         ==sizeof(hello)+5);
     assert(output[3]==0&&output[4]==3);
-    assert(output[11]==0x16&&output[12]==3&&output[13]==3);
+    assert(output[8]==0x16&&output[9]==3&&output[10]==3);
     assert(memcmp(output+5,hello+5,3)==0);
     assert(memcmp(output+16-3,hello+8,3)==0);
     uint8_t quic1[]={0xc0,0,0,0,1,0,0,0};
