@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Subscriptions are HTTPS-only. Do not trust user-added interception CAs
+         for requests made by this VPN client. Native Xray/ByeDPI sockets are
+         not governed by Java's NetworkSecurityConfig. -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

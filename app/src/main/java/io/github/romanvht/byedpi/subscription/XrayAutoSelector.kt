@@ -22,12 +22,25 @@ internal object XrayAutoSelector {
         bayEnabled: Boolean,
         isSupported: (SubscriptionNode) -> Boolean,
     ): List<SubscriptionNode> {
-        val eligible = nodes.filter { node ->
-            (!bayEnabled || LICBay.plan(node).supported) && isSupported(node)
-        }.distinctBy { it.id }
-        val preferred = eligible.firstOrNull { it.id == selectedId }
-        return (listOfNotNull(preferred) + eligible.filterNot { it.id == selectedId })
-            .take(MAX_CANDIDATES)
+        // Compiling one Xray JSON can be expensive (WireGuard PEM, VMess
+        // import). The UI may hold 500 nodes: examine at most enough to
+        // fill the three candidate slots instead of compiling all 500 on
+        // every Compose/View re-render or connection attempt.
+        val selected = nodes.firstOrNull { it.id == selectedId }
+        val ordered = sequence {
+            if (selected != null) yield(selected)
+            yieldAll(nodes.asSequence().filter { it.id != selectedId })
+        }
+        val chosen = ArrayList<SubscriptionNode>(MAX_CANDIDATES)
+        val seen = HashSet<String>()
+        for (node in ordered) {
+            if (!seen.add(node.id)) continue
+            if (bayEnabled && !LICBay.plan(node).supported) continue
+            if (!isSupported(node)) continue
+            chosen.add(node)
+            if (chosen.size == MAX_CANDIDATES) break
+        }
+        return chosen
     }
 
     fun best(measurements: List<Measurement>): Measurement? =

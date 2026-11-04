@@ -36,14 +36,65 @@ internal object SubscriptionFetcher {
                 !host.endsWith(".localhost") &&
                 !host.startsWith("127.") && !host.startsWith("10.") &&
                 !host.startsWith("192.168.") &&
-                !host.startsWith("169.254.")
+                !host.startsWith("169.254.") &&
+                (!host.contains(':') || publicAddress(InetAddress.getByName(host)))
         } catch (_: Exception) { false }
     }
 
-    internal fun publicAddress(address: InetAddress): Boolean =
-        !address.isAnyLocalAddress && !address.isLoopbackAddress &&
-        !address.isSiteLocalAddress && !address.isLinkLocalAddress &&
-        !address.isMulticastAddress
+    /**
+     * Reject special-use ranges, not only RFC1918. A malicious subscription
+     * host can rebind DNS to an ISP CGNAT gateway, benchmarking subnet, or
+     * IPv6 ULA address. All A/AAAA records must be globally routable.
+     *
+     * This is a deliberately conservative allow-list for global unicast.
+     * It does not use network calls and it is enforced at the OkHttp DNS layer.
+     */
+    internal fun publicAddress(address: InetAddress): Boolean {
+        if (address.isAnyLocalAddress || address.isLoopbackAddress ||
+            address.isSiteLocalAddress || address.isLinkLocalAddress ||
+            address.isMulticastAddress) return false
+        val a = address.address.map { it.toInt() and 0xff }
+        if (a.size == 4) {
+            val x = a[0]
+            val y = a[1]
+            val z = a[2]
+            return when {
+                x == 0 || x == 10 || x == 127 || x >= 224 -> false
+                x == 100 && y in 64..127 -> false       // CGNAT, 100.64/10
+                x == 169 && y == 254 -> false          // link-local
+                x == 172 && y in 16..31 -> false
+                x == 192 && (y == 0 && z in 0..2 ||
+                    y == 88 && z == 99 ||
+                    y == 168) -> false
+                x == 198 && (y in 18..19 || y == 51 && z == 100) -> false
+                x == 203 && y == 0 && z == 113 -> false
+                else -> true
+            }
+        }
+        if (a.size == 16) {
+            // The RFC6052 well-known NAT64 prefix 64:ff9b::/96 is not in
+            // 2000::/3. Some IPv6-only cellular networks synthesize it
+            // for public IPv4 subscription origins. Allow only when the
+            // EMBEDDED IPv4 address itself passes the public-route guard.
+            // Never blindly whitelist the entire NAT64 prefix.
+            if (a[0] == 0x00 && a[1] == 0x64 &&
+                a[2] == 0xff && a[3] == 0x9b &&
+                (4..11).all { a[it] == 0 }) {
+                return publicAddress(InetAddress.getByAddress(
+                    ByteArray(4) { a[it + 12].toByte() }
+                ))
+            }
+            // 2000::/3 global unicast, excluding special-use assignments.
+            if (a[0] !in 0x20..0x3f) return false
+            if (a[0] == 0x20 && a[1] == 0x01 &&
+                a[2] <= 0x01) return false              // IETF special-purpose
+            if (a[0] == 0x20 && a[1] == 0x01 &&
+                a[2] == 0x0d && a[3] == 0xb8) return false // documentation
+            if (a[0] == 0x3f && a[1] == 0xff) return false // documentation
+            return true
+        }
+        return false
+    }
 
     internal fun validateDnsAnswers(addresses: List<InetAddress>): List<InetAddress> {
         require(addresses.isNotEmpty() && addresses.all(::publicAddress)) {

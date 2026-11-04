@@ -194,7 +194,19 @@ internal class NativeEngine(
                 NetworkEnvironment.capture(context).type,
                 adaptive?.command ?: manual,
             ) { key -> preferences.getString(key, null) }
-            val proxy = if ((preferences.getCmdEnable() || adaptive != null) &&
+            // The new "local DPI" cockpit uses a private Android tunnel,
+            // NOT a LAN proxy. This must be enforced at the engine boundary:
+            // old/manual flags may otherwise bind a SOCKS5 port to 0.0.0.0.
+            val cockpitLocal = preferences.getStringNotNull(
+                "nlic_connection_mode", "subscription") == "local" &&
+                preferences.getStringNotNull("byedpi_mode", "vpn") == "vpn"
+            val localPort = preferences.getIntStringNotNull(
+                "byedpi_proxy_port", 1080).coerceIn(1, 65535)
+            val proxy = if (cockpitLocal) {
+                val strategy = if (AdaptiveDpiPolicy.isSafeCommand(selected)) selected
+                    else "-s0+sm"
+                ByeDpiProxyCmdPreferences(context, strategy, "127.0.0.1", localPort)
+            } else if ((preferences.getCmdEnable() || adaptive != null) &&
                 selected != manual) {
                 // Apply only on engine startup; never interrupt an existing flow.
                 val host = preferences.getStringNotNull("byedpi_proxy_ip", "127.0.0.1")
@@ -205,6 +217,11 @@ internal class NativeEngine(
             val args = when (proxy) {
                 is ByeDpiProxyCmdPreferences -> proxy.args
                 is ByeDpiProxyUIPreferences -> proxy.uiargs
+            }
+            if (cockpitLocal) {
+                check(XrayBayArgs.validLoopback(args.drop(1), localPort)) {
+                    "Local DPI mode refuses a non-private or ambiguous proxy listener"
+                }
             }
             val (defaultHost, defaultPort) = preferences.getProxyIpAndPort()
             val (host, port) = args.toList().checkIpAndPortInArgs()
@@ -227,7 +244,10 @@ internal class NativeEngine(
                         ""
                     } else userDns
                 },
-                ipv6 = preferences.getBoolean("ipv6_enable", false),
+                // Local DPI uses Android's VPN indicator but no remote
+                // VPN server. Capture IPv6 as well: leaving it outside
+                // would silently leak traffic around the local DPI engine.
+                ipv6 = cockpitLocal || preferences.getBoolean("ipv6_enable", false),
                 appListType = preferences.getStringNotNull("applist_type", "disable"),
                 apps = preferences.getSelectedApps(),
             )

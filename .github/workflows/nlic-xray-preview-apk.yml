@@ -2,7 +2,7 @@ name: N-LIC Xray Core Preview APK (DEV signed Release)
 
 on:
   push:
-    branches: [feature/nlic-xray-core-20261104]
+    branches: [feature/nlic-xray-core-20261104, feature/nlic-dual-mode-resilience-20261104]
     paths:
       - app/**
       - .github/workflows/nlic-xray-preview-apk.yml

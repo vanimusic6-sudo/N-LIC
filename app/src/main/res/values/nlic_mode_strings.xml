@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nlic_profiles_manage" translatable="false">Управление серверами</string>
+    <string name="nlic_mode_label" translatable="false">РЕЖИМ СОЕДИНЕНИЯ</string>
+    <string name="nlic_mode_local" translatable="false">Обход DPI</string>
+    <string name="nlic_mode_subscription" translatable="false">VPN-сервер</string>
+    <string name="nlic_bypass_heading" translatable="false">Локальный обход</string>
+    <string name="nlic_bypass_explanation" translatable="false">Без подписки и удалённого VPN-сервера. ByeDPI обрабатывает соединения на телефоне, но не меняет IP и не гарантирует доступ ко всем сайтам. Значок Android VPN остаётся: он нужен для локального туннеля.</string>
+    <string name="nlic_adaptive_heading" translatable="false">Сеть и устойчивость</string>
+    <string name="nlic_mode_confirm_title" translatable="false">Сменить режим?</string>
+    <string name="nlic_mode_confirm_body" translatable="false">Текущее подключение завершится. После переключения нажми «Подключиться».</string>
+    <string name="nlic_bypass_connected" translatable="false">Локальный обход работает. Трафик не проходит через удалённый VPN-сервер.</string>
+    <string name="nlic_bypass_status" translatable="false">Локальный обход DPI</string>
+    <string name="nlic_bypass_status_hint" translatable="false">Выбран обход без подписки. Используются локальные стратегии ByeDPI, подобранные по результатам тестов сети.</string>
+    <string name="nlic_mode_subscription_status" translatable="false">Подключение к VPN-серверу</string>
+    <string name="nlic_bypass_unavailable" translatable="false">Проверь локальный движок ByeDPI и настройки обхода.</string>
+</resources>

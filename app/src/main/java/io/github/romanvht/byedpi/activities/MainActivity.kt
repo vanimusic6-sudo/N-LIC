@@ -45,6 +45,8 @@ class MainActivity : BaseActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var historyUtils: HistoryUtils
     private var policyLabelJob: Job? = null
+    private var receiverRegistered = false
+    private var redirectedToCockpit = false
 
     companion object {
         private val TAG: String = MainActivity::class.java.simpleName
@@ -158,7 +160,18 @@ class MainActivity : BaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Reconcile the actual OS VPN state before showing the cockpit,
+        // including Always-on sessions restored after process death.
         ServiceManager.refresh(this)
+        // Xray preview now launches into the actual two-mode cockpit,
+        // preserving the old interface behind an explicit legacy action.
+        if (BuildConfig.NLIC_XRAY_INCLUDED && savedInstanceState == null &&
+            !intent.getBooleanExtra("nlic_legacy_screen", false)) {
+            redirectedToCockpit = true
+            startActivity(Intent(this, SubscriptionLabActivity::class.java))
+            finish()
+            return
+        }
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -176,6 +189,7 @@ class MainActivity : BaseActivity() {
         ContextCompat.registerReceiver(
             this, receiver, intentFilter, ContextCompat.RECEIVER_NOT_EXPORTED
         )
+        receiverRegistered = true
 
         binding.statusButtonCard.setOnClickListener {
             binding.statusButtonCard.isClickable = false
@@ -183,7 +197,7 @@ class MainActivity : BaseActivity() {
             val (status, _) = appStatus
             when (status) {
                 AppStatus.Halted -> {
-                    if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+                    if (BuildConfig.NLIC_LIBBOX_INCLUDED || BuildConfig.NLIC_XRAY_INCLUDED) {
                         startActivity(Intent(this, SubscriptionLabActivity::class.java).apply {
                             putExtra("nlic_quick_connect", true)
                         })
@@ -209,7 +223,8 @@ class MainActivity : BaseActivity() {
         // Some resource configurations use a compact alternative home layout.
         // ViewBinding therefore exposes this optional button as nullable.
         binding.nlicCoreButton?.apply {
-            visibility = if (BuildConfig.NLIC_LIBBOX_INCLUDED) View.VISIBLE else View.GONE
+            visibility = if (BuildConfig.NLIC_LIBBOX_INCLUDED || BuildConfig.NLIC_XRAY_INCLUDED)
+                View.VISIBLE else View.GONE
             setOnClickListener {
                 startActivity(Intent(this@MainActivity, SubscriptionLabActivity::class.java))
             }
@@ -321,6 +336,7 @@ class MainActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (redirectedToCockpit) return
         ServiceManager.refresh(this)
         updateStatus()
         updateStrategyButton()
@@ -329,7 +345,7 @@ class MainActivity : BaseActivity() {
     override fun onDestroy() {
         policyLabelJob?.cancel()
         super.onDestroy()
-        unregisterReceiver(receiver)
+        if (receiverRegistered) unregisterReceiver(receiver)
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
