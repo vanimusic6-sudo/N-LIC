@@ -72,6 +72,18 @@ internal object SubscriptionFetcher {
             }
         }
         if (a.size == 16) {
+            // The RFC6052 well-known NAT64 prefix 64:ff9b::/96 is not in
+            // 2000::/3. Some IPv6-only cellular networks synthesize it
+            // for public IPv4 subscription origins. Allow only when the
+            // EMBEDDED IPv4 address itself passes the public-route guard.
+            // Never blindly whitelist the entire NAT64 prefix.
+            if (a[0] == 0x00 && a[1] == 0x64 &&
+                a[2] == 0xff && a[3] == 0x9b &&
+                (4..11).all { a[it] == 0 }) {
+                return publicAddress(InetAddress.getByAddress(
+                    ByteArray(4) { a[it + 12].toByte() }
+                ))
+            }
             // 2000::/3 global unicast, excluding special-use assignments.
             if (a[0] !in 0x20..0x3f) return false
             if (a[0] == 0x20 && a[1] == 0x01 &&
