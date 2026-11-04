@@ -573,7 +573,12 @@ internal class NativeSession(
                         createTunnel?.let { create ->
                         val underlyingLink = NetworkEnvironment.capture(service)
                         val tuneMobile = service.getPreferences().getBoolean("nlic_mobile_safe_mtu", true)
-                        val mtu = AccessPolicy.tunMtu(underlyingLink, tuneMobile)
+                        val baseMtu = AccessPolicy.tunMtu(underlyingLink, tuneMobile)
+                        // Bound V2's TUN datagram sizes on both Wi-Fi and
+                        // cellular; set the exact same value in Android
+                        // VpnService.Builder and HEV tunnel configuration.
+                        val mtu = if (v2Mode) baseMtu.coerceIn(1280, 1400)
+                            else baseMtu
                         val fd = create(config, underlyingLink, mtu)
                         tunFd = fd
                         val tunnelConfig = buildString {
