@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="nlic_canvas">#0D1325</color>
-    <color name="nlic_surface">#192239</color>
-    <color name="nlic_surface_raised">#202B45</color>
-    <color name="nlic_accent">#93BAFF</color>
-    <color name="nlic_text">#F1F5FF</color>
-    <color name="nlic_muted">#ADBBD8</color>
-    <color name="nlic_success">#80D9BE</color>
-    <color name="nlic_border">#394966</color>
+    <color name="nlic_canvas">#10151F</color>
+    <color name="nlic_surface">#1B2330</color>
+    <color name="nlic_surface_raised">#293443</color>
+    <color name="nlic_accent">#ADC3D8</color>
+    <color name="nlic_text">#EFF3F7</color>
+    <color name="nlic_muted">#A8B3C0</color>
+    <color name="nlic_success">#9CC7BB</color>
+    <color name="nlic_border">#364352</color>
 
     <style name="Theme.NlicControl" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">@color/nlic_accent</item>
