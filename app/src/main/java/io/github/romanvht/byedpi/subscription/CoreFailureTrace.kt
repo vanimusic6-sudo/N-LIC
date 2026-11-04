@@ -25,7 +25,8 @@ internal object CoreFailureTrace {
         "REMOTE_CONNECT", "REMOTE_SOCKS", "REMOTE_TLS", "REMOTE_HTTP", "REMOTE_IO",
         "CORE_START", "SETUP", "CONFIG", "INTERFACES", "COMMAND", "OUTBOUND",
         "CREDENTIAL_STORAGE", "CORE_SOCKS", "REMOTE_TEST",
-        "TUN", "HEV", "RUNNING"
+        "TUN", "HEV", "RUNNING", "XRAY_START", "XRAY_SOCKS",
+        "XRAY_TUN", "XRAY_HEV", "XRAY_MODE_UNSUPPORTED"
     )
 
     fun mark(context: Context, stage: String) {
