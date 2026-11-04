@@ -133,8 +133,10 @@ internal class NativeSession(
                 tunnelThread?.join()
                 proxyThread?.join()
                 tunFd?.close()
-            } catch (e: Throwable) {
-                Log.w(TAG, "Failed to stop engine gracefully", e)
+            } catch (_: Throwable) {
+                // JNI/Go errors can include profile details and passwords.
+                // Never emit nested native exception messages to logcat.
+                Log.w(TAG, "Failed to stop engine gracefully (details withheld)")
             } finally {
                 terminate()
             }
@@ -635,8 +637,9 @@ internal class NativeSession(
                     Log.e(TAG, "LIC-Core failed at stage $safeCode (details withheld)")
                     fail("LIC-Core / $safeCode")
                 } else {
-                    Log.e(TAG, "Failed to start engine", e)
-                    fail(e.message ?: "Failed to start engine")
+                    Log.e(TAG, "Failed to start engine (details withheld)")
+                    fail(if (configuration?.args?.firstOrNull() == "--nlic-v2")
+                        "V2_NATIVE_START" else "BYEDPI_START")
                 }
             }
         }
@@ -654,8 +657,9 @@ internal class NativeSession(
                 Log.e(TAG, "LIC-Core native task $name exited (${e.javaClass.simpleName}, redacted)")
                 "$name: native engine failed"
             } else {
-                Log.e(TAG, "$name failed", e)
-                "$name: ${e.message ?: "native engine failed"}"
+                // Legacy ByeDPI commands may include hostnames and local paths.
+                Log.e(TAG, "$name failed (details withheld)")
+                "$name: native engine failed"
             }
         }
         handler.post {
@@ -718,7 +722,8 @@ internal class NativeSession(
 
     private fun fail(error: String) {
         if (state == EngineProtocol.STATE_STOPPING) return
-        Log.e(TAG, error)
+        Log.e(TAG, if (error.matches(Regex("LIC-Core / [A-Z_]{2,64}")))
+            error else "Engine stopped (details withheld)")
         if (configuration?.args?.firstOrNull() in
             setOf("--nlic-libbox", "--nlic-xray")) {
             // The service intentionally exits on a failed health check.
