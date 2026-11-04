@@ -124,7 +124,9 @@ internal object XrayConfigCompiler {
         val network = transport?.get("type")?.asString ?: "tcp"
         val targetNetwork = when (network) {
             "tcp" -> "raw"
-            "ws", "grpc", "httpupgrade", "http" -> network
+            "ws", "grpc", "httpupgrade" -> network
+            // Legacy HTTP/2 transport is removed in Xray 26.x.
+            // Do not silently turn it into RAW or claim support.
             else -> return null // Never pretend QUIC or an unknown transport works.
         }
         stream.addProperty("network", targetNetwork)
