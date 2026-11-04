@@ -19,6 +19,9 @@ jobs:
   xray_preview:
     runs-on: ubuntu-24.04
     timeout-minutes: 65
+    permissions:
+      contents: read
+      actions: write # Cancel only stale previews on this same branch.
     env:
       NLIC_INCLUDE_XRAY: "true"
       NLIC_ARM64_ONLY: "true"
@@ -29,6 +32,52 @@ jobs:
       NLIC_DEV_KEYSTORE_BASE64: ${{ secrets.NLIC_DEV_KEYSTORE_BASE64 }}
       NLIC_DEV_KEYSTORE_PATH: ${{ github.workspace }}/.signing/nlic-dev.p12
     steps:
+      - name: Cancel stale V2 runs before building (best effort)
+        if: github.ref == 'refs/heads/feature/nlic-v2-ui-core'
+        shell: bash
+        env:
+          GH_ACTIONS_TOKEN: ${{ github.token }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+          repo = os.environ['REPOSITORY']
+          current = int(os.environ['CURRENT_RUN_ID'])
+          headers = {
+              'Authorization': 'Bearer ' + os.environ['GH_ACTIONS_TOKEN'],
+              'Accept': 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+          }
+          url = f'https://api.github.com/repos/{repo}/actions/runs?branch=feature/nlic-v2-ui-core&per_page=100'
+          try:
+              with urllib.request.urlopen(
+                  urllib.request.Request(url, headers=headers), timeout=15,
+              ) as response:
+                  runs = json.load(response).get('workflow_runs', [])
+          except (OSError, ValueError) as error:
+              print('Could not list old runs; normal concurrency still applies:', type(error).__name__)
+              runs = []
+          total = 0
+          for run in runs:
+              if run.get('id', current) >= current or run.get('head_branch') != 'feature/nlic-v2-ui-core':
+                  continue
+              if run.get('status') not in ('queued', 'in_progress', 'pending', 'waiting', 'requested'):
+                  continue
+              previous = run['id']
+              cancel_url = f'https://api.github.com/repos/{repo}/actions/runs/{previous}/cancel'
+              request = urllib.request.Request(cancel_url, data=b'', headers=headers, method='POST')
+              try:
+                  with urllib.request.urlopen(request, timeout=8):
+                      total += 1
+              except urllib.error.HTTPError as error:
+                  if error.code not in (404, 409, 422):
+                      print('Could not cancel run', previous, 'HTTP', error.code)
+              except OSError:
+                  print('Could not cancel run', previous, '(network)')
+          print('Cancellation requests sent for', total, 'superseded V2 runs.')
+          PY
+
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
