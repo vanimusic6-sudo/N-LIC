@@ -85,9 +85,5 @@
    android:layout_width="match_parent" android:layout_height="55dp"
    android:text="@string/nlic_control_connect" android:textAllCaps="false"
    android:textSize="16sp" app:cornerRadius="18dp"/>
-  <com.google.android.material.button.MaterialButton android:id="@+id/nlic_disconnect"
-   android:layout_width="match_parent" android:layout_height="55dp"
-   android:text="@string/nlic_core_disconnect" android:textAllCaps="false"
-   android:visibility="gone" android:textSize="16sp" app:cornerRadius="18dp"/>
  </FrameLayout>
 </LinearLayout>
