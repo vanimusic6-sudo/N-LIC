@@ -378,7 +378,10 @@ object ServiceManager {
                             "BAY_UNSUPPORTED", "BAY_PROFILE", "CORE_START", "CORE_SOCKS",
                             "CONFIG_PREPARE", "PROTOCOL_UNSUPPORTED", "NATIVE_PROCESS",
                             "REMOTE_TEST", "REMOTE_CONNECT", "REMOTE_SOCKS", "REMOTE_TLS",
-                            "REMOTE_HTTP", "TUN", "HEV", "HEV_EXIT", "ENGINE_EXIT",
+                            "REMOTE_HTTP", "REMOTE_TLS_CERT", "REMOTE_TLS_TIMEOUT",
+                            "REMOTE_TLS_HANDSHAKE", "REMOTE_TLS_PROTOCOL",
+                            "REMOTE_TLS_EOF", "REMOTE_TLS_IO",
+                            "TUN", "HEV", "HEV_EXIT", "ENGINE_EXIT",
                             "XRAY_START", "XRAY_SOCKS", "XRAY_TUN", "XRAY_HEV",
                             "XRAY_MODE_UNSUPPORTED"
                         )
