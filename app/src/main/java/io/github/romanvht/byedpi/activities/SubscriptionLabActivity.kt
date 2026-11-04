@@ -260,10 +260,10 @@ class SubscriptionLabActivity : BaseActivity() {
             store.allNodes.any { it.id == store.selectedNodeId }) return
         val first = store.allNodes.firstOrNull { node ->
             if (BuildConfig.NLIC_XRAY_INCLUDED) {
-                XrayConfigCompiler.compile(node, LocalSocksAuth("nlic", "a".repeat(48)))
-                    is XrayConfigCompiler.Result.Compiled
-            } else SingBoxConfigCompiler.compile(node)
-                is SingBoxConfigCompiler.Result.Compiled
+                XrayConfigCompiler.compile(node, LocalSocksAuth("nlic", "a".repeat(48))) is
+                    XrayConfigCompiler.Result.Compiled
+            } else SingBoxConfigCompiler.compile(node) is
+                SingBoxConfigCompiler.Result.Compiled
         }
         if (first != null) SubscriptionVault.select(applicationContext, first.id)
     }
@@ -407,8 +407,8 @@ class SubscriptionLabActivity : BaseActivity() {
             val relayPort = if (bay) XrayConfigCompiler.BAY_PORT else null
             val auth = LocalSocksAuth("nlic", "a".repeat(48))
             val supported: (SubscriptionNode) -> Boolean = { node ->
-                XrayConfigCompiler.compile(node, auth, relayPort)
-                    is XrayConfigCompiler.Result.Compiled
+                XrayConfigCompiler.compile(node, auth, relayPort) is
+                    XrayConfigCompiler.Result.Compiled
             }
             return if (prefs.getBoolean("nlic_core_auto", false)) {
                 io.github.romanvht.byedpi.subscription.XrayAutoSelector.candidates(
@@ -569,8 +569,8 @@ class SubscriptionLabActivity : BaseActivity() {
         val bayEligible = if (BuildConfig.NLIC_XRAY_INCLUDED) {
             val auth = LocalSocksAuth("nlic", "a".repeat(48))
             val isValid: (SubscriptionNode) -> Boolean = { node ->
-                XrayConfigCompiler.compile(node, auth, XrayConfigCompiler.BAY_PORT)
-                    is XrayConfigCompiler.Result.Compiled
+                XrayConfigCompiler.compile(node, auth, XrayConfigCompiler.BAY_PORT) is
+                    XrayConfigCompiler.Result.Compiled
             }
             if (auto) all.any(isValid) else selected?.let(isValid) == true
         } else if (auto) all.any {
