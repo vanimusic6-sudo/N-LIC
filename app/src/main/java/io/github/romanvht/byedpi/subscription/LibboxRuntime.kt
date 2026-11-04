@@ -52,6 +52,7 @@ internal class LibboxRuntime(
         require(!closed.get() && server == null) { "Native core already started or stopped" }
         check(installed()) { "This APK does not contain LIC-Core native engine" }
         var stage = "SETUP"
+        CoreFailureTrace.mark(context, "SETUP")
         try {
             val setupClass = Class.forName(LIBBOX + "SetupOptions")
             val setup = setupClass.getConstructor().newInstance()
@@ -75,9 +76,11 @@ internal class LibboxRuntime(
             // Validate against the *native* pinned sing-box schema before dial.
             // The full credential-bearing reflection exception is never logged.
             stage = "CONFIG"
+            CoreFailureTrace.mark(context, "CONFIG")
             libbox.getMethod("checkConfig", String::class.java).invoke(null, config)
 
             stage = "INTERFACES"
+            CoreFailureTrace.mark(context, "INTERFACES")
             val platformType = Class.forName(LIBBOX + "PlatformInterface")
             val handlerType = Class.forName(LIBBOX + "CommandServerHandler")
             val platform = Proxy.newProxyInstance(
@@ -98,16 +101,19 @@ internal class LibboxRuntime(
             server = instance
             serverClass = cls
             stage = "COMMAND"
+            CoreFailureTrace.mark(context, "COMMAND")
             cls.getMethod("start").invoke(instance)
             val override = Class.forName(LIBBOX + "OverrideOptions")
                 .getConstructor().newInstance()
             stage = "OUTBOUND"
+            CoreFailureTrace.mark(context, "OUTBOUND")
             try {
                 cls.getMethod("startOrReloadService", String::class.java, override.javaClass)
                     .invoke(instance, config, override)
             } finally {
                 if (!eraseSnapshot()) {
                     stage = "CREDENTIAL_STORAGE"
+            CoreFailureTrace.mark(context, "CREDENTIAL_STORAGE")
                     throw CoreStartException(stage)
                 }
             }
@@ -195,6 +201,7 @@ internal class LibboxRuntime(
                     // TUN or loopback translation path is used.
                     val opener = openAndroidTun
                         ?: error("Native TUN service missing Android VPN descriptor")
+                    CoreFailureTrace.mark(vpn, "TUN")
                     val fd = opener()
                     check(fd >= 0) { "Android VPN tunnel could not be created" }
                     fd
