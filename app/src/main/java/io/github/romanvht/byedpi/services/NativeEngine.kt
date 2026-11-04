@@ -184,6 +184,34 @@ internal class NativeEngine(
                 )
             }
 
+            // Experimental clean-room V2: only the local DPI route.
+            // Never silently switch a proven Xray/LIC-Bay subscription.
+            // The app UID is excluded from this VpnService TUN; native
+            // outbound sockets therefore use the physical link without
+            // recursive TUN routing. This mode is not an encrypted VPN.
+            if (!isCore && BuildConfig.NLIC_XRAY_INCLUDED &&
+                preferences.getBoolean("nlic_v2_native_opt_in", false) &&
+                preferences.getStringNotNull("nlic_connection_mode", "subscription") == "local" &&
+                preferences.getStringNotNull("byedpi_mode", "vpn") == "vpn") {
+                return Configuration(
+                    args = listOf("--nlic-v2"),
+                    host = "127.0.0.1",
+                    port = 11091,
+                    dns = preferences.getStringNotNull("dns_ip", "1.1.1.1").let { userDns ->
+                        val physical = NetworkEnvironment.capture(context)
+                        val cellularDns64 = AccessPolicy.preferCarrierDnsOnNat64(
+                            physical,
+                            preferences.getBoolean("nlic_mobile_dns64_auto", true),
+                            userDns,
+                        )
+                        if (PrivateDnsUtils.getState(context) is PrivateDnsState.Configured ||
+                            cellularDns64) "" else userDns
+                    },
+                    ipv6 = true,
+                    appListType = preferences.getStringNotNull("applist_type", "disable"),
+                    apps = preferences.getSelectedApps(),
+                )
+            }
             val manual = preferences.getCmdArgs()
             // Pick from recent, locally measured link-type outcomes.
             // Do not make up carrier-specific universal bypass flags.

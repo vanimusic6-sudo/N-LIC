@@ -114,8 +114,13 @@ class SubscriptionLabActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_nlic_control)
         setupToolbar()
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        supportActionBar?.setTitle(R.string.nlic_control_title)
+        supportActionBar?.setDisplayHomeAsUpEnabled(false)
+        supportActionBar?.title = "N-LIC"
+        // ActionBar owns Toolbar menu dispatch. Bind a real view instead
+        // so Settings stays available even when the support menu is rebuilt.
+        findViewById<androidx.appcompat.widget.AppCompatImageButton>(
+            R.id.nlic_settings_button
+        ).setOnClickListener { showCompactSettings() }
 
         findViewById<MaterialButton>(R.id.nlic_manage_profiles).setOnClickListener {
             if (busy) return@setOnClickListener
@@ -138,83 +143,16 @@ class SubscriptionLabActivity : BaseActivity() {
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
         }
-        findViewById<MaterialButton>(R.id.nlic_add_subscription).setOnClickListener {
-            showImportDialog(subscription = true)
-        }
-        findViewById<MaterialButton>(R.id.nlic_add_link).setOnClickListener {
-            showImportDialog(subscription = false)
-        }
-        findViewById<MaterialButton>(R.id.nlic_add_file).setOnClickListener {
-            if (!busy) filePicker.launch(arrayOf("*/*"))
-        }
-        findViewById<MaterialButton>(R.id.nlic_refresh_now).setOnClickListener {
-            refreshSubscriptions()
-        }
         findViewById<MaterialButton>(R.id.nlic_mode_bypass).setOnClickListener {
             chooseMode(ConnectionMode.LOCAL)
         }
         findViewById<MaterialButton>(R.id.nlic_mode_subscription).setOnClickListener {
             chooseMode(ConnectionMode.SUBSCRIPTION)
         }
-        findViewById<MaterialButton>(R.id.nlic_connect).setOnClickListener { requestConnection() }
-        findViewById<MaterialButton>(R.id.nlic_disconnect).setOnClickListener { disconnectCore() }
-        findViewById<MaterialButton>(R.id.nlic_expand_advanced).setOnClickListener {
-            val panel = findViewById<View>(R.id.nlic_advanced_panel)
-            panel.visibility = if (panel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-        }
-        findViewById<MaterialButton>(R.id.nlic_privacy).setOnClickListener {
-            AlertDialog.Builder(this)
-                .setTitle(R.string.nlic_privacy_title)
-                .setMessage(R.string.nlic_privacy_confirmation)
-                .setPositiveButton(android.R.string.ok) { _, _ ->
-                    runCatching {
-                        startActivity(android.content.Intent("android.settings.VPN_SETTINGS"))
-                    }.onFailure {
-                        toast(R.string.nlic_privacy_unavailable)
-                    }
-                }
-                .setNegativeButton(android.R.string.cancel, null).show()
-        }
-        findViewById<MaterialButton>(R.id.nlic_help).setOnClickListener {
-            AlertDialog.Builder(this).setTitle(R.string.nlic_ui_help)
-                .setMessage(if (BuildConfig.NLIC_XRAY_INCLUDED) R.string.nlic_ui_help_steps_xray
-                    else R.string.nlic_ui_help_steps)
-                .setPositiveButton(android.R.string.ok, null).show()
-        }
-        findViewById<MaterialButton>(R.id.nlic_refresh).setOnClickListener { refreshSubscriptions() }
-        findViewById<MaterialButton>(R.id.nlic_tcp_check).setOnClickListener { checkTcpEndpoints() }
-        findViewById<MaterialButton>(R.id.nlic_legacy_mode).setOnClickListener {
-            AlertDialog.Builder(this).setTitle(R.string.nlic_ui_legacy_action)
-                .setMessage(R.string.nlic_ui_legacy_confirm)
-                .setPositiveButton(android.R.string.ok) { _, _ ->
-                    if (BuildConfig.NLIC_XRAY_INCLUDED) {
-                        runOperation {
-                            ServiceManager.waitStop()
-                            prefs.edit().putBoolean("nlic_core_mode", false).commit()
-                            startActivity(android.content.Intent(
-                                this@SubscriptionLabActivity, MainActivity::class.java
-                            ).putExtra("nlic_legacy_screen", true))
-                            finish()
-                        }
-                    } else disconnectCore()
-                }
-                .setNegativeButton(android.R.string.cancel, null).show()
-        }
-        findViewById<MaterialButton>(R.id.nlic_clear).setOnClickListener {
-            AlertDialog.Builder(this).setTitle(R.string.nlic_subscriptions_clear)
-                .setMessage(R.string.nlic_subscriptions_clear_confirm)
-                .setPositiveButton(android.R.string.ok) { _, _ ->
-                    runOperation {
-                        ServiceManager.waitStop()
-                        prefs.edit().putBoolean("nlic_core_mode", false)
-                            .putBoolean("nlic_core_auto", false)
-                            .putBoolean("nlic_core_bay", false).commit()
-                        withContext(Dispatchers.IO) { SubscriptionVault.clear(applicationContext) }
-                        locallyVerified = false
-                        latestMessage = null
-                    }
-                }
-                .setNegativeButton(android.R.string.cancel, null).show()
+        findViewById<MaterialButton>(R.id.nlic_connect).setOnClickListener {
+            if (appStatus.first == AppStatus.Running && appStatus.second == Mode.VPN)
+                disconnectCore()
+            else requestConnection()
         }
         render()
         // The home power button starts this Activity with an explicit visible
@@ -234,6 +172,22 @@ class SubscriptionLabActivity : BaseActivity() {
     override fun onSupportNavigateUp(): Boolean {
         finish()
         return true
+    }
+
+    private fun showCompactSettings() = NlicV2Settings.show(
+        this, appStatus.first == AppStatus.Running
+    ) {
+        runOperation {
+            ServiceManager.waitStop()
+            prefs.edit().putBoolean("nlic_core_mode", false)
+                .putBoolean("nlic_core_auto", false)
+                .putBoolean("nlic_core_bay", false).commit()
+            withContext(Dispatchers.IO) {
+                SubscriptionVault.clear(applicationContext)
+            }
+            latestMessage = null
+            locallyVerified = false
+        }
     }
 
     private fun toast(id: Int) =
@@ -315,7 +269,30 @@ class SubscriptionLabActivity : BaseActivity() {
         latestMessage = getString(R.string.nlic_subscriptions_imported, nodes.size)
     }
 
-    private fun importSubscription(url: String) = runOperation {
+    /** The app UID is excluded from its own VPN TUN to prevent routing
+     * loops. Subscription refresh may therefore use the physical network.
+     * HTTPS protects credentials in transit but not necessarily the domain.
+     */
+    private fun confirmSubscriptionFetch(action: () -> Unit) {
+        val activeVpn = appStatus.first == AppStatus.Running &&
+            appStatus.second == Mode.VPN
+        if (!activeVpn) {
+            action()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.nlic_subscription_fetch_title)
+            .setMessage(R.string.nlic_subscription_fetch_privacy)
+            .setPositiveButton(android.R.string.ok) { _, _ -> action() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun importSubscription(url: String) {
+        confirmSubscriptionFetch { performImportSubscription(url) }
+    }
+
+    private fun performImportSubscription(url: String) = runOperation {
         require(SubscriptionFetcher.validSubscriptionUrl(url)) { "INVALID_URL" }
         val nodes = withContext(Dispatchers.IO) {
             val body = SubscriptionFetcher.fetch(url)
@@ -349,7 +326,11 @@ class SubscriptionLabActivity : BaseActivity() {
         if (first != null) SubscriptionVault.select(applicationContext, first.id)
     }
 
-    private fun refreshSubscriptions() = runOperation {
+    private fun refreshSubscriptions() {
+        confirmSubscriptionFetch { performRefreshSubscriptions() }
+    }
+
+    private fun performRefreshSubscriptions() = runOperation {
         val groups = withContext(Dispatchers.IO) {
             SubscriptionVault.read(applicationContext).groups
         }
@@ -557,15 +538,8 @@ class SubscriptionLabActivity : BaseActivity() {
             if (local) View.VISIBLE else View.GONE
         findViewById<View>(R.id.nlic_subscription_panel).visibility =
             if (local) View.GONE else View.VISIBLE
-        listOf(R.id.nlic_refresh, R.id.nlic_tcp_check).forEach { id ->
-            findViewById<View>(id).visibility = if (local) View.GONE else View.VISIBLE
-        }
         updateModeButton(findViewById(R.id.nlic_mode_bypass), local)
         updateModeButton(findViewById(R.id.nlic_mode_subscription), !local)
-        findViewById<TextView>(R.id.nlic_supported_protocols).setText(
-            if (BuildConfig.NLIC_XRAY_INCLUDED) R.string.nlic_home_supported_xray_protocols
-            else R.string.nlic_home_supported_protocols
-        )
         val catalog = readCatalog()
         val all = catalog.allNodes
         val selected = all.firstOrNull { it.id == catalog.selectedNodeId }
@@ -594,6 +568,8 @@ class SubscriptionLabActivity : BaseActivity() {
             runningVpn -> getString(R.string.nlic_control_verified)
             else -> getString(R.string.nlic_control_status_hint)
         }
+        stage.visibility = if (!local && failure != null && !runningVpn)
+            View.VISIBLE else View.GONE
         stage.text = when {
             local && runningVpn -> getString(R.string.nlic_bypass_status)
             local -> getString(R.string.nlic_mode_local)
@@ -697,13 +673,6 @@ class SubscriptionLabActivity : BaseActivity() {
             latestMessage = null
             render()
         }
-        val bayHint = if (BuildConfig.NLIC_XRAY_INCLUDED) {
-            getString(R.string.nlic_xray_bay_hint)
-        } else if (bayEligible) getString(R.string.nlic_control_bay_desc)
-            else getString(R.string.nlic_core_bay_udp)
-        findViewById<TextView>(R.id.nlic_bay_hint).text =
-            if (bay) bayHint + "\n" + getString(R.string.nlic_control_bay_risk) else bayHint
-
         findViewById<SwitchMaterial>(R.id.nlic_adaptive_switch).apply {
             setOnCheckedChangeListener(null)
             isChecked = prefs.getBoolean(AdaptiveDpiPolicy.KEY, true)
@@ -716,19 +685,11 @@ class SubscriptionLabActivity : BaseActivity() {
         }
 
         findViewById<MaterialButton>(R.id.nlic_connect).apply {
-            isEnabled = !busy && (local || canConnect(catalog))
-            setText(if (runningVpn) R.string.nlic_control_apply else R.string.nlic_control_connect)
-        }
-        findViewById<MaterialButton>(R.id.nlic_disconnect).apply {
-            visibility = if (runningVpn) View.VISIBLE else View.GONE
-            isEnabled = !busy
+            isEnabled = !busy && (runningVpn || local || canConnect(catalog))
+            setText(if (runningVpn) R.string.nlic_core_disconnect
+                else R.string.nlic_control_connect)
         }
         findViewById<MaterialButton>(R.id.nlic_manage_profiles).isEnabled = !busy
-        listOf(R.id.nlic_add_subscription, R.id.nlic_add_link,
-            R.id.nlic_add_file, R.id.nlic_refresh_now, R.id.nlic_refresh, R.id.nlic_tcp_check, R.id.nlic_legacy_mode,
-            R.id.nlic_clear).forEach { id ->
-            findViewById<MaterialButton>(id).isEnabled = !busy
-        }
     }
 
     private fun runOperation(block: suspend () -> Unit) {

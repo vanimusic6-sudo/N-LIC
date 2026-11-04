@@ -101,7 +101,12 @@ class ByeDpiVpnService : VpnService() {
         builder.setSession("N-LIC")
         val coreActive = configuration.args.firstOrNull() == "--nlic-libbox"
         val xrayActive = configuration.args.firstOrNull() == "--nlic-xray"
-        if (coreActive || xrayActive || (underlyingLink.isCellular && mtu < 8500)) {
+        val v2Active = configuration.args.firstOrNull() == "--nlic-v2"
+        // V2's bounded UDP relay cannot safely accept the older 8.5k
+        // synthetic interface MTU on Wi-Fi. Both Builder and HEV must
+        // receive the same 1280-1400 MTU, including on IPv6-only links.
+        if (coreActive || xrayActive || v2Active ||
+            (underlyingLink.isCellular && mtu < 8500)) {
             builder.setMtu(mtu)
         }
         builder.setConfigureIntent(

@@ -1,8 +1,8 @@
-name: N-LIC Xray Core Preview APK (DEV signed Release)
+name: N-LIC V2 Release APK (DEV signed)
 
 on:
   push:
-    branches: [feature/nlic-xray-core-20261104, feature/nlic-dual-mode-resilience-20261104]
+    branches: [feature/nlic-xray-core-20261104, feature/nlic-dual-mode-resilience-20261104 , feature/nlic-v2-ui-core]
     paths:
       - app/**
       - .github/workflows/nlic-xray-preview-apk.yml
@@ -19,6 +19,9 @@ jobs:
   xray_preview:
     runs-on: ubuntu-24.04
     timeout-minutes: 65
+    permissions:
+      contents: read
+      actions: write # Cancel only stale previews on this same branch.
     env:
       NLIC_INCLUDE_XRAY: "true"
       NLIC_ARM64_ONLY: "true"
@@ -29,10 +32,60 @@ jobs:
       NLIC_DEV_KEYSTORE_BASE64: ${{ secrets.NLIC_DEV_KEYSTORE_BASE64 }}
       NLIC_DEV_KEYSTORE_PATH: ${{ github.workspace }}/.signing/nlic-dev.p12
     steps:
+      - name: Cancel stale V2 runs before building (best effort)
+        if: github.ref == 'refs/heads/feature/nlic-v2-ui-core'
+        shell: bash
+        env:
+          GH_ACTIONS_TOKEN: ${{ github.token }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+          repo = os.environ['REPOSITORY']
+          current = int(os.environ['CURRENT_RUN_ID'])
+          headers = {
+              'Authorization': 'Bearer ' + os.environ['GH_ACTIONS_TOKEN'],
+              'Accept': 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+          }
+          url = f'https://api.github.com/repos/{repo}/actions/runs?branch=feature/nlic-v2-ui-core&per_page=100'
+          try:
+              with urllib.request.urlopen(
+                  urllib.request.Request(url, headers=headers), timeout=15,
+              ) as response:
+                  runs = json.load(response).get('workflow_runs', [])
+          except (OSError, ValueError) as error:
+              print('Could not list old runs; normal concurrency still applies:', type(error).__name__)
+              runs = []
+          total = 0
+          for run in runs:
+              if run.get('id', current) >= current or run.get('head_branch') != 'feature/nlic-v2-ui-core':
+                  continue
+              if run.get('status') not in ('queued', 'in_progress', 'pending', 'waiting', 'requested'):
+                  continue
+              previous = run['id']
+              cancel_url = f'https://api.github.com/repos/{repo}/actions/runs/{previous}/cancel'
+              request = urllib.request.Request(cancel_url, data=b'', headers=headers, method='POST')
+              try:
+                  with urllib.request.urlopen(request, timeout=8):
+                      total += 1
+              except urllib.error.HTTPError as error:
+                  if error.code not in (404, 409, 422):
+                      print('Could not cancel run', previous, 'HTTP', error.code)
+              except OSError:
+                  print('Could not cancel run', previous, '(network)')
+          print('Cancellation requests sent for', total, 'superseded V2 runs.')
+          PY
+
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           submodules: recursive
+
+      - name: Validate V2 one-screen settings and permissions
+        shell: bash
+        run: python3 tests/nlic-v2/test_ui_contract.py
 
       - name: Java 21
         uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
@@ -109,12 +162,13 @@ jobs:
           mkdir -p xray-preview
           apk="$(find app/build/outputs/apk/release -type f -name '*arm64-v8a*release*.apk' -print -quit)"
           test -s "$apk"
-          cp "$apk" xray-preview/N-LIC-XrayPreview-arm64-Release-DEV.apk
-          apk=xray-preview/N-LIC-XrayPreview-arm64-Release-DEV.apk
+          cp "$apk" xray-preview/N-LIC-V2-2.1.0-arm64-Release-DEV.apk
+          apk=xray-preview/N-LIC-V2-2.1.0-arm64-Release-DEV.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$apk" > xray-preview/SIGNATURE.txt
           grep -iq '9eac8ece5fb89eeacb03c5eff20155724a206d73180d58c78fc7d3911dbee5c5' xray-preview/SIGNATURE.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" > xray-preview/APK_METADATA.txt
           grep -q 'io.github.vanimusic6sudo.nlic' xray-preview/APK_METADATA.txt
+          grep -q "versionCode='2100'" xray-preview/APK_METADATA.txt
           if grep -q '^application-debuggable' xray-preview/APK_METADATA.txt; then exit 1; fi
           python3 - "$apk" <<'PY'
           import sys,zipfile
@@ -124,15 +178,21 @@ jobs:
               libs = [n for n in entries if n.startswith('lib/arm64-v8a/') and n.endswith('.so')]
               assert libs, 'Native ARM64 library missing'
               assert any('gojni' in n.lower() for n in libs), f'Gomobile JNI missing: {libs}'
+              assert 'lib/arm64-v8a/libnlicv2.so' in entries, 'Experimental V2 native core missing'
+              assert 'lib/arm64-v8a/libbyedpi.so' in entries, 'Stable ByeDPI rollback missing'
           PY
           cat > xray-preview/READ_ME_FIRST.txt <<'EOF'
-          N-LIC experimental Xray preview, DEV-signed optimized Release.
+          N-LIC V2 version 2.1.0-v2-preview (versionCode 2100).
+          DEV-signed optimized Release APK, not a production signing key.
           Xray-core provided by 2dust/AndroidLibXrayLite v26.10.31.
           Native AAR SHA256:
           2efdf731b1ed624eb1cb0d5a4d0aa95c0672e89f9702226d1ba2dc90308630b6
           Supported experimental profiles: VLESS TLS/REALITY, VMess,
           Trojan, Shadowsocks, wg-quick WireGuard.
-          LIC-Auto and LIC-Bay are unavailable in this preview.
+          LIC-Auto and LIC-Bay remain available with the proven Xray engine.
+          V2 clean-room native core is opt-in for local DPI mode only, in Settings.
+          Experimental native core has no universal DPI bypass guarantee.
+          Keep the stable engine selected if native TCP/UDP field tests fail.
           Xray uses an authenticated private SOCKS inbound plus HEV Android TUN.
           This is not a production security-tested VPN. Check for leaks.
           Do not disable Play Protect and do not use for sensitive data.
@@ -143,7 +203,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: N-LIC-XrayPreview-ARM64-DevSigned
+          name: N-LIC-V2-ARM64-DevSigned
           path: xray-preview/
           if-no-files-found: error
           retention-days: 14

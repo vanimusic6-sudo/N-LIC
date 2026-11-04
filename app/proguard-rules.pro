@@ -41,3 +41,6 @@
 # Xray gomobile JNI reflection
 -keep class libv2ray.** { *; }
 -keep class io.github.romanvht.byedpi.subscription.XrayRuntime { *; }
+
+# JNI symbols are bound to the original Kotlin class/method names.
+-keep class io.github.romanvht.byedpi.core.NlicV2Proxy { *; }
