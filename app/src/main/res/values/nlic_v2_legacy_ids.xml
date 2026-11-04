@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item type="id" name="nlic_add_subscription" />
+    <item type="id" name="nlic_add_link" />
+    <item type="id" name="nlic_add_file" />
+    <item type="id" name="nlic_refresh_now" />
+    <item type="id" name="nlic_expand_advanced" />
+    <item type="id" name="nlic_advanced_panel" />
+    <item type="id" name="nlic_privacy" />
+    <item type="id" name="nlic_help" />
+    <item type="id" name="nlic_refresh" />
+    <item type="id" name="nlic_tcp_check" />
+    <item type="id" name="nlic_legacy_mode" />
+    <item type="id" name="nlic_clear" />
+    <item type="id" name="nlic_supported_protocols" />
+    <item type="id" name="nlic_bay_hint" />
+</resources>
