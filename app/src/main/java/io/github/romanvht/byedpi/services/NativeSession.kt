@@ -297,23 +297,26 @@ internal class NativeSession(
                                 corePhase = if (transport == BayTransport.UDP_ASSOCIATE)
                                     "BAY_UDP" else "BAY_UPSTREAM"
                                 if (coreMode) CoreFailureTrace.mark(service, corePhase)
-                                var bayReady = false
-                                repeat(3) { attempt ->
-                                    if (!bayReady) {
-                                        bayReady = withContext(Dispatchers.IO) {
-                                            if (transport == BayTransport.UDP_ASSOCIATE)
+                                // A bare SOCKS5 CONNECT to a VLESS/Reality
+                                // server is NOT a reliable readiness test:
+                                // some DPI middleboxes and ByeDPI strategies
+                                // open the real TCP connection only after a
+                                // TLS ClientHello has been sent. Rejecting
+                                // the node at this point makes valid TCP
+                                // subscriptions fail as BAY_UNREACHABLE.
+                                // The actual authenticated HTTPS-through-
+                                // sing-box probe below validates TCP end-to-end.
+                                if (transport == BayTransport.UDP_ASSOCIATE) {
+                                    var bayReady = false
+                                    repeat(3) { attempt ->
+                                        if (!bayReady) {
+                                            bayReady = withContext(Dispatchers.IO) {
                                                 TunnelHealthProbe.checkBayUdp(legacyPort)
-                                            else TunnelHealthProbe.checkBay(
-                                                legacyPort, selected.host, selected.port,
-                                            )
+                                            }
                                         }
+                                        if (!bayReady && attempt < 2) delay(450)
                                     }
-                                    if (!bayReady && attempt < 2) delay(450)
-                                }
-                                check(bayReady) {
-                                    if (transport == BayTransport.UDP_ASSOCIATE)
-                                        "LIC-Core / BAY_UDP_UNAVAILABLE"
-                                    else "LIC-Core / BAY_UNREACHABLE"
+                                    check(bayReady) { "LIC-Core / BAY_UDP_UNAVAILABLE" }
                                 }
                             } else {
                                 // A mixed URLTest set needs both capabilities
@@ -495,6 +498,14 @@ internal class NativeSession(
     private fun fail(error: String) {
         if (state == EngineProtocol.STATE_STOPPING) return
         Log.e(TAG, error)
+        if (configuration?.args?.firstOrNull() == "--nlic-libbox") {
+            // The service intentionally exits on a failed health check.
+            // Persist only its credential-free code so the UI does not
+            // confuse that controlled exit with a Go panic at REMOTE_TEST.
+            val code = Regex("^LIC-Core / ([A-Z_]+)$")
+                .matchEntire(error)?.groupValues?.getOrNull(1) ?: "ENGINE"
+            CoreFailureTrace.markFailure(service, code)
+        }
         state = EngineProtocol.STATE_STOPPING
         reply(EngineProtocol.FAILED, Bundle().apply {
             putString(EngineProtocol.ERROR, error)
@@ -503,7 +514,7 @@ internal class NativeSession(
         // with delivery to the UI, so the actual safe error phase is lost
         // and the app displays only ENGINE. Give Binder a bounded 350 ms to
         // deliver FAILED before terminating the failed service.
-        handler.postDelayed({ terminate() }, 350L)
+        handler.postDelayed({ terminate() }, 1_000L)
     }
 
     private fun reply(what: Int, data: Bundle = Bundle()) {
