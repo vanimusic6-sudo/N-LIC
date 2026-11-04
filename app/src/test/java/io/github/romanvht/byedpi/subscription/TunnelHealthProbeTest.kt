@@ -9,6 +9,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TunnelHealthProbeTest {
+    @Test fun localProxyRefusalIsDistinguishedFromRemoteTlsFailure() {
+        val port = ServerSocket(0).use { it.localPort }
+        assertEquals(TunnelHealthProbe.EgressResult.CONNECT,
+            TunnelHealthProbe.probe("127.0.0.1", port))
+    }
+
     @Test fun `verified HTTPS response accepts normal successful sites not only 204`() {
         assertTrue(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 204 No Content\r"))
         assertTrue(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 200 OK"))
