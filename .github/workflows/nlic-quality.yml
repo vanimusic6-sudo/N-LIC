@@ -40,12 +40,39 @@ jobs:
           set -euo pipefail
           sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1" "ndk;27.2.12479018"
 
-      - name: Run unit tests and compile Android APK
+      - name: Run unit tests and export synthetic sing-box config fixtures
         shell: bash
+        env:
+          NLIC_EXPORT_NATIVE_FIXTURES: "1"
         run: |
           set -euo pipefail
           chmod +x ./gradlew
           ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace
+          test -f app/build/native-fixtures/vless.json
+
+      - name: Validate every real config schema with upstream sing-box 1.14.3
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/nlic-upstream
+          curl --fail --location --retry 3 --connect-timeout 15 --max-time 200 \
+            -o /tmp/nlic-upstream/singbox.tar.gz \
+            https://github.com/SagerNet/sing-box/releases/download/v1.14.3/sing-box-1.14.3-linux-amd64.tar.gz
+          tar xzf /tmp/nlic-upstream/singbox.tar.gz -C /tmp/nlic-upstream
+          engine="$(find /tmp/nlic-upstream -type f -name sing-box | head -1)"
+          test -n "$engine"
+          chmod +x "$engine"
+          "$engine" version
+          failures=0
+          for f in app/build/native-fixtures/*.json; do
+            echo "::group::Validate $f"
+            if ! "$engine" check -c "$f"; then
+              echo "::error file=$f::Generated config is rejected by sing-box 1.14.3"
+              failures=$((failures+1))
+            fi
+            echo "::endgroup::"
+          done
+          test "$failures" -eq 0
 
       - name: Upload internal debug APKs
         if: success()
