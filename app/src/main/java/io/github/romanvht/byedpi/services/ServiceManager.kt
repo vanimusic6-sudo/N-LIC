@@ -384,7 +384,7 @@ object ServiceManager {
                             "TUN", "HEV", "HEV_EXIT", "ENGINE_EXIT",
                             "XRAY_START", "XRAY_SOCKS", "XRAY_TUN", "XRAY_HEV",
                             "XRAY_HTTPS",
-                            "XRAY_MODE_UNSUPPORTED"
+                            "XRAY_MODE_UNSUPPORTED", "AUTO_PROBE", "AUTO_NO_WORKING_SERVER"
                         )
                         val lastNativeStage = application?.let {
                             io.github.romanvht.byedpi.subscription.CoreFailureTrace.recent(it)
