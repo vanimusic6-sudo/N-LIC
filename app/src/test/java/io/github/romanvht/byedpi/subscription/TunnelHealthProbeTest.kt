@@ -10,7 +10,7 @@ import org.junit.Test
 
 class TunnelHealthProbeTest {
     @Test fun `verified HTTPS response accepts normal successful sites not only 204`() {
-        assertTrue(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 204 No Content\\r"))
+        assertTrue(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 204 No Content\r"))
         assertTrue(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 200 OK"))
         assertTrue(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 301 Moved Permanently"))
         assertFalse(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 403 Forbidden"))
