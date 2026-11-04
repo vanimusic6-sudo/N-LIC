@@ -409,4 +409,5 @@
     <string name="nlic_privacy_description">Android VPN ayarlarından Her zaman açık VPN ve VPN olmadan bağlantıları engelle seçeneklerini değerlendirin. Aksi halde yeniden bağlanırken trafik doğrudan çıkabilir.</string>
     <string name="nlic_privacy_confirmation">Sistem VPN ayarları açılsın mı? N-LIC Android bağlantı engellemesini sizin yerinize etkinleştiremez.</string>
     <string name="nlic_privacy_unavailable">Bu cihazda VPN ayarları açılamıyor.</string>
+    <string name="nlic_core_advice_native_crash">Android yerel çekirdeği başlatılırken kapandı. Aşağıdaki kod kapanmadan önceki son aşamayı gösterir. Bu sorun sunucudan değil uygulamadan kaynaklanabilir. Yapılandırma veya anahtar yerine yalnızca kodu paylaşın.</string>
 </resources>
