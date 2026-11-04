@@ -481,9 +481,12 @@ internal class NativeSession(
         // Do not declare a working encrypted VPN dead solely because one
         // CDN blocks a captive-portal test path. Require a real validated TLS
         // + 204 response from either of two fixed public endpoints.
+        // Four *independent* cert-verified HTTPS targets, not the same
+        // two 204-only URLs twice. A blocked connectivity-check endpoint
+        // alone must not make a healthy VPN look disconnected.
         val targets = listOf(
             "www.gstatic.com", "cp.cloudflare.com",
-            "www.gstatic.com", "cp.cloudflare.com",
+            "example.com", "www.wikipedia.org",
         )
         for ((index, target) in targets.withIndex()) {
             val ok = withContext(Dispatchers.IO) {
