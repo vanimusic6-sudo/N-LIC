@@ -30,6 +30,24 @@ class AdaptiveDpiPolicyTest {
         assertEquals(AccessType.CELLULAR, pick.type)
     }
 
+    @Test fun `stable repeated results beat fragile lucky strategies`() {
+        val lucky = result("-f8", AccessType.WIFI, 3, 3)
+        val repeated = result("-s0+sm", AccessType.WIFI, 90, 100)
+        assertTrue(AdaptiveDpiPolicy.confidenceScore(repeated) >
+            AdaptiveDpiPolicy.confidenceScore(lucky))
+        val choice = AdaptiveDpiPolicy.choose(AccessType.WIFI, listOf(lucky, repeated))
+        assertEquals("-s0+sm", choice.command)
+    }
+
+    @Test fun `tampered benchmark commands cannot open listening ports`() {
+        for (bad in listOf("-i0.0.0.0 -s0+sm", "-p8080 -s0+sm",
+            "--ip=0.0.0.0 -s0+sm", "--port 8080 -s0+sm",
+            "--hosts=/tmp/hosts -s0+sm", "--cache-file /tmp/cache -s0+sm")) {
+            assertFalse(bad, AdaptiveDpiPolicy.isSafeCommand(bad))
+        }
+        assertTrue(AdaptiveDpiPolicy.isSafeCommand("-s0+sm"))
+    }
+
     @Test fun `wrong network or insufficient successes falls back conservatively`() {
         val results = listOf(result("-f7", AccessType.WIFI, 8, 8),
             result("-r1", AccessType.ETHERNET, 2, 2))
