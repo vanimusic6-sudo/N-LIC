@@ -289,7 +289,8 @@ object ServiceManager {
         if (current.configuration.isCompleted || current.started.isCompleted) return
         try {
             val config = NativeEngine.configuration(app)
-            current.expectedCore = config.args.firstOrNull() == "--nlic-libbox"
+            current.expectedCore = config.args.firstOrNull() in
+                setOf("--nlic-libbox", "--nlic-xray")
             current.configuration.complete(config)
         } catch (e: Exception) {
             if (current.expectedCore) {
@@ -377,7 +378,9 @@ object ServiceManager {
                             "BAY_UNSUPPORTED", "BAY_PROFILE", "CORE_START", "CORE_SOCKS",
                             "CONFIG_PREPARE", "PROTOCOL_UNSUPPORTED", "NATIVE_PROCESS",
                             "REMOTE_TEST", "REMOTE_CONNECT", "REMOTE_SOCKS", "REMOTE_TLS",
-                            "REMOTE_HTTP", "TUN", "HEV", "HEV_EXIT", "ENGINE_EXIT"
+                            "REMOTE_HTTP", "TUN", "HEV", "HEV_EXIT", "ENGINE_EXIT",
+                            "XRAY_START", "XRAY_SOCKS", "XRAY_TUN", "XRAY_HEV",
+                            "XRAY_MODE_UNSUPPORTED"
                         )
                         val lastNativeStage = application?.let {
                             io.github.romanvht.byedpi.subscription.CoreFailureTrace.recent(it)
