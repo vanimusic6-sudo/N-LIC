@@ -376,7 +376,8 @@ object ServiceManager {
                             "BAY_UPSTREAM", "BAY_UDP", "BAY_UDP_UNAVAILABLE",
                             "BAY_UNSUPPORTED", "BAY_PROFILE", "CORE_START", "CORE_SOCKS",
                             "CONFIG_PREPARE", "PROTOCOL_UNSUPPORTED", "NATIVE_PROCESS",
-                            "REMOTE_TEST", "TUN", "HEV", "HEV_EXIT", "ENGINE_EXIT"
+                            "REMOTE_TEST", "REMOTE_CONNECT", "REMOTE_SOCKS", "REMOTE_TLS",
+                            "REMOTE_HTTP", "TUN", "HEV", "HEV_EXIT", "ENGINE_EXIT"
                         )
                         val lastNativeStage = application?.let {
                             io.github.romanvht.byedpi.subscription.CoreFailureTrace.recent(it)
