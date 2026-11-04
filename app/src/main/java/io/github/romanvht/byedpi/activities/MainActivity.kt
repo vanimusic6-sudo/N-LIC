@@ -160,6 +160,9 @@ class MainActivity : BaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Reconcile the actual OS VPN state before showing the cockpit,
+        // including Always-on sessions restored after process death.
+        ServiceManager.refresh(this)
         // Xray preview now launches into the actual two-mode cockpit,
         // preserving the old interface behind an explicit legacy action.
         if (BuildConfig.NLIC_XRAY_INCLUDED && savedInstanceState == null &&
@@ -169,7 +172,6 @@ class MainActivity : BaseActivity() {
             finish()
             return
         }
-        ServiceManager.refresh(this)
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
