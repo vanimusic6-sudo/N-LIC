@@ -258,6 +258,8 @@ object ServiceManager {
         session = current
         if (current.expectedCore) {
             lastCoreFailureCode = null
+            io.github.romanvht.byedpi.subscription.CoreFailureTrace.clear(app)
+            io.github.romanvht.byedpi.subscription.CoreFailureTrace.mark(app, "CONFIG_PREPARE")
         }
         if (mode == Mode.VPN) beginNetworkObservation(app)
         configure(current, app)
@@ -376,9 +378,15 @@ object ServiceManager {
                             "CONFIG_PREPARE", "PROTOCOL_UNSUPPORTED", "NATIVE_PROCESS",
                             "REMOTE_TEST", "TUN", "HEV", "HEV_EXIT", "ENGINE_EXIT"
                         )
+                        val lastNativeStage = application?.let {
+                            io.github.romanvht.byedpi.subscription.CoreFailureTrace.recent(it)
+                        }
                         lastCoreFailureCode = code?.takeIf {
                             it in safeStages || it.removeSuffix("_TIMEOUT") in safeStages
-                        } ?: lastCoreFailureCode?.takeIf { it in safeStages } ?: "ENGINE"
+                        } ?: lastCoreFailureCode?.takeIf { it in safeStages }
+                            ?: lastNativeStage?.takeIf { it != "RUNNING" }?.let {
+                                "NATIVE_AT_$it"
+                            } ?: "ENGINE"
                         Log.e(TAG, "LIC-Core failed at safe stage $lastCoreFailureCode")
                     } else {
                         Log.e(TAG, "Native service failed", e)
