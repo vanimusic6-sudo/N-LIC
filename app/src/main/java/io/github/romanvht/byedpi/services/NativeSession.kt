@@ -372,6 +372,13 @@ internal class NativeSession(
                                 awaitRemoteReadiness(config.host, config.port, auth)
                             }
                         }
+                        // Save only the actually verified Auto winner.
+                        // Explicit manual selections are never overwritten.
+                        if (autoEnabled) withContext(Dispatchers.IO) {
+                            runCatching {
+                                SubscriptionVault.select(service, selected.id)
+                            }
+                        }
                         val physical = NetworkEnvironment.capture(service)
                         val mtu = AccessPolicy.tunMtu(
                             physical,
