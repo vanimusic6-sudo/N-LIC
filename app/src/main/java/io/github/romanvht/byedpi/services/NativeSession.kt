@@ -234,7 +234,68 @@ internal class NativeSession(
             if (coreMode) CoreFailureTrace.mark(service, corePhase)
             try {
                 withTimeout(50_000) {
-                    if (config.args.firstOrNull() == "--nlic-libbox") {
+                    if (xrayMode) {
+                        check(createTunnel != null) { "Xray VPN requires Android TUN" }
+                        corePhase = "CATALOG"; CoreFailureTrace.mark(service, corePhase)
+                        val catalog = withContext(Dispatchers.IO) {
+                            SubscriptionVault.read(service)
+                        }
+                        val node = catalog.allNodes.firstOrNull {
+                            it.id == catalog.selectedNodeId
+                        } ?: throw CoreStartException("NO_SERVER")
+                        val secret = ByteArray(24).also {
+                            SecureRandom().nextBytes(it)
+                        }.joinToString("") { "%02x".format(it.toInt() and 255) }
+                        val auth = LocalSocksAuth("nlic", secret)
+                        localAuth = auth
+                        corePhase = "CONFIG_COMPILE"; CoreFailureTrace.mark(service, corePhase)
+                        val result = XrayConfigCompiler.compile(node, auth)
+                        val plan = result as? XrayConfigCompiler.Result.Compiled
+                            ?: throw CoreStartException("PROTOCOL_UNSUPPORTED")
+
+                        // Start authenticated SOCKS before installing Android TUN.
+                        // If proxy health fails, no VPN interface is exposed.
+                        corePhase = "XRAY_START"; CoreFailureTrace.mark(service, corePhase)
+                        val xray = XrayRuntime(service)
+                        xrayEngine = xray
+                        withContext(Dispatchers.IO) { xray.start(plan.json) }
+                        corePhase = "XRAY_SOCKS"; CoreFailureTrace.mark(service, corePhase)
+                        withTimeout(START_TIMEOUT) {
+                            awaitProxy(config.host, config.port, auth)
+                        }
+                        corePhase = "REMOTE_TEST"; CoreFailureTrace.mark(service, corePhase)
+                        withTimeout(28_000) {
+                            awaitRemoteReadiness(config.host, config.port, auth)
+                        }
+                        val physical = NetworkEnvironment.capture(service)
+                        val mtu = AccessPolicy.tunMtu(
+                            physical,
+                            service.getPreferences().getBoolean("nlic_mobile_safe_mtu", true)
+                        ).coerceIn(1280, 1400)
+                        corePhase = "XRAY_TUN"; CoreFailureTrace.mark(service, corePhase)
+                        val descriptor = requireNotNull(createTunnel)(config, physical, mtu)
+                        tunFd = descriptor
+                        val tunnelConfig = buildString {
+                            appendLine("tunnel:")
+                            appendLine("  mtu: $mtu")
+                            appendLine("misc:")
+                            appendLine("  task-stack-size: 81920")
+                            appendLine("socks5:")
+                            appendLine("  address: 127.0.0.1")
+                            appendLine("  port: ${config.port}")
+                            appendLine("  udp: udp")
+                            appendLine("  username: nlic")
+                            appendLine("  password: ${auth.password}")
+                        }
+                        corePhase = "XRAY_HEV"; CoreFailureTrace.mark(service, corePhase)
+                        tunnelThread = runNative("HEV") {
+                            TProxyService.startTunnel(tunnelConfig, descriptor.fd)
+                        }
+                        delay(150)
+                        check(tunnelThread?.isAlive == true) {
+                            "Xray HEV tunnel exited during startup"
+                        }
+                    } else if (config.args.firstOrNull() == "--nlic-libbox") {
                         check(createTunnel != null) {
                             "LIC-Core requires VPN mode; proxy-only service is unsupported"
                         }
