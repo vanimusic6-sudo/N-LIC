@@ -113,6 +113,58 @@ internal object XrayConfigCompiler {
         }
     }
 
+    const val FORK_BRIDGE_TAG = "nlic-fork-bridge"
+
+    /**
+     * Two authenticated Xray transports, not packet fragmentation:
+     * Android TUN -> local SOCKS -> EXIT (tunneled via BRIDGE) -> Internet.
+     * The peer at BRIDGE can see the EXIT address. Nothing leaves through a
+     * direct fallback, even if the bridge fails after startup.
+     *
+     * Only TLS/REALITY-protected TCP-compatible transports are considered.
+     * UDP/WireGuard/QUIC bridging cannot be assumed to work over TCP SOCKS.
+     */
+    fun compileChain(
+        exit: SubscriptionNode,
+        bridge: SubscriptionNode,
+        auth: LocalSocksAuth,
+    ): Result {
+        if (exit.id == bridge.id || exit.host.equals(bridge.host, ignoreCase = true)) {
+            return Result.Unsupported("Chain endpoints must be distinct")
+        }
+        val first = compile(exit, auth) as? Result.Compiled
+            ?: return Result.Unsupported("Exit protocol is not supported")
+        val second = compile(bridge, auth) as? Result.Compiled
+            ?: return Result.Unsupported("Bridge protocol is not supported")
+        return try {
+            val root = JsonParser.parseString(first.json).asJsonObject
+            val exitOutbound = root.getAsJsonArray("outbounds")[0].asJsonObject
+            val bridgeOutbound = JsonParser.parseString(second.json).asJsonObject
+                .getAsJsonArray("outbounds")[0].asJsonObject.deepCopy()
+
+            fun approved(outbound: JsonObject): Boolean {
+                if (outbound.get("protocol")?.asString !in
+                    setOf("vless", "vmess", "trojan")) return false
+                val stream = outbound.getAsJsonObject("streamSettings") ?: return false
+                if (stream.get("network")?.asString !in
+                    setOf("raw", "ws", "grpc", "httpupgrade", "xhttp")) return false
+                return stream.get("security")?.asString in setOf("tls", "reality")
+            }
+            if (!approved(exitOutbound) || !approved(bridgeOutbound)) {
+                return Result.Unsupported("Chain requires two encrypted TCP transports")
+            }
+            // Xray dialerProxy acts on the outbound socket, not on the user's
+            // payload. No free-form routing fields are accepted from imports.
+            exitOutbound.getAsJsonObject("streamSettings").add("sockopt",
+                JsonObject().apply { addProperty("dialerProxy", FORK_BRIDGE_TAG) })
+            bridgeOutbound.addProperty("tag", FORK_BRIDGE_TAG)
+            root.getAsJsonArray("outbounds").add(bridgeOutbound)
+            Result.Compiled(root.toString(), "CHAIN")
+        } catch (_: Exception) {
+            Result.Unsupported("Could not construct encrypted chain")
+        }
+    }
+
     private fun convert(src: JsonObject): JsonObject? {
         val type = src.get("type")?.asString ?: return null
         val server = src.get("server")?.asString ?: return null
