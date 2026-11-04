@@ -247,7 +247,9 @@ class SubscriptionLabActivity : BaseActivity() {
         return true
     }
 
-    private fun showCompactSettings() = NlicV2Settings.show(this) {
+    private fun showCompactSettings() = NlicV2Settings.show(
+        this, appStatus.first == AppStatus.Running
+    ) {
         runOperation {
             ServiceManager.waitStop()
             prefs.edit().putBoolean("nlic_core_mode", false)
