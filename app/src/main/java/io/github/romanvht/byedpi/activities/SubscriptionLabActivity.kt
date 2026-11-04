@@ -505,9 +505,13 @@ class SubscriptionLabActivity : BaseActivity() {
         val choices = all.take(150)
         val labels = choices.map { node -> node.name + "  ·  " + node.protocol }
         findViewById<MaterialButton>(R.id.nlic_server_picker_button).apply {
-            text = if (auto) getString(R.string.nlic_control_auto_selected)
-                else selected?.let { it.name + "  ·  " + it.protocol }
-                    ?: getString(R.string.nlic_control_select_server)
+            text = if (auto) {
+                if (BuildConfig.NLIC_XRAY_INCLUDED && runningVpn && selected != null) {
+                    getString(R.string.nlic_control_auto_selected) + " · " +
+                        selected.name + " · " + selected.protocol
+                } else getString(R.string.nlic_control_auto_selected)
+            } else selected?.let { it.name + "  ·  " + it.protocol }
+                ?: getString(R.string.nlic_control_select_server)
             isEnabled = !busy && choices.isNotEmpty()
             setOnClickListener {
                 val selectedPosition = choices.indexOfFirst { node -> node.id == selected?.id }
