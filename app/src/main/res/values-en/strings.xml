@@ -409,4 +409,5 @@
     <string name="nlic_home_policy_measured">Selected from recent successful local tests on this network type</string>
     <string name="nlic_home_policy_baseline">No recent test results · using conservative fallback</string>
     <string name="nlic_home_policy_off">Automatic strategy disabled</string>
+    <string name="nlic_core_advice_native_crash">The Android native core exited during startup. The code below shows the last stage before the crash. This may be an app or engine compatibility issue, not the server. Share the stage code without configs or keys.</string>
 </resources>
