@@ -4,11 +4,19 @@ import android.app.Application
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
 import android.util.Log
 import io.github.romanvht.byedpi.R
 import io.github.romanvht.byedpi.data.*
+import io.github.romanvht.byedpi.utility.AccessType
+import io.github.romanvht.byedpi.utility.NetworkEnvironment
+import io.github.romanvht.byedpi.utility.LinkChangePolicy
+import io.github.romanvht.byedpi.utility.getPreferences
 import io.github.romanvht.byedpi.utility.createPauseNotification
 import io.github.romanvht.byedpi.utility.registerNotificationChannel
 import kotlinx.coroutines.*
@@ -29,8 +37,91 @@ object ServiceManager {
     private val mutex = Mutex()
     private var application: Application? = null
     private var session: Session? = null
+    private var networkListener: ConnectivityManager.NetworkCallback? = null
+    private var observedAccessType: AccessType = AccessType.UNKNOWN
+    private var transitionJob: Job? = null
+
+    // This field is intentionally process-local and contains only a fixed
+    // diagnostic code. Never persist a native exception or subscription URI.
+    @Volatile var lastCoreFailureCode: String? = null
+        private set
+
+    /**
+     * Optional low-frequency network listener: only active while our VPN runs.
+     * Avoid reconnecting for insignificant capability events or transient
+     * UNKNOWN readings. Never restart a Proxy-mode Helping session.
+     */
+    private fun beginNetworkObservation(app: Application) {
+        if (networkListener != null ||
+            !app.getPreferences().getBoolean("nlic_restart_on_network_change", false)) return
+        val manager = app.getSystemService(Context.CONNECTIVITY_SERVICE)
+            as? ConnectivityManager ?: return
+        observedAccessType = NetworkEnvironment.capture(app).type
+        val listener = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) = schedule()
+            override fun onLost(network: Network) = schedule()
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = schedule()
+
+            private fun schedule() {
+                transitionJob?.cancel()
+                transitionJob = scope.launch {
+                    delay(1_800)
+                    val currentType = NetworkEnvironment.capture(app).type
+                    val lastType = observedAccessType
+                    if (currentType == AccessType.UNKNOWN) return@launch
+                    observedAccessType = currentType
+                    if (LinkChangePolicy.shouldRestart(
+                            lastType, currentType,
+                            app.getPreferences().getBoolean("nlic_restart_on_network_change", false),
+                            session?.mode == Mode.VPN && session?.stopping == false &&
+                                !TestService.isRunning,
+                        )) {
+                        Log.i(TAG, "Physical network type changed, reconnecting VPN via user opt-in")
+                        restart(app, Mode.VPN)
+                    }
+                }
+            }
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                manager.registerDefaultNetworkCallback(listener)
+            } else {
+                manager.registerNetworkCallback(
+                    NetworkRequest.Builder()
+                        .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                        .build(),
+                    listener,
+                )
+            }
+            networkListener = listener
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not register radio listener", e)
+        }
+    }
+
+    private fun endNetworkObservation() {
+        transitionJob?.cancel()
+        transitionJob = null
+        val listener = networkListener ?: return
+        networkListener = null
+        application?.let { app ->
+            try {
+                val manager = app.getSystemService(Context.CONNECTIVITY_SERVICE)
+                    as? ConnectivityManager
+                manager?.unregisterNetworkCallback(listener)
+            } catch (_: Exception) {
+                // It may have been removed after the app process lost its network.
+            }
+        }
+        observedAccessType = AccessType.UNKNOWN
+    }
+
 
     private class Session(val mode: Mode, val engine: NativeEngine) {
+        // Snapshot the intended runtime before the UI resets the core-mode
+        // preference after a failed start. Otherwise failure classification
+        // races with the preference rollback and always falls to ENGINE.
+        var expectedCore: Boolean = false
         val configuration = CompletableDeferred<Configuration>()
         val configured = CompletableDeferred<Boolean>()
         val started = CompletableDeferred<Boolean>()
@@ -160,9 +251,20 @@ object ServiceManager {
         if (TestService.isRunning || commands.get() != command) return@withLock false
 
         val current = Session(mode, NativeEngine(app, mode))
+        // Mark the request BEFORE compiling imported profiles. A failure in
+        // settings/vault/Bay validation otherwise resets into generic ENGINE.
+        current.expectedCore = mode == Mode.VPN &&
+            app.getPreferences().getBoolean("nlic_core_mode", false)
         session = current
+        if (current.expectedCore) {
+            lastCoreFailureCode = null
+            io.github.romanvht.byedpi.subscription.CoreFailureTrace.clear(app)
+            io.github.romanvht.byedpi.subscription.CoreFailureTrace.mark(app, "CONFIG_PREPARE")
+        }
+        if (mode == Mode.VPN) beginNetworkObservation(app)
         configure(current, app)
-        publish(mode, AppStatus.Running, STARTED_BROADCAST)
+        // STARTING is not CONNECTED: only publish RUNNING after the native
+        // engine passes its authenticated readiness probe.
         (app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(PAUSE_NOTIFICATION_ID)
         monitor(current, launchService = true)
         try {
@@ -186,8 +288,19 @@ object ServiceManager {
     private fun configure(current: Session, app: Application) {
         if (current.configuration.isCompleted || current.started.isCompleted) return
         try {
-            current.configuration.complete(NativeEngine.configuration(app))
+            val config = NativeEngine.configuration(app)
+            current.expectedCore = config.args.firstOrNull() in
+                setOf("--nlic-libbox", "--nlic-xray")
+            current.configuration.complete(config)
         } catch (e: Exception) {
+            if (current.expectedCore) {
+                val code = when (e) {
+                    is io.github.romanvht.byedpi.subscription.CoreStartException -> e.stage
+                    else -> "CONFIG_PREPARE"
+                }
+                lastCoreFailureCode = code
+                Log.e(TAG, "LIC-Core compilation failed ($code); details withheld")
+            }
             current.configuration.completeExceptionally(e)
         }
     }
@@ -197,6 +310,7 @@ object ServiceManager {
         if (session != null || TestService.isRunning) return
         val running = NativeEngine.running(app)
         if (running == null) {
+            endNetworkObservation()
             app.stopService(Intent(app, ByeDpiVpnService::class.java))
             app.stopService(Intent(app, ByeDpiProxyService::class.java))
             val notifications = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -207,7 +321,9 @@ object ServiceManager {
         }
         val current = Session(running.first, NativeEngine(app, running.first, running.second))
         session = current
-        publish(current.mode, AppStatus.Running, STARTED_BROADCAST)
+        if (running.first == Mode.VPN) beginNetworkObservation(app)
+        // A recovered process may still be initializing. Query its native
+        // session first; never infer a working VPN from service presence.
         monitor(current, launchService = false)
     }
 
@@ -239,6 +355,7 @@ object ServiceManager {
                     }
                 }
                 if (!current.stopping) {
+                    lastCoreFailureCode = null
                     publish(current.mode, AppStatus.Running, STARTED_BROADCAST)
                     current.started.complete(true)
                 }
@@ -247,7 +364,47 @@ object ServiceManager {
                 failed = !current.stopping
             } catch (e: Exception) {
                 failed = !current.stopping
-                if (failed) Log.e(TAG, "Native service failed", e)
+                if (failed) {
+                    if (current.expectedCore ||
+                        e.message.orEmpty().contains("LIC-Core / ")) {
+                        val code = Regex("LIC-Core / ([A-Z_]+)")
+                            .find(e.message.orEmpty())?.groupValues?.getOrNull(1)
+                        val safeStages = setOf(
+                            "SETUP", "CONFIG", "INTERFACES", "COMMAND", "OUTBOUND",
+                            "CREDENTIAL_STORAGE", "BAY_UNREACHABLE", "NO_SERVER",
+                            "TUNNEL_TEST", "ENGINE", "CATALOG", "PREPARE",
+                            "CONFIG_COMPILE", "BAY_PROXY", "BAY_PROXY_EXIT",
+                            "BAY_UPSTREAM", "BAY_UDP", "BAY_UDP_UNAVAILABLE",
+                            "BAY_UNSUPPORTED", "BAY_PROFILE", "CORE_START", "CORE_SOCKS",
+                            "CONFIG_PREPARE", "PROTOCOL_UNSUPPORTED", "NATIVE_PROCESS",
+                            "REMOTE_TEST", "REMOTE_CONNECT", "REMOTE_SOCKS", "REMOTE_TLS",
+                            "REMOTE_HTTP", "REMOTE_TLS_CERT", "REMOTE_TLS_TIMEOUT",
+                            "REMOTE_TLS_HANDSHAKE", "REMOTE_TLS_PROTOCOL",
+                            "REMOTE_TLS_EOF", "REMOTE_TLS_IO",
+                            "TUN", "HEV", "HEV_EXIT", "ENGINE_EXIT",
+                            "XRAY_START", "XRAY_SOCKS", "XRAY_TUN", "XRAY_HEV",
+                            "XRAY_HTTPS",
+                            "XRAY_MODE_UNSUPPORTED", "AUTO_PROBE", "AUTO_NO_WORKING_SERVER"
+                        )
+                        val lastNativeStage = application?.let {
+                            io.github.romanvht.byedpi.subscription.CoreFailureTrace.recent(it)
+                        }
+                        lastCoreFailureCode = code?.takeIf {
+                            it in safeStages || it.removeSuffix("_TIMEOUT") in safeStages
+                        } ?: lastCoreFailureCode?.takeIf { it in safeStages }
+                            // A controlled health-check failure also kills :native.
+                            // Never label it a native crash just because its
+                            // IPC error was lost while the service was exiting.
+                            ?: lastNativeStage?.takeIf { it.startsWith("FAILED_") }
+                                ?.removePrefix("FAILED_")?.takeIf { it in safeStages }
+                            ?: lastNativeStage?.takeIf { it != "RUNNING" }?.let {
+                                "NATIVE_AT_$it"
+                            } ?: "ENGINE"
+                        Log.e(TAG, "LIC-Core failed at safe stage $lastCoreFailureCode")
+                    } else {
+                        Log.e(TAG, "Native service failed", e)
+                    }
+                }
             } finally {
                 current.configured.complete(false)
                 withContext(NonCancellable) {
@@ -272,6 +429,7 @@ object ServiceManager {
     private fun finish(current: Session, failed: Boolean) {
         current.engine.onStopping = null
         if (session === current) {
+            endNetworkObservation()
             session = null
             publish(current.mode, AppStatus.Halted, if (failed) FAILED_BROADCAST else STOPPED_BROADCAST)
         }

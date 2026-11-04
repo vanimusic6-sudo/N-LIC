@@ -6,31 +6,35 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:ignore="ForegroundServicesPolicy" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.QUICKBOOT_POWERON" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="AllFilesAccessPolicy,ScopedStorage" />
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="PackageVisibilityPolicy,QueryAllPackagesPermission" />
+    <!-- On Android 11+, list only apps that expose a launcher/TV entry.
+         The VPN routing app picker no longer gets blanket inventory access. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+        </intent>
+    </queries>
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:logo="@mipmap/ic_launcher"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
-        android:banner="@mipmap/ic_banner"
+        android:logo="@drawable/nlic_icon_legacy"
+        android:icon="@mipmap/nlic_launcher"
+        android:roundIcon="@mipmap/nlic_launcher"
+        android:banner="@drawable/nlic_tv_banner"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.ByeDPI"
-        android:requestLegacyExternalStorage="true"
         tools:targetApi="34">
 
         <activity
@@ -48,7 +52,7 @@
         <activity
             android:name=".activities.ToggleActivity"
             android:theme="@android:style/Theme.NoDisplay"
-            android:exported="true"
+            android:exported="false"
             android:excludeFromRecents="true"
             android:noHistory="true"
             android:taskAffinity=""
@@ -58,10 +62,16 @@
         <activity
             android:name=".activities.SettingsActivity"
             android:label="@string/title_settings"
-            android:exported="true"/>
+            android:exported="false"/>
 
         <activity
             android:name=".activities.FileActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".activities.SubscriptionLabActivity"
+            android:label="@string/nlic_control_title"
+            android:theme="@style/Theme.NlicControl"
             android:exported="false" />
 
         <activity
@@ -105,7 +115,7 @@
 
         <service
             android:name=".services.QuickTileService"
-            android:icon="@drawable/ic_notification"
+            android:icon="@drawable/nlic_notification"
             android:label="@string/app_name"
             android:exported="true"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
@@ -129,9 +139,6 @@
             android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="android.intent.action.REBOOT" />
-                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </receiver>
     </application>

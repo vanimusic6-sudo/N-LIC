@@ -1,0 +1,4 @@
+<resources>
+    <string name="nlic_xray_bay_hint">LIC-Bay sends Xray TCP and UDP VPN-server connections through the local ByeDPI SOCKS5 relay. WireGuard uses UDP ASSOCIATE. DPI bypass and UDP connectivity are not guaranteed, and no direct fallback is allowed.</string>
+    <string name="nlic_xray_auto_failed">LIC-Auto found no working encrypted connection among the tested servers. Up to three candidates are tested with real HTTPS through Xray; a TCP ping does not count as VPN success. Try another server or switch Bay off to diagnose.</string>
+</resources>

@@ -5,7 +5,18 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val abis = setOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+val includeNativeLibbox = System.getenv("NLIC_INCLUDE_LIBBOX") == "true"
+val includeNativeXray = System.getenv("NLIC_INCLUDE_XRAY") == "true"
+require(!(includeNativeLibbox && includeNativeXray)) {
+    "N-LIC preview must bundle exactly one core, not both"
+}
+// The emulator test exercises the EXACT pinned libbox Go library on x86_64,
+// without changing the arm64-only consumer Release DEV artifact.
+val abis = when {
+    System.getenv("NLIC_EMULATOR_X86_ONLY") == "true" -> setOf("x86_64")
+    (includeNativeLibbox || includeNativeXray) && System.getenv("NLIC_ARM64_ONLY") == "true" -> setOf("arm64-v8a")
+    else -> setOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+}
 
 // Dev signing values are injected by GitHub Actions; no signing secrets live in the repo.
 val devKeystorePath = System.getenv("NLIC_DEV_KEYSTORE_PATH")
@@ -16,18 +27,42 @@ val devSigningAvailable = listOf(
     devKeystorePath, devStorePassword, devKeyPassword, devKeyAlias
 ).all { !it.isNullOrBlank() }
 
+// The production certificate is separate from the DEV identity and never
+// committed to the repository. It is supplied only to an approved release job.
+val releaseKeystorePath = System.getenv("NLIC_RELEASE_KEYSTORE_PATH")
+val releaseStorePassword = System.getenv("NLIC_RELEASE_STORE_PASSWORD")
+val releaseKeyPassword = System.getenv("NLIC_RELEASE_KEY_PASSWORD")
+val releaseKeyAlias = System.getenv("NLIC_RELEASE_KEY_ALIAS")
+val releaseSigningAvailable = listOf(
+    releaseKeystorePath, releaseStorePassword, releaseKeyPassword, releaseKeyAlias
+).all { !it.isNullOrBlank() }
+
+// Explicit opt-in for an internal, release-optimized TEST artifact.
+// Uses the existing N-LIC DEV certificate; it is NOT a production signature.
+// Do not publish as an official release. Permanent releases require nlicRelease.
+val devSignedReleaseTest = System.getenv("NLIC_DEV_SIGN_RELEASE_TEST") == "true"
+
 android {
     namespace = "io.github.romanvht.byedpi"
     //noinspection GradleDependency
     compileSdk = 36
+    // Pin the native toolchain used by both Gradle/CMake and ndk-build.
+    ndkVersion = "27.2.12479018"
 
     defaultConfig {
         applicationId = "io.github.vanimusic6sudo.nlic"
-        minSdk = 21
+        // The pinned third-party libbox AAR declares minSdk 24.
+        // Legacy ByeDPI builds keep Android 5 support.
+        minSdk = if (includeNativeLibbox || includeNativeXray) 24 else 21
         //noinspection OldTargetApi
         targetSdk = 34
-        versionCode = 1820
-        versionName = "1.8.2"
+        versionCode = 2002
+        versionName = "2.0.2"
+        buildConfigField("boolean", "NLIC_LIBBOX_INCLUDED",
+            if (includeNativeLibbox) "true" else "false")
+
+        buildConfigField("boolean", "NLIC_XRAY_INCLUDED",
+            if (includeNativeXray) "true" else "false")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -50,6 +85,14 @@ android {
                 keyPassword = devKeyPassword
             }
         }
+        if (releaseSigningAvailable) {
+            create("nlicRelease") {
+                storeFile = file(requireNotNull(releaseKeystorePath))
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
@@ -60,6 +103,12 @@ android {
             }
         }
         release {
+            if (releaseSigningAvailable) {
+                signingConfig = signingConfigs.getByName("nlicRelease")
+            } else if (devSignedReleaseTest && devSigningAvailable) {
+                // Only the dedicated internal QA workflow sets this flag.
+                signingConfig = signingConfigs.getByName("nlicDev")
+            }
             buildConfigField("String", "VERSION_NAME",  "\"${defaultConfig.versionName}\"")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             isMinifyEnabled = true
@@ -107,6 +156,25 @@ android {
 }
 
 dependencies {
+    // Native sing-box is isolated to experimental Core Preview builds.
+    // CI pins SHA-256 of the AAR. Ordinary DEV APK never fetches it and
+    // remains the original small, fully functional ByeDPI build.
+    if (includeNativeLibbox) {
+        val pinnedAar = file("libs/libbox.aar")
+        require(pinnedAar.isFile) {
+            "NLIC_INCLUDE_LIBBOX=true requires pinned app/libs/libbox.aar"
+        }
+        implementation(files(pinnedAar))
+    }
+    if (includeNativeXray) {
+        // Exact version and SHA-256 are enforced in the dedicated Xray
+        // preview workflow. Never download an unpinned native engine in app.
+        val xrayAar = file("libs/libv2ray.aar")
+        require(xrayAar.isFile) {
+            "NLIC_INCLUDE_XRAY=true requires pinned app/libs/libv2ray.aar"
+        }
+        implementation(files(xrayAar))
+    }
     //noinspection GradleDependency
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.fragment:fragment-ktx:1.8.9")
@@ -115,7 +183,11 @@ dependencies {
     implementation("androidx.preference:preference-ktx:1.2.1")
     implementation("com.google.android.material:material:1.13.0")
     implementation("com.google.code.gson:gson:2.14.0")
+    // Pin a modern TLS-validated HTTPS client; its DNS callback is used to
+    // prevent DNS rebinding when importing user-provided subscription URLs.
+    implementation("com.squareup.okhttp3:okhttp:5.3.2")
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test:core:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
 }

@@ -25,11 +25,16 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
 import io.github.romanvht.byedpi.R
+import io.github.romanvht.byedpi.BuildConfig
 import io.github.romanvht.byedpi.data.*
 import io.github.romanvht.byedpi.databinding.ActivityMainBinding
 import io.github.romanvht.byedpi.services.ServiceManager
 import io.github.romanvht.byedpi.services.TestService
 import io.github.romanvht.byedpi.services.appStatus
+import io.github.romanvht.byedpi.subscription.SubscriptionVault
+import io.github.romanvht.byedpi.utility.AdaptiveDpiPolicy
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import io.github.romanvht.byedpi.utility.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -39,17 +44,26 @@ import kotlin.system.exitProcess
 class MainActivity : BaseActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var historyUtils: HistoryUtils
+    private var policyLabelJob: Job? = null
 
     companion object {
         private val TAG: String = MainActivity::class.java.simpleName
-        private const val BATTERY_OPTIMIZATION_REQUESTED = "battery_optimization_requested"
 
         private fun collectLogs(): String? {
             return try {
-                val process = Runtime.getRuntime().exec("logcat *:D -d")
-                process.inputStream.bufferedReader().use { reader ->
-                    reader.readText()
+                // Diagnostic export is initiated by the user. Never dump
+                // unrelated apps' device-wide logs; keep recent app-UID
+                // records from both the UI and separate native process.
+                val selector = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    "--uid=${android.os.Process.myUid()}"
+                } else {
+                    "--pid=${android.os.Process.myPid()}"
                 }
+                val process = Runtime.getRuntime().exec(
+                    arrayOf("logcat", "-d", "-t", "2500", selector, "*:D")
+                )
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                if (process.waitFor() != 0) null else output
             } catch (exception: Exception) {
                 Log.e(TAG, "Failed to collect logs", exception)
                 null
@@ -158,19 +172,23 @@ class MainActivity : BaseActivity() {
             addAction(FAILED_BROADCAST)
         }
 
-        @SuppressLint("UnspecifiedRegisterReceiverFlag")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(receiver, intentFilter, RECEIVER_EXPORTED)
-        } else {
-            registerReceiver(receiver, intentFilter)
-        }
+        // Internal state events must not be spoofable by third-party apps.
+        ContextCompat.registerReceiver(
+            this, receiver, intentFilter, ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         binding.statusButtonCard.setOnClickListener {
             binding.statusButtonCard.isClickable = false
 
             val (status, _) = appStatus
             when (status) {
-                AppStatus.Halted -> start()
+                AppStatus.Halted -> {
+                    if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+                        startActivity(Intent(this, SubscriptionLabActivity::class.java).apply {
+                            putExtra("nlic_quick_connect", true)
+                        })
+                    } else start()
+                }
                 AppStatus.Running -> stop()
             }
 
@@ -185,6 +203,15 @@ class MainActivity : BaseActivity() {
                 binding.statusButtonCard.strokeColor = android.graphics.Color.argb(100, 0, 0, 0)
             } else {
                 binding.statusButtonCard.strokeWidth = 0
+            }
+        }
+
+        // Some resource configurations use a compact alternative home layout.
+        // ViewBinding therefore exposes this optional button as nullable.
+        binding.nlicCoreButton?.apply {
+            visibility = if (BuildConfig.NLIC_LIBBOX_INCLUDED) View.VISIBLE else View.GONE
+            setOnClickListener {
+                startActivity(Intent(this@MainActivity, SubscriptionLabActivity::class.java))
             }
         }
 
@@ -204,6 +231,10 @@ class MainActivity : BaseActivity() {
         }
 
         binding.editorButton.setOnClickListener {
+            if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+                startActivity(Intent(this, SubscriptionLabActivity::class.java))
+                return@setOnClickListener
+            }
             val useCmdSettings = getPreferences().getCmdEnable()
 
             if (!useCmdSettings && appStatus.first == AppStatus.Running) {
@@ -227,14 +258,15 @@ class MainActivity : BaseActivity() {
         }
 
         binding.strategyButton.setOnClickListener {
-            showStrategyPicker()
+            if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+                startActivity(Intent(this, TestActivity::class.java))
+            } else showStrategyPicker()
         }
 
         if (!PermissionUtils.hasNotificationPermission(this)) {
             PermissionUtils.requestNotificationPermission(this, 1)
-        } else {
-            requestBatteryOptimization()
         }
+        // Battery optimization exemption is optional and only requested from Settings.
 
         if (!TestService.isRunning && getPreferences().getBoolean("auto_connect", false) &&
             appStatus.first != AppStatus.Running) {
@@ -242,6 +274,49 @@ class MainActivity : BaseActivity() {
         }
 
         ShortcutUtils.update(this)
+        if (savedInstanceState == null) handleShortcutIntent(intent)
+    }
+
+    /**
+     * Shortcuts can be sent by any launcher/app because MainActivity is public.
+     * Never execute an external network-control request without visible consent.
+     * A strategy must also be an existing pinned entry, not arbitrary arguments.
+     */
+    private fun handleShortcutIntent(source: Intent?) {
+        val action = source?.getStringExtra("nlic_shortcut_action") ?: return
+        if (action != "toggle" && action != "strategy") return
+        val strategy = source.getStringExtra("nlic_shortcut_strategy")
+        if (action == "strategy") {
+            if (strategy.isNullOrBlank() || strategy.length > 4096 ||
+                HistoryUtils(this).getHistory().none { it.pinned && it.text == strategy }
+            ) {
+                Log.w(TAG, "Ignoring unrecognized strategy shortcut")
+                return
+            }
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.nlic_shortcut_confirm_title)
+            .setMessage(R.string.nlic_shortcut_confirm_message)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                if (action == "strategy" && !strategy.isNullOrBlank()) {
+                    getPreferences().edit(commit = true) {
+                        putString("byedpi_cmd_args", strategy)
+                    }
+                    updateStrategyButton()
+                    if (appStatus.first == AppStatus.Running) {
+                        ServiceManager.restart(this, getPreferences().mode())
+                    } else {
+                        start()
+                    }
+                } else if (appStatus.first == AppStatus.Running) {
+                    stop()
+                } else {
+                    start()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     override fun onResume() {
@@ -252,20 +327,9 @@ class MainActivity : BaseActivity() {
     }
 
     override fun onDestroy() {
+        policyLabelJob?.cancel()
         super.onDestroy()
         unregisterReceiver(receiver)
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-
-        if (requestCode == 1) {
-            requestBatteryOptimization()
-        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -374,14 +438,24 @@ class MainActivity : BaseActivity() {
         val preferences = getPreferences()
         val (ip, port) = preferences.getProxyIpAndPort()
 
-        binding.proxyAddress.text = getString(R.string.proxy_address, ip, port)
+        binding.proxyAddress.text =
+            if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+                runCatching {
+                    val catalog = SubscriptionVault.read(applicationContext)
+                    val selected = catalog.allNodes.firstOrNull {
+                        it.id == catalog.selectedNodeId
+                    }
+                    selected?.let { it.name + " · " + it.protocol }
+                        ?: getString(R.string.nlic_control_start_hint)
+                }.getOrDefault(getString(R.string.nlic_control_status_hint))
+            } else getString(R.string.proxy_address, ip, port)
 
         when (status) {
             AppStatus.Halted -> {
-                val typedValue = android.util.TypedValue()
-                theme.resolveAttribute(android.R.attr.colorPrimary, typedValue,true)
-                binding.statusButtonCard.setCardBackgroundColor(typedValue.data)
-                binding.statusButtonIcon.clearColorFilter()
+                binding.statusButtonCard.setCardBackgroundColor(
+                    ContextCompat.getColor(this, R.color.nlic_surface_raised))
+                binding.statusButtonIcon.setColorFilter(
+                    ContextCompat.getColor(this, R.color.nlic_accent))
 
                 when (preferences.mode()) {
                     Mode.VPN -> {
@@ -395,8 +469,10 @@ class MainActivity : BaseActivity() {
             }
 
             AppStatus.Running -> {
-                binding.statusButtonCard.setCardBackgroundColor(ContextCompat.getColor(this, R.color.green_active))
-                binding.statusButtonIcon.setColorFilter(ContextCompat.getColor(this, android.R.color.white))
+                binding.statusButtonCard.setCardBackgroundColor(
+                    ContextCompat.getColor(this, R.color.nlic_success))
+                binding.statusButtonIcon.setColorFilter(
+                    ContextCompat.getColor(this, R.color.nlic_canvas))
 
                 when (mode) {
                     Mode.VPN -> {
@@ -412,6 +488,36 @@ class MainActivity : BaseActivity() {
     }
 
     private fun updateStrategyButton() {
+        if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+            // No raw ByeDPI command-line text on the new VPN-first home.
+            binding.cmdButtonsRow.visibility = View.VISIBLE
+            binding.strategyButton.visibility = View.VISIBLE
+            binding.strategyButtonName.visibility = View.VISIBLE
+            binding.strategyButtonName.text =
+                when (NetworkEnvironment.capture(this).type) {
+                    AccessType.WIFI -> "Wi-Fi"
+                    AccessType.CELLULAR -> getString(R.string.nlic_home_auto_network)
+                    AccessType.ETHERNET -> "Ethernet"
+                    else -> getString(R.string.nlic_home_connection)
+                }
+            binding.strategyButtonText.setText(R.string.nlic_home_policy_loading)
+            policyLabelJob?.cancel()
+            policyLabelJob = lifecycleScope.launch {
+                val decision = withContext(Dispatchers.IO) {
+                    val prefs = getPreferences()
+                    AdaptiveDpiPolicy.decide(this@MainActivity,
+                        prefs.getBoolean(AdaptiveDpiPolicy.KEY, true), prefs.getCmdArgs())
+                }
+                if (!isFinishing && !isDestroyed) {
+                    binding.strategyButtonText.setText(when {
+                        decision == null -> R.string.nlic_home_policy_off
+                        decision.measured -> R.string.nlic_home_policy_measured
+                        else -> R.string.nlic_home_policy_baseline
+                    })
+                }
+            }
+            return
+        }
         val useCmdSettings = getPreferences().getCmdEnable()
 
         if (!useCmdSettings) {
@@ -521,13 +627,4 @@ class MainActivity : BaseActivity() {
         }
     }
 
-    private fun requestBatteryOptimization() {
-        val preferences = getPreferences()
-        val alreadyRequested = preferences.getBoolean(BATTERY_OPTIMIZATION_REQUESTED, false)
-
-        if (!alreadyRequested && !PermissionUtils.isBatteryOptimizationDisabled(this)) {
-            PermissionUtils.requestBatteryOptimization(this)
-            preferences.edit { putBoolean(BATTERY_OPTIMIZATION_REQUESTED, true) }
-        }
-    }
 }

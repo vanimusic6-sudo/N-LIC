@@ -17,6 +17,7 @@ import io.github.romanvht.byedpi.data.StrategyResult
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import io.github.romanvht.byedpi.utility.ClipboardUtils
+import io.github.romanvht.byedpi.utility.StrategyRanking
 
 class StrategyResultAdapter(
     private val context: Context,
@@ -31,6 +32,7 @@ class StrategyResultAdapter(
         val progressLayout: LinearLayout = view.findViewById(R.id.progressLayout)
         val progressBar: ProgressBar = view.findViewById(R.id.progressBar)
         val progressTextView: TextView = view.findViewById(R.id.progressTextView)
+        val mediaResultTextView: TextView = view.findViewById(R.id.mediaResultTextView)
         val expandButton: LinearLayout = view.findViewById(R.id.expandButton)
         val expandTextView: TextView = view.findViewById(R.id.expandTextView)
         val expandIcon: ImageView = view.findViewById(R.id.expandIcon)
@@ -63,7 +65,14 @@ class StrategyResultAdapter(
     override fun onBindViewHolder(holder: StrategyViewHolder, position: Int) {
         val strategy = strategies[position]
 
-        holder.commandTextView.text = strategy.command
+        val networkTag = when (strategy.networkType) {
+            "CELLULAR" -> " · Mobile"
+            "WIFI" -> " · Wi-Fi"
+            "ETHERNET" -> " · Ethernet"
+            else -> ""
+        }
+        holder.commandTextView.text = strategy.command + networkTag
+        updateStreamLabel(holder, strategy)
 
         if (strategy.totalRequests > 0) {
             holder.progressLayout.visibility = View.VISIBLE
@@ -113,6 +122,7 @@ class StrategyResultAdapter(
             super.onBindViewHolder(holder, position, payloads)
         } else {
             val strategy = strategies[position]
+            updateStreamLabel(holder, strategy)
 
             if (strategy.totalRequests > 0) {
                 holder.progressLayout.visibility = View.VISIBLE
@@ -144,6 +154,31 @@ class StrategyResultAdapter(
         }
     }
 
+    private fun updateStreamLabel(holder: StrategyViewHolder, strategy: StrategyResult) {
+        val sample = strategy.streamProbe
+        if (sample == null) {
+            holder.mediaResultTextView.visibility = View.GONE
+            return
+        }
+        val label = when (sample.outcome) {
+            "COMPLETE" -> "видео получено"
+            "SLOW_TRANSFER" -> "очень медленный поток"
+            "STALLED_AFTER_DATA" -> "поток завис после первых байтов"
+            "CONNECTION_RESET_AFTER_DATA" -> "соединение оборвалось после начала"
+            "TIMEOUT_BEFORE_DATA" -> "нет первых байтов"
+            "PREMATURE_EOF" -> "обрыв до конца видеофрагмента"
+            "SHORT_OBJECT" -> "недостаточно данных для оценки"
+            "NOT_MEDIA" -> "вместо видео ответ другого типа"
+            "HTTP_REJECTED" -> "HTTP ${sample.httpStatus}"
+            "REDIRECTED" -> "перенаправление"
+            "INVALID_TARGET" -> "ссылка не поддерживается"
+            else -> "поток недоступен"
+        }
+        val rate = sample.transferBytesPerSecond?.let { " · ${it / 1024} КиБ/с" }.orEmpty()
+        holder.mediaResultTextView.text = "Видео: ${sample.bytesRead / 1024}/${sample.expectedBytes / 1024} КиБ · $label$rate"
+        holder.mediaResultTextView.visibility = View.VISIBLE
+    }
+
     override fun getItemCount(): Int {
         return strategies.size
     }
@@ -164,9 +199,7 @@ class StrategyResultAdapter(
     fun updateStrategies(newStrategies: List<StrategyResult>) {
         strategies.clear()
 
-        val sorted = newStrategies.sortedWith(compareByDescending<StrategyResult> { it.isCompleted }
-            .thenByDescending { it.successPercentage }
-            .thenByDescending { it.successCount })
+        val sorted = newStrategies.sortedWith(StrategyRanking.comparator)
 
         strategies.addAll(sorted)
         notifyDataSetChanged()

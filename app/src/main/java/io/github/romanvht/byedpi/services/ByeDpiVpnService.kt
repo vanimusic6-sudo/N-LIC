@@ -17,6 +17,7 @@ import io.github.romanvht.byedpi.activities.MainActivity
 import io.github.romanvht.byedpi.data.*
 import io.github.romanvht.byedpi.receiver.ServiceActionReceiver
 import io.github.romanvht.byedpi.utility.*
+import io.github.romanvht.byedpi.subscription.NativeTunConfig
 
 @SuppressLint("VpnServicePolicy")
 class ByeDpiVpnService : VpnService() {
@@ -95,10 +96,14 @@ class ByeDpiVpnService : VpnService() {
         }
     }
 
-    private fun createTunnel(configuration: Configuration): ParcelFileDescriptor {
-        Log.d(TAG, "DNS: ${configuration.dns}")
+    private fun createTunnel(configuration: Configuration, underlyingLink: AccessSnapshot, mtu: Int): ParcelFileDescriptor {
         val builder = Builder()
-        builder.setSession("ByeDPI")
+        builder.setSession("N-LIC")
+        val coreActive = configuration.args.firstOrNull() == "--nlic-libbox"
+        val xrayActive = configuration.args.firstOrNull() == "--nlic-xray"
+        if (coreActive || xrayActive || (underlyingLink.isCellular && mtu < 8500)) {
+            builder.setMtu(mtu)
+        }
         builder.setConfigureIntent(
             PendingIntent.getActivity(
                 this,
@@ -108,20 +113,39 @@ class ByeDpiVpnService : VpnService() {
             )
         )
 
-        builder.addAddress("10.10.10.10", 32)
-            .addRoute("0.0.0.0", 0)
+        // The Android addresses MUST match the native sing-box TUN config.
+        // A mismatch here causes native handshake success but no app traffic.
+        builder.addAddress(
+            if (coreActive) NativeTunConfig.IPV4_ADDRESS else "10.10.10.10",
+            if (coreActive) NativeTunConfig.IPV4_PREFIX else 32,
+        ).addRoute("0.0.0.0", 0)
 
-        if (configuration.ipv6) {
-            builder.addAddress("fd00::1", 128)
+        val mobileIpv6 = getPreferences().getBoolean("nlic_mobile_ipv6_auto", true)
+        // An encrypted LIC-Core session must never accidentally let IPv6
+        // escape when the mobile link advertises a dual-stack network.
+        // Legacy ByeDPI keeps its existing per-carrier IPv6 policy.
+        if (coreActive ||
+            AccessPolicy.shouldCaptureIpv6(configuration.ipv6, underlyingLink, mobileIpv6)) {
+            builder.addAddress(
+                if (coreActive) NativeTunConfig.IPV6_ADDRESS else "fd00::1",
+                if (coreActive) NativeTunConfig.IPV6_PREFIX else 128
+            )
                 .addRoute("::", 0)
         }
 
-        if (configuration.dns.isNotBlank()) {
+        if (coreActive) {
+            // sing-box 1.14 native TUN hijacks port 53 on this synthetic IP;
+            // visited domain names do not go to the carrier DNS resolver.
+            builder.addDnsServer(NativeTunConfig.IPV4_DNS)
+        } else if (configuration.dns.isNotBlank()) {
             builder.addDnsServer(configuration.dns)
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            builder.setMetered(false)
+            // Respect mobile carrier metering; do not falsely advertise unmetered data.
+            if (underlyingLink.type != AccessType.UNKNOWN) {
+                builder.setMetered(underlyingLink.isCellular)
+            }
         }
 
         when (configuration.appListType) {
@@ -138,18 +162,25 @@ class ByeDpiVpnService : VpnService() {
             }
 
             "whitelist" -> {
+                var allowed = 0
                 for (packageName in configuration.apps) {
+                    // The N-LIC UID must never enter its own TUN: its
+                    // native SOCKS outbound sockets would recursively loop.
+                    if (packageName == applicationContext.packageName) continue
                     try {
                         builder.addAllowedApplication(packageName)
+                        allowed++
                     } catch (e: Exception) {
                         Log.e(TAG, "Не удалось добавить приложение $packageName в белый список", e)
                     }
                 }
+                check(allowed > 0) { "Select at least one installed app for VPN whitelist" }
             }
 
             "disable" -> {
                 builder.addDisallowedApplication(applicationContext.packageName)
             }
+            else -> error("Unsupported application routing mode")
         }
 
         return builder.establish() ?: throw IllegalStateException("VPN connection failed")

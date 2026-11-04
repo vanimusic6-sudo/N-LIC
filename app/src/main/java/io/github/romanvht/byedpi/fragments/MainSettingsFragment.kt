@@ -1,6 +1,22 @@
 package io.github.romanvht.byedpi.fragments
 
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import android.net.VpnService
+import io.github.romanvht.byedpi.services.NativeEngine
+import io.github.romanvht.byedpi.services.ServiceManager
+import io.github.romanvht.byedpi.services.appStatus
+import io.github.romanvht.byedpi.data.AppStatus
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.Log
@@ -10,6 +26,7 @@ import androidx.preference.*
 import io.github.romanvht.byedpi.R
 import io.github.romanvht.byedpi.BuildConfig
 import io.github.romanvht.byedpi.activities.TestActivity
+import io.github.romanvht.byedpi.activities.SubscriptionLabActivity
 import io.github.romanvht.byedpi.data.Mode
 import io.github.romanvht.byedpi.data.PrivateDnsState
 import io.github.romanvht.byedpi.utility.*
@@ -44,6 +61,32 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
                 true
             }
 
+        findPreferenceNotNull<SwitchPreference>(NetworkProfileStore.ENABLED_KEY)
+            .setOnPreferenceChangeListener { _, enabled ->
+                if (enabled == true) {
+                    // When first enabled, remember the current command for
+                    // this link type, without touching the other network.
+                    val prefs = requireContext().getPreferences()
+                    val key = NetworkProfileStore.key(NetworkEnvironment.capture(requireContext()).type)
+                    if (key != null && prefs.getString(key, null).isNullOrBlank()) {
+                        prefs.edit { putString(key, prefs.getCmdArgs()) }
+                    }
+                }
+                true
+            }
+
+        findPreferenceNotNull<Preference>("nlic_subscription_manager")
+            .setOnPreferenceClickListener {
+                startActivity(Intent(requireContext(), SubscriptionLabActivity::class.java))
+                true
+            }
+
+        findPreferenceNotNull<Preference>("nlic_network_health")
+            .setOnPreferenceClickListener {
+                showNetworkHealth()
+                true
+            }
+
         findPreferenceNotNull<Preference>("proxy_test")
             .setOnPreferenceClickListener {
                 val intent = Intent(context, TestActivity::class.java)
@@ -57,11 +100,6 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
                 true
             }
 
-        findPreferenceNotNull<Preference>("storage_access")
-            .setOnPreferenceClickListener {
-                PermissionUtils.requestStorageAccess(this)
-                true
-            }
 
         findPreferenceNotNull<Preference>("donate")
             .setOnPreferenceClickListener {
@@ -116,7 +154,6 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
         val applistType = findPreferenceNotNull<ListPreference>("applist_type")
         val selectedApps = findPreferenceNotNull<Preference>("selected_apps")
         val batteryOptimization = findPreferenceNotNull<Preference>("battery_optimization")
-        val storageAccess = findPreferenceNotNull<Preference>("storage_access")
 
         val uiSettings = findPreferenceNotNull<Preference>("byedpi_ui_settings")
         val cmdSettings = findPreferenceNotNull<Preference>("byedpi_cmd_settings")
@@ -132,6 +169,14 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
         uiSettings.isEnabled = !cmdEnable
         cmdSettings.isEnabled = cmdEnable
         proxyTest.isEnabled = cmdEnable
+        if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+            // N-LIC is a managed VPN client, not a shell-argument editor.
+            // Legacy settings remain on disk for migration/rollback but
+            // cannot be edited via the 2.0 primary UI.
+            findPreferenceNotNull<SwitchPreference>("byedpi_enable_cmd_settings").isVisible = false
+            cmdSettings.isVisible = false
+            proxyTest.isEnabled = true
+        }
 
         dns.summary = dnsSummary()
         dnsEdit.isVisible = false
@@ -174,10 +219,124 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
             batteryOptimization.summary = getString(R.string.battery_optimization_summary)
         }
 
-        if (PermissionUtils.hasStorageAccess(requireContext())) {
-            storageAccess.summary = getString(R.string.storage_access_allowed_summary)
+    }
+
+    private fun showNetworkHealth() {
+        val context = requireContext()
+        val vpnActive = NativeEngine.running(context)?.first == Mode.VPN ||
+            (appStatus.first == AppStatus.Running && appStatus.second == Mode.VPN)
+        val physicalAvailable = runCatching {
+            NetworkHealthUtils.underlyingNetwork(context) != null
+        }.getOrDefault(false)
+        // Without N-LIC VPN, an unavailable ConnectivityManager network list
+        // must not prevent a plain default-route TCP/HTTPS diagnostic.
+        // Never silently disconnect any third-party VPN.
+
+        if (vpnActive && !physicalAvailable) {
+            // A VPN may be the only Network visible to our UID. Ask BEFORE
+            // disconnecting; restoring the same N-LIC mode is non-optional.
+            AlertDialog.Builder(context)
+                .setTitle(R.string.nlic_network_health_paused_title)
+                .setMessage(R.string.nlic_network_health_paused_warning)
+                .setPositiveButton(R.string.nlic_network_health_paused_confirm) { _, _ ->
+                    runNetworkHealth(temporarilyStopVpn = true)
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
         } else {
-            storageAccess.summary = getString(R.string.storage_access_summary)
+            runNetworkHealth(temporarilyStopVpn = false)
+        }
+    }
+
+    private fun runNetworkHealth(temporarilyStopVpn: Boolean) {
+        val app = requireContext().applicationContext
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle(R.string.nlic_network_health)
+            .setMessage(R.string.nlic_network_health_running)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setCancelable(false)
+            .create()
+        dialog.show()
+        val job = viewLifecycleOwner.lifecycleScope.launch {
+            var stopped = false
+            var restored = !temporarilyStopVpn
+            var report: io.github.romanvht.byedpi.utility.NetworkHealthReport? = null
+            var failure: String? = null
+            try {
+                if (temporarilyStopVpn) {
+                    // Mark restoration required before invoking stop, because
+                    // cancellation may happen at any suspension point.
+                    stopped = true
+                    ServiceManager.waitStop()
+                    delay(1_000) // Give Android time to update default Network.
+                }
+                report = withTimeoutOrNull(105_000) {
+                    NetworkHealthUtils.run(app, compareSocks = !temporarilyStopVpn)
+                }
+                if (report == null) failure = getString(R.string.nlic_network_health_timeout)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                failure = e.message?.take(120) ?: "Network diagnostic failed"
+                Log.w(TAG, "Physical network diagnostic failed", e)
+            } finally {
+                if (stopped) {
+                    // Even when the user cancels the scan or navigates away,
+                    // always attempt to restore their previously running VPN.
+                    withContext(NonCancellable) {
+                        restored = try {
+                            if (VpnService.prepare(app) == null) {
+                                withTimeoutOrNull(25_000) {
+                                    ServiceManager.waitStart(app, Mode.VPN)
+                                } == true
+                            } else false
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Could not restore N-LIC VPN after diagnostics", e)
+                            false
+                        }
+                    }
+                }
+            }
+            if (temporarilyStopVpn && restored && report != null) {
+                report = withTimeoutOrNull(18_000) {
+                    NetworkHealthUtils.addProxyComparison(app, requireNotNull(report))
+                } ?: report
+            }
+            dialog.dismiss()
+            if (!isAdded) return@launch
+            val text = buildString {
+                report?.let { appendLine(it.asText()) }
+                failure?.let { appendLine(it) }
+                if (temporarilyStopVpn) {
+                    appendLine(getString(
+                        if (restored) R.string.nlic_network_health_restored
+                        else R.string.nlic_network_health_restore_failed
+                    ))
+                }
+            }
+            AlertDialog.Builder(requireContext())
+                .setTitle(R.string.nlic_network_health)
+                .setMessage(text)
+                .setPositiveButton(R.string.diagnostic_copy) { _, _ ->
+                    val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE)
+                        as ClipboardManager
+                    clipboard.setPrimaryClip(
+                        ClipData.newPlainText("N-LIC physical network report", text)
+                    )
+                    Toast.makeText(requireContext(), R.string.toast_copied, Toast.LENGTH_SHORT).show()
+                }
+                .setNeutralButton(R.string.nlic_network_health_app_access) { _, _ ->
+                    startActivity(Intent(
+                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.fromParts("package", requireContext().packageName, null),
+                    ))
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener {
+            job.cancel()
+            dialog.dismiss()
         }
     }
 

@@ -2,11 +2,13 @@ package io.github.romanvht.byedpi.data
 
 data class StrategyResult(
     val command: String,
+    val networkType: String = "UNKNOWN",
     var successCount: Int = 0,
     var totalRequests: Int = 0,
     var currentProgress: Int = 0,
     var isCompleted: Boolean = false,
     val siteResults: MutableList<SiteResult> = mutableListOf(),
+    var streamProbe: StreamProbeResult? = null,
     var isExpanded: Boolean = false
 ) {
     val successPercentage: Int
@@ -16,5 +18,8 @@ data class StrategyResult(
 data class SiteResult(
     val site: String,
     val successCount: Int,
-    val totalCount: Int
+    val totalCount: Int,
+    // Backward-compatible optional fields. Old results.json files may lack them.
+    val verdictCounts: Map<String, Int> = emptyMap(),
+    val medianSuccessLatencyMs: Long? = null,
 )

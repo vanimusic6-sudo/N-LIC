@@ -15,10 +15,15 @@ object DiagnosticUtils {
         val mode = preferences.mode()
         val privateDnsState = PrivateDnsUtils.getState(context)
         val cmdEnabled = preferences.getCmdEnable()
-        val strategy = if (cmdEnabled) {
-            preferences.getCmdArgs()
+        // Full ByeDPI arguments can contain provider hosts, domain lists,
+        // paths or future authentication flags. The exported report is
+        // designed to be shareable, so do not include raw strategy content.
+        val strategy = if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+            "Managed local strategy (redacted)"
+        } else if (cmdEnabled) {
+            "Custom strategy (redacted)"
         } else {
-            ByeDpiProxyUIPreferences(preferences).uiargs.drop(1).joinToString(" ")
+            "GUI strategy (redacted)"
         }
         val (ip, port) = preferences.getProxyIpAndPort()
         val activeLists = DomainListUtils.getLists(context)
@@ -37,6 +42,16 @@ object DiagnosticUtils {
             ))
             appendLine(value(context, R.string.diagnostic_kernel_version, Os.uname().release))
             appendLine(value(context, R.string.diagnostic_app_version, BuildConfig.VERSION_NAME))
+
+            val network = NetworkEnvironment.capture(context)
+            appendLine("Underlying transport: ${network.type.name}")
+            appendLine("Underlying IPv4 present: ${network.hasIpv4}, IPv6 present: ${network.hasIpv6}")
+            appendLine("Carrier NAT64: ${network.hasNat64}")
+            appendLine("Carrier DNS64 auto: ${preferences.getBoolean("nlic_mobile_dns64_auto", true)}")
+            appendLine("Link-specific profiles: ${preferences.getBoolean(NetworkProfileStore.ENABLED_KEY, false)}")
+            appendLine("Reported link MTU: ${network.physicalMtu}")
+            appendLine("N-LIC TUN MTU policy: ${AccessPolicy.tunMtu(network, preferences.getBoolean("nlic_mobile_safe_mtu", true))}")
+            appendLine("Cellular IPv6 auto-capture: ${preferences.getBoolean("nlic_mobile_ipv6_auto", true)}")
 
             appendLine()
             appendLine(context.getString(R.string.diagnostic_app_settings))
@@ -82,11 +97,6 @@ object DiagnosticUtils {
                 R.string.diagnostic_battery_exclusion,
                 availability(context, PermissionUtils.isBatteryOptimizationDisabled(context))
             ))
-            appendLine(value(
-                context,
-                R.string.storage_access,
-                availability(context, PermissionUtils.hasStorageAccess(context))
-            ))
 
             appendLine()
             appendLine(context.getString(R.string.diagnostic_test_settings))
@@ -98,12 +108,12 @@ object DiagnosticUtils {
             appendLine(value(
                 context,
                 R.string.test_requests,
-                preferences.getIntStringNotNull("byedpi_proxytest_requests", 1).toString()
+                preferences.getIntStringNotNull("byedpi_proxytest_requests", 2).toString()
             ))
             appendLine(value(
                 context,
                 R.string.test_requests_limit,
-                preferences.getIntStringNotNull("byedpi_proxytest_limit", 20).toString()
+                preferences.getIntStringNotNull("byedpi_proxytest_limit", 6).toString()
             ))
             appendLine(value(
                 context,

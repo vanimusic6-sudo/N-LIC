@@ -25,6 +25,12 @@
             android:summary="%s"
             android:defaultValue="system" />
 
+        <Preference
+            android:key="nlic_subscription_manager"
+            android:icon="@drawable/ic_vpn_key"
+            android:title="@string/nlic_subscriptions_title"
+            android:summary="@string/nlic_subscriptions_phase_desc" />
+
         <ListPreference
             android:key="byedpi_mode"
             android:icon="@drawable/ic_vpn_key"
@@ -50,6 +56,41 @@
             android:key="dns_ip"
             android:title="@string/dbs_ip_setting"
             android:defaultValue="1.1.1.1" />
+
+        <SwitchPreference
+            android:key="nlic_network_profiles"
+            android:icon="@drawable/ic_tune"
+            android:title="@string/nlic_network_profiles"
+            android:summary="@string/nlic_network_profiles_desc"
+            android:defaultValue="false" />
+
+        <SwitchPreference
+            android:key="nlic_restart_on_network_change"
+            android:icon="@drawable/ic_autorenew"
+            android:title="@string/nlic_restart_on_network_change"
+            android:summary="@string/nlic_restart_on_network_change_desc"
+            android:defaultValue="false" />
+
+        <SwitchPreference
+            android:key="nlic_mobile_dns64_auto"
+            android:icon="@drawable/ic_dns"
+            android:title="@string/nlic_mobile_dns64_auto"
+            android:summary="@string/nlic_mobile_dns64_auto_desc"
+            android:defaultValue="true" />
+
+        <SwitchPreference
+            android:key="nlic_mobile_ipv6_auto"
+            android:icon="@drawable/ic_network"
+            android:title="@string/nlic_mobile_ipv6_auto"
+            android:summary="@string/nlic_mobile_ipv6_auto_desc"
+            android:defaultValue="true" />
+
+        <SwitchPreference
+            android:key="nlic_mobile_safe_mtu"
+            android:icon="@drawable/ic_network"
+            android:title="@string/nlic_mobile_safe_mtu"
+            android:summary="@string/nlic_mobile_safe_mtu_desc"
+            android:defaultValue="true" />
 
         <SwitchPreference
             android:key="ipv6_enable"
@@ -115,6 +156,12 @@
             app:fragment="io.github.romanvht.byedpi.fragments.ByeDpiCMDSettingsFragment" />
 
         <Preference
+            android:key="nlic_network_health"
+            android:icon="@drawable/ic_network"
+            android:title="@string/nlic_network_health"
+            android:summary="@string/nlic_network_health_desc" />
+
+        <Preference
             android:key="proxy_test"
             android:icon="@drawable/ic_speed"
             android:title="@string/title_test"
@@ -153,12 +200,6 @@
             android:summary="@string/battery_optimization_summary">
         </Preference>
 
-        <Preference
-            android:key="storage_access"
-            android:icon="@drawable/ic_folder"
-            android:title="@string/storage_access"
-            android:summary="@string/storage_access_summary">
-        </Preference>
 
     </androidx.preference.PreferenceCategory>
 
@@ -185,7 +226,7 @@
             android:icon="@drawable/ic_github">
             <intent
                 android:action="android.intent.action.VIEW"
-                android:data="https://github.com/romanvht/ByeDPIAndroid" />
+                android:data="https://github.com/vanimusic6-sudo/N-LIC" />
         </Preference>
 
         <Preference
@@ -212,5 +253,14 @@
             android:summary="0.0.1" />
 
     </androidx.preference.PreferenceCategory>
+
+    <Preference
+        android:key="nlic_upstream_credits"
+        android:title="@string/nlic_upstream_credits"
+        android:icon="@drawable/ic_github">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="https://github.com/romanvht/ByeByeDPI" />
+    </Preference>
 
 </PreferenceScreen>

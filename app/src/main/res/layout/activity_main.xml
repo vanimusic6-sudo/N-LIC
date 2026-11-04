@@ -5,310 +5,359 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
+    android:background="@color/nlic_canvas"
     tools:context=".activities.MainActivity">
 
     <include layout="@layout/app_toolbar" />
 
-    <RelativeLayout
-    android:layout_width="match_parent"
-    android:layout_height="0dp"
-    android:layout_weight="1"
-    android:clipChildren="false"
-    android:clipToPadding="false">
-
-    <LinearLayout
-        android:id="@+id/bottom_buttons"
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:layout_marginStart="24dp"
-        android:layout_marginEnd="24dp"
-        android:layout_marginBottom="20dp"
-        android:clipChildren="false"
-        android:clipToPadding="false"
-        android:orientation="vertical">
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:scrollbars="none"
+        android:clipToPadding="false">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center">
-
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/editor_button"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginEnd="8dp"
-                android:clickable="true"
-                android:focusable="true"
-                android:foreground="?attr/selectableItemBackground"
-                app:cardCornerRadius="12dp"
-                app:strokeWidth="0dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:gravity="center"
-                    android:padding="16dp"
-                    tools:ignore="UseCompoundDrawables">
-
-                    <ImageView
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:src="@drawable/ic_tune"
-                        android:contentDescription="@string/open_editor"
-                        app:tint="?attr/colorPrimary" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="@string/open_editor"
-                        android:textSize="14sp"
-                        android:textColor="?android:textColorPrimary" />
-
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/settings_button"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:clickable="true"
-                android:focusable="true"
-                android:foreground="?attr/selectableItemBackground"
-                app:cardCornerRadius="12dp"
-                app:strokeWidth="0dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:gravity="center"
-                    android:padding="16dp"
-                    tools:ignore="UseCompoundDrawables">
-
-                    <ImageView
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:src="@drawable/baseline_settings_24"
-                        android:contentDescription="@string/title_settings"
-                        app:tint="?attr/colorPrimary" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="@string/title_settings"
-                        android:textSize="14sp"
-                        android:textColor="?android:textColorPrimary" />
-
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/cmd_buttons_row"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:layout_marginTop="16dp"
-            android:visibility="gone">
-
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/test_proxy_button"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginEnd="8dp"
-                android:clickable="true"
-                android:focusable="true"
-                android:foreground="?attr/selectableItemBackground"
-                app:cardCornerRadius="12dp"
-                app:strokeWidth="0dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:gravity="center"
-                    android:padding="16dp"
-                    tools:ignore="UseCompoundDrawables">
-
-                    <ImageView
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:src="@drawable/ic_speed"
-                        android:contentDescription="@string/main_btn_test"
-                        app:tint="?attr/colorPrimary" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="@string/main_btn_test"
-                        android:textSize="14sp"
-                        android:textColor="?android:textColorPrimary" />
-
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/domain_lists_button"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:clickable="true"
-                android:focusable="true"
-                android:foreground="?attr/selectableItemBackground"
-                app:cardCornerRadius="12dp"
-                app:strokeWidth="0dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:gravity="center"
-                    android:padding="16dp"
-                    tools:ignore="UseCompoundDrawables">
-
-                    <ImageView
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:src="@drawable/ic_filter_list"
-                        android:contentDescription="@string/main_btn_list"
-                        app:tint="?attr/colorPrimary" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="@string/main_btn_list"
-                        android:textSize="14sp"
-                        android:textColor="?android:textColorPrimary" />
-
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-        </LinearLayout>
-
-    </LinearLayout>
-
-    <FrameLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_above="@id/bottom_buttons">
-
-        <LinearLayout
-            android:id="@+id/center_container"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
             android:orientation="vertical"
-            android:gravity="center"
-            tools:ignore="UselessParent">
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="32dp">
 
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/status_button_card"
-                android:layout_width="140dp"
-                android:layout_height="140dp"
-                app:cardCornerRadius="70dp"
-                app:cardElevation="8dp"
-                app:strokeWidth="0dp"
-                android:clickable="true"
-                android:focusable="true"
-                android:foreground="?attr/selectableItemBackground">
-
-                <ImageView
-                    android:id="@+id/status_button_icon"
-                    android:layout_width="56dp"
-                    android:layout_height="56dp"
-                    android:layout_gravity="center"
-                    android:src="@drawable/ic_power"
-                    android:contentDescription="@string/vpn_connect"
-                    app:tint="?attr/colorOnPrimary" />
-
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/status_text"
-                android:layout_width="wrap_content"
+            <TextView
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:textSize="16sp"
-                tools:text="@string/vpn_disconnected" />
+                android:text="@string/nlic_home_eyebrow"
+                android:textColor="@color/nlic_accent"
+                android:textSize="12sp"
+                android:letterSpacing="0.10"
+                android:fontFamily="sans-serif-medium" />
 
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/proxy_address"
-                android:layout_width="wrap_content"
+            <TextView
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:textSize="14sp"
-                android:textColor="?android:textColorSecondary"
-                tools:text="127.0.0.1:1080" />
+                android:text="@string/nlic_home_heading"
+                android:textSize="31sp"
+                android:letterSpacing="-0.03"
+                android:textColor="@color/nlic_text"
+                android:fontFamily="sans-serif-medium" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/nlic_home_intro"
+                android:textColor="@color/nlic_muted"
+                android:textSize="14sp" />
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                app:cardBackgroundColor="@color/nlic_surface"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/nlic_border"
+                app:strokeWidth="1dp"
+                app:cardCornerRadius="30dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center_horizontal"
+                    android:paddingStart="20dp"
+                    android:paddingEnd="20dp"
+                    android:paddingTop="28dp"
+                    android:paddingBottom="24dp">
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/nlic_home_tunnel"
+                        android:textColor="@color/nlic_muted"
+                        android:textSize="12sp"
+                        android:letterSpacing="0.11"
+                        android:gravity="center" />
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/status_button_card"
+                        android:layout_width="136dp"
+                        android:layout_height="136dp"
+                        android:layout_marginTop="26dp"
+                        android:layout_marginBottom="20dp"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:contentDescription="@string/nlic_home_power"
+                        android:foreground="?attr/selectableItemBackground"
+                        app:cardCornerRadius="68dp"
+                        app:cardElevation="0dp"
+                        app:strokeColor="@color/nlic_border"
+                        app:strokeWidth="2dp"
+                        app:cardBackgroundColor="@color/nlic_surface_raised">
+                        <ImageView
+                            android:id="@+id/status_button_icon"
+                            android:layout_width="58dp"
+                            android:layout_height="58dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_power"
+                            android:contentDescription="@string/nlic_home_power"
+                            app:tint="@color/nlic_accent" />
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <com.google.android.material.textview.MaterialTextView
+                        android:id="@+id/status_text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:textColor="@color/nlic_text"
+                        android:textSize="24sp"
+                        android:fontFamily="sans-serif-medium"
+                        tools:text="Отключено" />
+
+                    <com.google.android.material.textview.MaterialTextView
+                        android:id="@+id/proxy_address"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:gravity="center"
+                        android:maxLines="2"
+                        android:ellipsize="end"
+                        android:textColor="@color/nlic_muted"
+                        android:textSize="13sp"
+                        tools:text="Выбери VPN-сервер" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/nlic_core_button"
+                        android:layout_width="match_parent"
+                        android:layout_height="50dp"
+                        android:layout_marginTop="26dp"
+                        android:text="@string/nlic_home_open_servers"
+                        android:textAllCaps="false"
+                        android:textSize="15sp"
+                        android:visibility="gone"
+                        app:cornerRadius="18dp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="28dp"
+                android:layout_marginBottom="12dp"
+                android:text="@string/nlic_home_connection"
+                android:textColor="@color/nlic_text"
+                android:textSize="18sp"
+                android:fontFamily="sans-serif-medium" />
 
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/strategy_button"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
                 android:clickable="true"
                 android:focusable="true"
-                android:visibility="gone"
-                app:cardElevation="1dp"
-                app:shapeAppearanceOverlay="@style/PillCard"
-                app:cardUseCompatPadding="true"
-                tools:visibility="visible">
-
+                android:foreground="?attr/selectableItemBackground"
+                app:cardElevation="0dp"
+                app:cardCornerRadius="22dp"
+                app:cardBackgroundColor="@color/nlic_surface">
                 <LinearLayout
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:gravity="center"
                     android:orientation="vertical"
-                    android:paddingStart="18dp"
-                    android:paddingEnd="18dp"
-                    android:paddingTop="8dp"
-                    android:paddingBottom="8dp">
-
+                    android:padding="19dp">
                     <com.google.android.material.textview.MaterialTextView
                         android:id="@+id/strategy_button_name"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:maxWidth="260dp"
-                        android:maxLines="1"
-                        android:ellipsize="end"
-                        android:gravity="center"
+                        android:textColor="@color/nlic_accent"
                         android:textSize="13sp"
-                        android:textStyle="bold"
-                        android:visibility="gone"
-                        tools:text="strategy_name"
-                        tools:visibility="visible" />
-
+                        android:fontFamily="sans-serif-medium"
+                        tools:text="Wi-Fi" />
                     <com.google.android.material.textview.MaterialTextView
                         android:id="@+id/strategy_button_text"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:maxWidth="260dp"
+                        android:layout_marginTop="4dp"
                         android:maxLines="2"
                         android:ellipsize="end"
-                        android:gravity="center"
-                        android:textSize="13sp"
-                        tools:text="-f-200 -Qr -s3:5+sm" />
-
+                        android:textSize="14sp"
+                        android:textColor="@color/nlic_text"
+                        tools:text="Стратегия выбирается для текущей сети" />
                 </LinearLayout>
-
             </com.google.android.material.card.MaterialCardView>
 
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="28dp"
+                android:layout_marginBottom="12dp"
+                android:text="@string/nlic_home_shortcuts"
+                android:textColor="@color/nlic_text"
+                android:textSize="18sp"
+                android:fontFamily="sans-serif-medium" />
+
+            <LinearLayout
+                android:id="@+id/bottom_buttons"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:baselineAligned="false">
+
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/editor_button"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    app:cardCornerRadius="22dp"
+                    app:cardBackgroundColor="@color/nlic_surface"
+                    app:cardElevation="0dp">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:padding="15dp">
+                        <ImageView
+                            android:layout_width="28dp"
+                            android:layout_height="28dp"
+                            android:src="@drawable/ic_vpn_key"
+                            android:contentDescription="@string/nlic_home_open_servers"
+                            app:tint="@color/nlic_accent" />
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="9dp"
+                            android:text="@string/nlic_home_servers"
+                            android:textColor="@color/nlic_text"
+                            android:textSize="14sp" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/settings_button"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    app:cardCornerRadius="22dp"
+                    app:cardBackgroundColor="@color/nlic_surface"
+                    app:cardElevation="0dp">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:padding="15dp">
+                        <ImageView
+                            android:layout_width="28dp"
+                            android:layout_height="28dp"
+                            android:src="@drawable/baseline_settings_24"
+                            android:contentDescription="@string/title_settings"
+                            app:tint="@color/nlic_accent" />
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="9dp"
+                            android:text="@string/title_settings"
+                            android:textColor="@color/nlic_text"
+                            android:textSize="14sp" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/cmd_buttons_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal"
+                android:baselineAligned="false">
+
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/test_proxy_button"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    app:cardCornerRadius="22dp"
+                    app:cardBackgroundColor="@color/nlic_surface"
+                    app:cardElevation="0dp">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+                        <ImageView
+                            android:layout_width="27dp"
+                            android:layout_height="27dp"
+                            android:src="@drawable/ic_speed"
+                            android:contentDescription="@string/main_btn_test"
+                            app:tint="@color/nlic_accent" />
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="@string/nlic_home_check_network"
+                            android:textColor="@color/nlic_text"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/domain_lists_button"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    app:cardCornerRadius="22dp"
+                    app:cardBackgroundColor="@color/nlic_surface"
+                    app:cardElevation="0dp">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+                        <ImageView
+                            android:layout_width="27dp"
+                            android:layout_height="27dp"
+                            android:src="@drawable/ic_filter_list"
+                            android:contentDescription="@string/main_btn_list"
+                            app:tint="@color/nlic_accent" />
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="@string/nlic_home_rules"
+                            android:textColor="@color/nlic_text"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:gravity="center"
+                android:text="@string/nlic_home_disclaimer"
+                android:textColor="@color/nlic_muted"
+                android:textSize="11sp" />
+
         </LinearLayout>
-    </FrameLayout>
-
-    </RelativeLayout>
-
+    </androidx.core.widget.NestedScrollView>
 </LinearLayout>

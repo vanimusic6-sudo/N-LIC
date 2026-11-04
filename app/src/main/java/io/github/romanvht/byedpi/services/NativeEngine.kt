@@ -28,6 +28,12 @@ import io.github.romanvht.byedpi.data.Mode
 import io.github.romanvht.byedpi.data.PrivateDnsState
 import io.github.romanvht.byedpi.data.START_ACTION
 import io.github.romanvht.byedpi.utility.*
+import io.github.romanvht.byedpi.BuildConfig
+import io.github.romanvht.byedpi.subscription.SubscriptionVault
+import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
+import io.github.romanvht.byedpi.subscription.XrayBayArgs
+import io.github.romanvht.byedpi.subscription.CoreStartException
+
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
@@ -45,21 +51,188 @@ internal class NativeEngine(
 
         fun configuration(context: Context): Configuration {
             val preferences = context.getPreferences()
-            val proxy = ByeDpiProxyPreferences.fromSharedPreferences(preferences, context)
+
+            // LIC-Core is now a standalone, explicit VPN runtime.
+            // Neither normal VPN nor LIC-Bay may parse legacy UI flags/ports:
+            // those often contain stale values and previously caused a global
+            // ENGINE failure before the native core even initialized.
+            val isCore = preferences.getBoolean("nlic_core_mode", false) &&
+                preferences.getStringNotNull("byedpi_mode", "vpn") == "vpn"
+            if (isCore && BuildConfig.NLIC_XRAY_INCLUDED) {
+                val catalog = runCatching { SubscriptionVault.read(context) }
+                    .getOrElse { throw CoreStartException("CATALOG") }
+                val auto = preferences.getBoolean("nlic_core_auto", false)
+                val bay = preferences.getBoolean("nlic_core_bay", false)
+                val bayPort = io.github.romanvht.byedpi.subscription.XrayConfigCompiler.BAY_PORT
+                val authForValidation =
+                    io.github.romanvht.byedpi.subscription.LocalSocksAuth("nlic", "a".repeat(48))
+                val supports: (io.github.romanvht.byedpi.subscription.SubscriptionNode) -> Boolean =
+                    { node ->
+                        io.github.romanvht.byedpi.subscription.XrayConfigCompiler.compile(
+                            node, authForValidation, if (bay) bayPort else null
+                        ) is io.github.romanvht.byedpi.subscription.XrayConfigCompiler.Result.Compiled
+                    }
+                val eligible = if (auto) {
+                    io.github.romanvht.byedpi.subscription.XrayAutoSelector.candidates(
+                        catalog.allNodes, catalog.selectedNodeId, bay, supports
+                    )
+                } else {
+                    catalog.allNodes.filter {
+                        it.id == catalog.selectedNodeId && supports(it)
+                    }
+                }
+                if (eligible.isEmpty()) throw CoreStartException("PROTOCOL_UNSUPPORTED")
+                val bayArgs = if (bay) {
+                    // Only the pinned local ByeDPI command generator is allowed.
+                    // User subscription entries cannot add proxy flags or
+                    // create an externally listening ByeDPI server.
+                    val strategy = AdaptiveDpiPolicy.decide(
+                        context,
+                        preferences.getBoolean(AdaptiveDpiPolicy.KEY, true),
+                        "-s0+sm",
+                    )?.command ?: "-s0+sm"
+                    val arguments = try {
+                        ByeDpiProxyCmdPreferences(
+                            context, strategy, "127.0.0.1", bayPort,
+                        ).args.drop(1)
+                    } catch (_: Exception) {
+                        throw CoreStartException("BAY_PROFILE")
+                    }
+                    if (!XrayBayArgs.validLoopback(arguments, bayPort)) {
+                        throw CoreStartException("BAY_PROFILE")
+                    }
+                    arguments
+                } else emptyList()
+                return Configuration(
+                    args = listOf(
+                        "--nlic-xray",
+                        if (bay) "--nlic-bay" else "--nlic-direct",
+                        if (auto) "--nlic-auto" else "--nlic-fixed",
+                    ) + bayArgs,
+                    host = "127.0.0.1",
+                    port = io.github.romanvht.byedpi.subscription.XrayConfigCompiler.SOCKS_PORT,
+                    dns = preferences.getStringNotNull("dns_ip", "1.1.1.1")
+                        .ifBlank { "1.1.1.1" },
+                    ipv6 = true,
+                    appListType = preferences.getStringNotNull("applist_type", "disable"),
+                    apps = preferences.getSelectedApps(),
+                )
+            }
+            if (isCore) {
+                check(BuildConfig.NLIC_LIBBOX_INCLUDED) {
+                    "Core preview runtime not bundled"
+                }
+                val catalog = try {
+                    SubscriptionVault.read(context)
+                } catch (_: Exception) {
+                    // No user secrets or Java exception messages in logs/UI.
+                    throw CoreStartException("CATALOG")
+                }
+                val auto = preferences.getBoolean("nlic_core_auto", false)
+                val bay = preferences.getBoolean("nlic_core_bay", false)
+                val bayPort = 11088 // Dedicated loopback port, never a public listener.
+                val bayMode = if (bay) SingBoxConfigCompiler.Bay.ON
+                    else SingBoxConfigCompiler.Bay.OFF
+                val chosen = if (auto) {
+                    SingBoxConfigCompiler.compileAuto(catalog.allNodes, bayMode, bayPort)
+                } else {
+                    val node = catalog.allNodes.firstOrNull {
+                        it.id == catalog.selectedNodeId
+                    } ?: error("Select a VPN server first")
+                    SingBoxConfigCompiler.compile(node, bayMode, bayPort)
+                }
+                if (chosen !is SingBoxConfigCompiler.Result.Compiled) {
+                    throw CoreStartException("PROTOCOL_UNSUPPORTED")
+                }
+                val bayArgs = if (bay) {
+                    val strategy = AdaptiveDpiPolicy.decide(
+                        context,
+                        preferences.getBoolean(AdaptiveDpiPolicy.KEY, true),
+                        "-s0+sm",
+                    )?.command ?: "-s0+sm"
+                    // All selected ByeDPI strategies are local. No arguments
+                    // from an imported config can change the listener or run
+                    // external commands. ByeDPI's SOCKS5 UDP is enabled by
+                    // default; there is no --no-udp in this dedicated profile.
+                    val proxy = try {
+                        ByeDpiProxyCmdPreferences(
+                            context, strategy, "127.0.0.1", bayPort,
+                        )
+                    } catch (_: Exception) {
+                        throw CoreStartException("BAY_PROFILE")
+                    }
+                    proxy.args.drop(1).also {
+                        check(it.none { option ->
+                            option == "-U" || option == "--no-udp" ||
+                                option == "--transparent" || option == "-E"
+                        }) { "LIC-Bay requires SOCKS5 UDP and loopback mode" }
+                    }
+                } else emptyList()
+                return Configuration(
+                    args = listOf(
+                        "--nlic-libbox",
+                        if (bay) "--nlic-bay" else "--nlic-direct",
+                        if (auto) "--nlic-auto" else "--nlic-fixed",
+                    ) + bayArgs,
+                    host = "127.0.0.1",
+                    port = SingBoxConfigCompiler.PROXY_PORT,
+                    dns = preferences.getStringNotNull("dns_ip", "1.1.1.1")
+                        .ifBlank { "1.1.1.1" },
+                    ipv6 = true,
+                    appListType = preferences.getStringNotNull("applist_type", "disable"),
+                    apps = preferences.getSelectedApps(),
+                )
+            }
+
+            val manual = preferences.getCmdArgs()
+            // Pick from recent, locally measured link-type outcomes.
+            // Do not make up carrier-specific universal bypass flags.
+            val adaptive = AdaptiveDpiPolicy.decide(context,
+                preferences.getBoolean(AdaptiveDpiPolicy.KEY, true), manual)
+            val selected = NetworkProfileStore.choose(
+                preferences.getBoolean(NetworkProfileStore.ENABLED_KEY, false),
+                NetworkEnvironment.capture(context).type,
+                adaptive?.command ?: manual,
+            ) { key -> preferences.getString(key, null) }
+            val proxy = if ((preferences.getCmdEnable() || adaptive != null) &&
+                selected != manual) {
+                // Apply only on engine startup; never interrupt an existing flow.
+                val host = preferences.getStringNotNull("byedpi_proxy_ip", "127.0.0.1")
+                val port = preferences.getIntStringNotNull("byedpi_proxy_port", 1080)
+                    .coerceIn(1, 65535)
+                ByeDpiProxyCmdPreferences(context, selected, host, port)
+            } else ByeDpiProxyPreferences.fromSharedPreferences(preferences, context)
             val args = when (proxy) {
                 is ByeDpiProxyCmdPreferences -> proxy.args
                 is ByeDpiProxyUIPreferences -> proxy.uiargs
             }
             val (defaultHost, defaultPort) = preferences.getProxyIpAndPort()
             val (host, port) = args.toList().checkIpAndPortInArgs()
-            return Configuration(
-                args.toList(), host ?: defaultHost, (port ?: defaultPort).toInt(),
-                dns = if (PrivateDnsUtils.getState(context) is PrivateDnsState.Configured) ""
-                    else preferences.getStringNotNull("dns_ip", "1.1.1.1"),
+            val resolvedPort = (port ?: defaultPort).toIntOrNull()
+            require(resolvedPort != null && resolvedPort in 1..65535) {
+                "Invalid local proxy port (expected 1..65535)"
+            }
+            val legacy = Configuration(
+                args.toList(), host ?: defaultHost, resolvedPort,
+                dns = preferences.getStringNotNull("dns_ip", "1.1.1.1").let { userDns ->
+                    val link = NetworkEnvironment.capture(context)
+                    val carrierDns = AccessPolicy.preferCarrierDnsOnNat64(
+                        link,
+                        preferences.getBoolean("nlic_mobile_dns64_auto", true),
+                        userDns,
+                    )
+                    if (PrivateDnsUtils.getState(context) is PrivateDnsState.Configured || carrierDns) {
+                        // No VPN DNS override: Android inherits the underlying
+                        // resolver (including DNS64 on IPv6-only mobile paths).
+                        ""
+                    } else userDns
+                },
                 ipv6 = preferences.getBoolean("ipv6_enable", false),
                 appListType = preferences.getStringNotNull("applist_type", "disable"),
                 apps = preferences.getSelectedApps(),
             )
+            // Legacy ByeDPI remains a separate, explicit mode.
+            return legacy
         }
 
         private fun serviceClass(mode: Mode): Class<out Service> = when (mode) {
@@ -214,15 +387,19 @@ internal class NativeEngine(
                 putStringArray(EngineProtocol.APPS, configuration.apps.toTypedArray())
             })
         }
-        awaitStarted()
+        awaitStarted(
+            if (configuration.args.firstOrNull() == "--nlic-xray" &&
+                configuration.args.getOrNull(2) == "--nlic-auto"
+            ) 95_000L else 60_000L
+        )
     }
 
     suspend fun awaitConfigured() {
         configured.await()
     }
 
-    suspend fun awaitStarted() {
-        withTimeout(15_000) { started.await() }
+    suspend fun awaitStarted(timeoutMs: Long = 60_000L) {
+        withTimeout(timeoutMs) { started.await() }
         check(!closing && !exited.isCompleted) { failure ?: "Native engine stopped during startup" }
     }
 

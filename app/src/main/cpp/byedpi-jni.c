@@ -21,6 +21,11 @@ int __wrap_daemon(__attribute__((unused)) int nochdir, __attribute__((unused)) i
 
 JNIEXPORT jint JNICALL
 Java_io_github_romanvht_byedpi_core_ByeDpiProxy_jniStartProxy(JNIEnv *env, __attribute__((unused)) jobject thiz, jobjectArray args) {
+    if (!args) return -1;
+    int argc = (*env)->GetArrayLength(env, args);
+    // Bound untrusted strategy data before handing it to the C command parser.
+    if (argc < 1 || argc > 256) return -1;
+
     pthread_mutex_lock(&proxy_mutex);
     if (proxy_started) {
         pthread_mutex_unlock(&proxy_mutex);
@@ -30,18 +35,24 @@ Java_io_github_romanvht_byedpi_core_ByeDpiProxy_jniStartProxy(JNIEnv *env, __att
     proxy_started = 1;
     pthread_mutex_unlock(&proxy_mutex);
 
-    int argc = (*env)->GetArrayLength(env, args);
-    char **argv = calloc(argc + 1, sizeof(char *));
+    char **argv = calloc((size_t)argc + 1, sizeof(char *));
     int result = -1;
-    if (!argv) {
-        return result;
-    }
+    int entered_main = 0;
+    size_t total_bytes = 0;
+    if (!argv) goto cleanup;
 
     for (int i = 0; i < argc; i++) {
         jstring arg = (jstring) (*env)->GetObjectArrayElement(env, args, i);
         if (!arg) {
             goto cleanup;
         }
+
+        const jsize len = (*env)->GetStringUTFLength(env, arg);
+        if (len < 1 || len > 4096 || total_bytes + (size_t)len > 65536) {
+            (*env)->DeleteLocalRef(env, arg);
+            goto cleanup;
+        }
+        total_bytes += (size_t)len;
 
         const char *arg_str = (*env)->GetStringUTFChars(env, arg, NULL);
         if (arg_str) {
@@ -60,6 +71,7 @@ Java_io_github_romanvht_byedpi_core_ByeDpiProxy_jniStartProxy(JNIEnv *env, __att
     proxy_running = 1;
     pthread_mutex_unlock(&proxy_mutex);
 
+    entered_main = 1;
     result = main(argc, argv);
 
     pthread_mutex_lock(&proxy_mutex);
@@ -68,8 +80,18 @@ Java_io_github_romanvht_byedpi_core_ByeDpiProxy_jniStartProxy(JNIEnv *env, __att
     LOG(LOG_S, "proxy return code %d", result);
 
 cleanup:
-    for (int i = 0; i < argc; i++) free(argv[i]);
-    free(argv);
+    if (argv) {
+        for (int i = 0; i < argc; i++) free(argv[i]);
+        free(argv);
+    }
+    // On argument validation/allocation failure, do not permanently poison
+    // the worker. After native main() starts we intentionally keep one-shot
+    // lifecycle semantics because upstream globals are not restart-safe.
+    if (!entered_main) {
+        pthread_mutex_lock(&proxy_mutex);
+        proxy_started = 0;
+        pthread_mutex_unlock(&proxy_mutex);
+    }
     return result;
 }
 
