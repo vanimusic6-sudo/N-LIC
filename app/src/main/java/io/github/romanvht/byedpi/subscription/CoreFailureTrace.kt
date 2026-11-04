@@ -21,6 +21,8 @@ internal object CoreFailureTrace {
         "PREPARE", "CATALOG", "CONFIG_PREPARE", "CONFIG_COMPILE",
         "BAY_PROXY", "BAY_UPSTREAM", "BAY_UDP", "BAY_UNREACHABLE",
         "BAY_UDP_UNAVAILABLE", "BAY_UNSUPPORTED", "NO_SERVER", "ENGINE",
+        "BAY_PROXY_EXIT", "BAY_PROFILE", "PROTOCOL_UNSUPPORTED", "ENGINE_EXIT",
+        "REMOTE_CONNECT", "REMOTE_SOCKS", "REMOTE_TLS", "REMOTE_HTTP", "REMOTE_IO",
         "CORE_START", "SETUP", "CONFIG", "INTERFACES", "COMMAND", "OUTBOUND",
         "CREDENTIAL_STORAGE", "CORE_SOCKS", "REMOTE_TEST",
         "TUN", "HEV", "RUNNING"
@@ -47,11 +49,19 @@ internal object CoreFailureTrace {
      * misreported as NATIVE_AT_REMOTE_TEST due to a Binder delivery race.
      */
     fun markFailure(context: Context, safeStage: String) {
-        if (safeStage in allowed) mark(context, "FAILED_$safeStage")
+        if (isSafeFailure(safeStage)) mark(context, "FAILED_$safeStage")
     }
 
+    /** Persist controlled timeouts without reporting a native Go crash.
+     * Never persist exception messages, VPN node names or credentials.
+     */
+    internal fun isSafeFailure(stage: String): Boolean =
+        stage in allowed || (stage.endsWith("_TIMEOUT") &&
+            stage.removeSuffix("_TIMEOUT") in allowed)
+
     private fun isAllowed(stage: String): Boolean = stage in allowed ||
-        (stage.startsWith("FAILED_") && stage.removePrefix("FAILED_") in allowed)
+        (stage.startsWith("FAILED_") &&
+            isSafeFailure(stage.removePrefix("FAILED_")))
 
     fun recent(context: Context): String? {
         return runCatching {
