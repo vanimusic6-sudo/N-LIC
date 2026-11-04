@@ -45,6 +45,8 @@ class MainActivity : BaseActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var historyUtils: HistoryUtils
     private var policyLabelJob: Job? = null
+    private var receiverRegistered = false
+    private var redirectedToCockpit = false
 
     companion object {
         private val TAG: String = MainActivity::class.java.simpleName
@@ -162,6 +164,7 @@ class MainActivity : BaseActivity() {
         // preserving the old interface behind an explicit legacy action.
         if (BuildConfig.NLIC_XRAY_INCLUDED && savedInstanceState == null &&
             !intent.getBooleanExtra("nlic_legacy_screen", false)) {
+            redirectedToCockpit = true
             startActivity(Intent(this, SubscriptionLabActivity::class.java))
             finish()
             return
@@ -184,6 +187,7 @@ class MainActivity : BaseActivity() {
         ContextCompat.registerReceiver(
             this, receiver, intentFilter, ContextCompat.RECEIVER_NOT_EXPORTED
         )
+        receiverRegistered = true
 
         binding.statusButtonCard.setOnClickListener {
             binding.statusButtonCard.isClickable = false
@@ -330,6 +334,7 @@ class MainActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (redirectedToCockpit) return
         ServiceManager.refresh(this)
         updateStatus()
         updateStrategyButton()
@@ -338,7 +343,7 @@ class MainActivity : BaseActivity() {
     override fun onDestroy() {
         policyLabelJob?.cancel()
         super.onDestroy()
-        unregisterReceiver(receiver)
+        if (receiverRegistered) unregisterReceiver(receiver)
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
