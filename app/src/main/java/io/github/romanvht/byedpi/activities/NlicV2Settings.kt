@@ -11,6 +11,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import io.github.romanvht.byedpi.BuildConfig
 import io.github.romanvht.byedpi.R
 import io.github.romanvht.byedpi.services.ServiceManager
@@ -93,6 +94,14 @@ internal object NlicV2Settings {
             setPadding(dp(4), dp(2), 0, dp(12))
         })
 
+        section("Приложение")
+        action("Все настройки", "Оформление, язык, автоматизация, сеть и параметры приложения") {
+            activity.startActivity(Intent(activity, SettingsActivity::class.java))
+        }
+        action("Автозапуск и автоматическое подключение", "Управление запуском N-LIC") {
+            activity.startActivity(Intent(activity, SettingsActivity::class.java))
+        }
+
         section("Обход DPI")
         action("Ядро локального обхода",
             "Стабильный ByeDPI или экспериментальное N-LIC V2") {
@@ -121,6 +130,12 @@ internal object NlicV2Settings {
                     .setNegativeButton(android.R.string.cancel, null).show()
             }
         }
+        action("Параметры ByeDPI", "Визуальный редактор локального обхода") {
+            requireDisconnected {
+                activity.startActivity(Intent(activity, SettingsActivity::class.java)
+                    .putExtra("open_fragment", "ui"))
+            }
+        }
         action("Проверить стратегии", "Подобрать обход по результатам реальных тестов") {
             requireDisconnected { activity.startActivity(Intent(activity, TestActivity::class.java)) }
         }
@@ -136,6 +151,9 @@ internal object NlicV2Settings {
             requireDisconnected {
                 activity.startActivity(Intent(activity, SettingsActivity::class.java))
             }
+        }
+        action("Диагностика сети", "Проверка доступности, DNS и подключения") {
+            activity.startActivity(Intent(activity, SettingsActivity::class.java))
         }
         action("Защита Android VPN", "Всегда включённый VPN и блокировка соединений без VPN") {
             val intent = Intent("android.settings.VPN_SETTINGS")
@@ -174,6 +192,21 @@ internal object NlicV2Settings {
                 .show()
         }
         dialog.setContentView(outer)
+        dialog.setOnShowListener {
+            // The sheet must not stop at its default peek height: every settings
+            // row remains reachable even with gesture navigation and font scaling.
+            dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+                ?.let { sheet ->
+                    sheet.layoutParams = sheet.layoutParams.apply {
+                        height = android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                    }
+                    BottomSheetBehavior.from(sheet).apply {
+                        isFitToContents = true
+                        skipCollapsed = true
+                        state = BottomSheetBehavior.STATE_EXPANDED
+                    }
+                }
+        }
         dialog.show()
     }
 }
