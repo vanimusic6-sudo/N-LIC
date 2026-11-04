@@ -396,6 +396,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/nlic_expand_advanced"
+                android:visibility="gone"
                 style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
