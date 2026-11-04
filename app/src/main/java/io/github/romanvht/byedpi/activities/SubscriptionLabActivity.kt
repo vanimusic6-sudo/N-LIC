@@ -24,6 +24,8 @@ import io.github.romanvht.byedpi.services.ServiceManager
 import io.github.romanvht.byedpi.services.appStatus
 import io.github.romanvht.byedpi.subscription.LICAuto
 import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
+import io.github.romanvht.byedpi.subscription.XrayConfigCompiler
+import io.github.romanvht.byedpi.subscription.LocalSocksAuth
 import io.github.romanvht.byedpi.subscription.SubscriptionCatalog
 import io.github.romanvht.byedpi.subscription.SubscriptionFetcher
 import io.github.romanvht.byedpi.subscription.SubscriptionGroup
@@ -68,6 +70,12 @@ class SubscriptionLabActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_nlic_control)
+        // A separate experimental Xray engine has no verified LIC-Auto/Bay
+        // adapter yet. Never silently activate unsupported routing profiles.
+        if (BuildConfig.NLIC_XRAY_INCLUDED) {
+            prefs.edit().putBoolean("nlic_core_auto", false)
+                .putBoolean("nlic_core_bay", false).commit()
+        }
         setupToolbar()
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.setTitle(R.string.nlic_control_title)
@@ -328,7 +336,7 @@ class SubscriptionLabActivity : BaseActivity() {
 
     private fun requestConnection() {
         if (busy) return
-        if (!BuildConfig.NLIC_LIBBOX_INCLUDED) {
+        if (!BuildConfig.NLIC_LIBBOX_INCLUDED && !BuildConfig.NLIC_XRAY_INCLUDED) {
             toast(R.string.nlic_core_missing)
             return
         }
@@ -395,6 +403,15 @@ class SubscriptionLabActivity : BaseActivity() {
             .getOrDefault(SubscriptionCatalog())
 
     private fun canConnect(catalog: SubscriptionCatalog): Boolean {
+        if (BuildConfig.NLIC_XRAY_INCLUDED) {
+            if (prefs.getBoolean("nlic_core_auto", false) ||
+                prefs.getBoolean("nlic_core_bay", false)) return false
+            val selected = catalog.allNodes.firstOrNull { it.id == catalog.selectedNodeId }
+                ?: return false
+            return XrayConfigCompiler.compile(selected,
+                LocalSocksAuth("nlic", "a".repeat(48))
+            ) is XrayConfigCompiler.Result.Compiled
+        }
         if (!BuildConfig.NLIC_LIBBOX_INCLUDED) return false
         val bay = if (prefs.getBoolean("nlic_core_bay", false))
             SingBoxConfigCompiler.Bay.ON else SingBoxConfigCompiler.Bay.OFF
@@ -415,6 +432,8 @@ class SubscriptionLabActivity : BaseActivity() {
             getString(R.string.nlic_core_advice_config)
         code.startsWith("BAY_") ->
             getString(R.string.nlic_core_advice_bay)
+        code.startsWith("XRAY_") ->
+            getString(R.string.nlic_core_advice_engine)
         code.startsWith("CORE_SOCKS") ->
             getString(R.string.nlic_core_advice_socks)
         code.startsWith("REMOTE_") || code == "TUNNEL_TEST" ->
@@ -448,7 +467,8 @@ class SubscriptionLabActivity : BaseActivity() {
             busy -> getString(R.string.nlic_control_working)
             failure != null && !runningVpn -> failureAdvice(failure)
             latestMessage != null -> latestMessage
-            !BuildConfig.NLIC_LIBBOX_INCLUDED -> getString(R.string.nlic_core_missing)
+            !BuildConfig.NLIC_LIBBOX_INCLUDED && !BuildConfig.NLIC_XRAY_INCLUDED ->
+                getString(R.string.nlic_core_missing)
             all.isEmpty() -> getString(R.string.nlic_control_start_hint)
             runningVpn && !locallyVerified -> getString(R.string.nlic_control_android_only)
             runningVpn -> getString(R.string.nlic_control_verified)
@@ -503,8 +523,13 @@ class SubscriptionLabActivity : BaseActivity() {
             all.isEmpty() -> getString(R.string.nlic_control_start_hint)
             auto -> getString(R.string.nlic_core_auto_desc)
             selected == null -> getString(R.string.nlic_ui_step_choose)
-            SingBoxConfigCompiler.compile(selected) is SingBoxConfigCompiler.Result.Compiled ->
-                getString(R.string.nlic_control_selected_ok)
+            (if (BuildConfig.NLIC_XRAY_INCLUDED) {
+                XrayConfigCompiler.compile(selected, LocalSocksAuth("nlic", "a".repeat(48)))
+                    is XrayConfigCompiler.Result.Compiled
+            } else {
+                SingBoxConfigCompiler.compile(selected)
+                    is SingBoxConfigCompiler.Result.Compiled
+            }) -> getString(R.string.nlic_control_selected_ok)
             else -> getString(R.string.nlic_control_unsupported)
         }
 
@@ -517,7 +542,8 @@ class SubscriptionLabActivity : BaseActivity() {
             latestMessage = null
             render()
         }
-        val bayEligible = if (auto) all.any {
+        val bayEligible = if (BuildConfig.NLIC_XRAY_INCLUDED) false
+            else if (auto) all.any {
             SingBoxConfigCompiler.compile(it, SingBoxConfigCompiler.Bay.ON) is
                 SingBoxConfigCompiler.Result.Compiled
         } else selected?.let {
