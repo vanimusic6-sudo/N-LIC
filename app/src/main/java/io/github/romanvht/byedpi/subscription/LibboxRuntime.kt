@@ -46,6 +46,7 @@ internal class LibboxRuntime(
     private var workspaceDir: File? = null
     private var serverClass: Class<*>? = null
     private val networkMonitor = CoreNetworkMonitor(context)
+    private val localDnsResolver = CoreLocalDnsResolver(context)
 
     @Synchronized
     fun start(config: String) {
@@ -93,6 +94,7 @@ internal class LibboxRuntime(
                 PlatformHandler(
                     context as? VpnService ?: error("Core must run inside Android VpnService"),
                     networkMonitor,
+                    localDnsResolver,
                     openAndroidTun,
                 ),
             )
@@ -183,6 +185,7 @@ internal class LibboxRuntime(
     private class PlatformHandler(
         private val vpn: VpnService,
         private val monitor: CoreNetworkMonitor,
+        private val localDnsResolver: CoreLocalDnsResolver,
         private val openAndroidTun: (() -> Int)?,
     ) : InvocationHandler {
         override fun invoke(proxy: Any, method: Method, args: Array<out Any?>?): Any? =
@@ -217,7 +220,11 @@ internal class LibboxRuntime(
                 }
                 "closeDefaultInterfaceMonitor" -> { monitor.close(); null }
                 "getInterfaces" -> monitor.interfaces()
-                "readWIFIState", "localDNSTransport", "findConnectionOwner" -> null
+                // A null LocalDNSTransport is not a functioning Android
+                // DNS implementation. Without this bridge Go's "local"
+                // DNS often cannot bootstrap the encrypted server hostname.
+                "localDNSTransport" -> localDnsResolver.transport()
+                "readWIFIState", "findConnectionOwner" -> null
                 "underNetworkExtension", "includeAllNetworks" -> false
                 "usePlatformShell", "usePlatformBridge", "usePlatformAutoRedirect" -> false
                 "toString" -> "N-LIC Android platform"
