@@ -93,7 +93,7 @@ internal object AdaptiveDpiPolicy {
      */
     internal fun isSafeCommand(value: String): Boolean {
         if (value.length !in 2..2048 || !value.startsWith('-') ||
-            value.none { it.code !in 32..126 }.not()) return false
+            value.any { it.code !in 32..126 }) return false
         if (value.any { it in "\r\n\u0000" }) return false
         val tokens = shellSplit(value)
         if (tokens.isEmpty()) return false
