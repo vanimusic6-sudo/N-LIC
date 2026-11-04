@@ -11,6 +11,7 @@ import android.os.Process
 import android.os.RemoteException
 import android.util.Log
 import io.github.romanvht.byedpi.core.ByeDpiProxy
+import io.github.romanvht.byedpi.core.NlicV2Proxy
 import io.github.romanvht.byedpi.core.TProxyService
 import io.github.romanvht.byedpi.data.Configuration
 import io.github.romanvht.byedpi.utility.AccessPolicy
@@ -78,6 +79,7 @@ internal class NativeSession(
     private var state = EngineProtocol.STATE_IDLE
     private var proxy: ByeDpiProxy? = null
     private var boxEngine: LibboxRuntime? = null
+    private var v2Engine: NlicV2Proxy? = null
     private var xrayEngine: XrayRuntime? = null
     private var localAuth: LocalSocksAuth? = null
     private var proxyThread: Thread? = null
@@ -126,6 +128,7 @@ internal class NativeSession(
                 if (tunnelThread != null) TProxyService.stopTunnel()
                 boxEngine?.close()
                 xrayEngine?.close()
+                v2Engine?.stop()
                 proxy?.stopProxy()
                 tunnelThread?.join()
                 proxyThread?.join()
@@ -230,6 +233,7 @@ internal class NativeSession(
             // Only fixed phase identifiers appear in logs and UI: neither
             // outbound JSON nor VPN credentials may leave the native process.
             val xrayMode = config.args.firstOrNull() == "--nlic-xray"
+            val v2Mode = config.args.firstOrNull() == "--nlic-v2"
             val coreMode = xrayMode ||
                 config.args.firstOrNull() == "--nlic-libbox"
             var corePhase = "PREPARE"
@@ -542,6 +546,22 @@ internal class NativeSession(
                         withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port, auth) }
                         corePhase = "REMOTE_TEST"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
                         withTimeout(28_000) { awaitRemoteReadiness(config.host, config.port, auth) }
+                    } else if (v2Mode) {
+                        check(createTunnel != null) { "V2 proxy requires Android VPN mode" }
+                        // Per-session random password; never store in preferences
+                        // or logs. HEV authenticates to this private listener.
+                        val secret = ByteArray(24).also { SecureRandom().nextBytes(it) }
+                            .joinToString("") { "%02x".format(it.toInt() and 255) }
+                        val auth = LocalSocksAuth("nlic", secret)
+                        localAuth = auth
+                        val native = NlicV2Proxy()
+                        v2Engine = native
+                        proxyThread = runNative("NlicV2") {
+                            native.run(config.port, auth.username, auth.password, true)
+                        }
+                        withTimeout(START_TIMEOUT) {
+                            awaitProxy(config.host, config.port, auth)
+                        }
                     } else {
                         val engine = withContext(Dispatchers.IO) { ByeDpiProxy() }
                         proxy = engine
@@ -621,9 +641,9 @@ internal class NativeSession(
         val error = try {
             "$name stopped with code ${run()}"
         } catch (e: Throwable) {
-            if (name == "ByeDPI-Bay" ||
+            if (name == "ByeDPI-Bay" || name == "NlicV2" ||
                 configuration?.args?.firstOrNull() in
-                    setOf("--nlic-libbox", "--nlic-xray")) {
+                    setOf("--nlic-libbox", "--nlic-xray", "--nlic-v2")) {
                 // Core may carry an ephemeral SOCKS password in the private
                 // HEV YAML. Never log nested native exception strings.
                 Log.e(TAG, "LIC-Core native task $name exited (${e.javaClass.simpleName}, redacted)")
