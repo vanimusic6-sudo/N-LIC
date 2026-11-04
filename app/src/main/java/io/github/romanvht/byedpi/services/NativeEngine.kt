@@ -31,6 +31,7 @@ import io.github.romanvht.byedpi.utility.*
 import io.github.romanvht.byedpi.BuildConfig
 import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
+import io.github.romanvht.byedpi.subscription.XrayBayArgs
 import io.github.romanvht.byedpi.subscription.CoreStartException
 
 import kotlinx.coroutines.CompletableDeferred
@@ -97,9 +98,9 @@ internal class NativeEngine(
                     } catch (_: Exception) {
                         throw CoreStartException("BAY_PROFILE")
                     }
-                    if (arguments.isEmpty() || arguments.any {
-                            it in setOf("-U", "--no-udp", "--transparent", "-E")
-                        }) throw CoreStartException("BAY_PROFILE")
+                    if (!XrayBayArgs.validLoopback(arguments, bayPort)) {
+                        throw CoreStartException("BAY_PROFILE")
+                    }
                     arguments
                 } else emptyList()
                 return Configuration(
