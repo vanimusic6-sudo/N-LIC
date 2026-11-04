@@ -33,7 +33,6 @@ import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
 import io.github.romanvht.byedpi.subscription.XrayBayArgs
 import io.github.romanvht.byedpi.subscription.CoreStartException
-import io.github.romanvht.byedpi.subscription.XrayBayArgs
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
