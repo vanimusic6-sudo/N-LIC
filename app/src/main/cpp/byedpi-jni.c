@@ -12,6 +12,7 @@ extern int server_fd;
 static pthread_mutex_t proxy_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int proxy_started;
 static int proxy_running;
+/* Future V2 engine is isolated from the upstream one-shot proxy. */
 
 int __wrap_daemon(__attribute__((unused)) int nochdir, __attribute__((unused)) int noclose) {
     LOG(LOG_S, "daemon mode is not supported in the native worker");
