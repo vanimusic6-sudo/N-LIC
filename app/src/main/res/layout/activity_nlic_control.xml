@@ -2,9 +2,22 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
  android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"
  android:background="@color/nlic_canvas">
- <com.google.android.material.appbar.MaterialToolbar android:id="@+id/toolbar"
-  android:layout_width="match_parent" android:layout_height="56dp" app:title="N-LIC"
-  app:titleTextColor="@color/nlic_text" android:background="@color/nlic_canvas"/>
+ <FrameLayout android:layout_width="match_parent" android:layout_height="56dp"
+  android:background="@color/nlic_canvas">
+  <com.google.android.material.appbar.MaterialToolbar android:id="@+id/toolbar"
+   android:layout_width="match_parent" android:layout_height="match_parent"
+   android:paddingEnd="64dp" app:title="N-LIC" app:titleTextColor="@color/nlic_text"
+   android:background="@color/nlic_canvas"/>
+  <!-- A real clickable control: AppCompat's ActionBar takes ownership of
+       Toolbar menu dispatch, so menu-added clicks were not reliable. -->
+  <androidx.appcompat.widget.AppCompatImageButton android:id="@+id/nlic_settings_button"
+   android:layout_width="52dp" android:layout_height="52dp"
+   android:layout_gravity="end|center_vertical" android:layout_marginEnd="12dp"
+   android:padding="14dp" android:src="@android:drawable/ic_menu_manage"
+   android:background="?attr/selectableItemBackgroundBorderless"
+   android:tint="@color/nlic_text" android:contentDescription="@string/nlic_v2_settings"
+   android:focusable="true" android:clickable="true"/>
+ </FrameLayout>
  <ScrollView android:layout_width="match_parent" android:layout_height="0dp"
   android:layout_weight="1" android:fillViewport="true" android:scrollbars="none">
   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
