@@ -21,6 +21,13 @@ class NlicNativeGoContractTest {
         assertTrue("This test requires the native Core Preview build",
             BuildConfig.NLIC_LIBBOX_INCLUDED)
         val context = ApplicationProvider.getApplicationContext<Context>()
+        // JNI must see a real Android DNS transport. A null platform
+        // localDNSTransport silently prevents hostname-based VPN bootstrap.
+        val dns = CoreLocalDnsResolver(context).transport()
+        val dnsType = Class.forName("io.nekohasekai.libbox.LocalDNSTransport")
+        assertTrue("Android local DNS bridge is missing", dnsType.isInstance(dns))
+        assertTrue("Core bootstrap resolver must use family-aware A/AAAA queries",
+            dnsType.getMethod("raw").invoke(dns) == false)
         val libbox = Class.forName("io.nekohasekai.libbox.Libbox")
         val setupType = Class.forName("io.nekohasekai.libbox.SetupOptions")
         val setup = setupType.getConstructor().newInstance()
