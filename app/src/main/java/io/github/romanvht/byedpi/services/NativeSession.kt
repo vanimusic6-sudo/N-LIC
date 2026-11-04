@@ -24,6 +24,7 @@ import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
 import io.github.romanvht.byedpi.subscription.LibboxRuntime
 import io.github.romanvht.byedpi.subscription.CoreStartException
 import io.github.romanvht.byedpi.subscription.NativeTunConfig
+import io.github.romanvht.byedpi.subscription.CoreFailureTrace
 import io.github.romanvht.byedpi.subscription.BayTransport
 import io.github.romanvht.byedpi.subscription.LICBay
 import io.github.romanvht.byedpi.subscription.LocalSocksAuth
@@ -222,8 +223,9 @@ internal class NativeSession(
         startJob = scope.launch {
             // Only fixed phase identifiers appear in logs and UI: neither
             // outbound JSON nor VPN credentials may leave the native process.
-            var corePhase = "PREPARE"
+            var corePhase = "PREPARE"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
             val coreMode = config.args.firstOrNull() == "--nlic-libbox"
+            if (coreMode) CoreFailureTrace.mark(service, corePhase)
             try {
                 withTimeout(50_000) {
                     if (config.args.firstOrNull() == "--nlic-libbox") {
@@ -231,9 +233,9 @@ internal class NativeSession(
                             "LIC-Core requires VPN mode; proxy-only service is unsupported"
                         }
                         val preferences = service.getPreferences()
-                        corePhase = "CATALOG"
+                        corePhase = "CATALOG"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
                         val saved = withContext(Dispatchers.IO) { SubscriptionVault.read(service) }
-                        corePhase = "PREPARE"
+                        corePhase = "PREPARE"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
                         val bayEnabled = config.args.getOrNull(1) == "--nlic-bay"
                         val autoEnabled = config.args.getOrNull(2) == "--nlic-auto"
                         // LIC-Core DIRECT must not depend on the old ByeDPI
@@ -263,7 +265,7 @@ internal class NativeSession(
                             .joinToString("") { "%02x".format(it.toInt() and 255) }
                         val auth = LocalSocksAuth("nlic", password)
                         localAuth = auth
-                        corePhase = "CONFIG_COMPILE"
+                        corePhase = "CONFIG_COMPILE"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
                         val compiled = if (autoEnabled) {
                             SingBoxConfigCompiler.compileAuto(saved.allNodes, bay, legacyPort, auth.password)
                         } else {
@@ -274,7 +276,7 @@ internal class NativeSession(
                         val plan = compiled as? SingBoxConfigCompiler.Result.Compiled
                             ?: error("Selected LIC-Core configuration cannot be used")
                         if (bayEnabled) {
-                            corePhase = "BAY_PROXY"
+                            corePhase = "BAY_PROXY"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
                             check(legacyArgs.isNotEmpty()) { "Missing LIC-Bay command" }
                             val engine = withContext(Dispatchers.IO) { ByeDpiProxy() }
                             proxy = engine
@@ -294,6 +296,7 @@ internal class NativeSession(
                                     ?: error("LIC-Core / BAY_UNSUPPORTED")
                                 corePhase = if (transport == BayTransport.UDP_ASSOCIATE)
                                     "BAY_UDP" else "BAY_UPSTREAM"
+                                if (coreMode) CoreFailureTrace.mark(service, corePhase)
                                 var bayReady = false
                                 repeat(3) { attempt ->
                                     if (!bayReady) {
@@ -318,7 +321,7 @@ internal class NativeSession(
                                 if (saved.allNodes.any {
                                         LICBay.plan(it).transport == BayTransport.UDP_ASSOCIATE
                                     }) {
-                                    corePhase = "BAY_UDP"
+                                    corePhase = "BAY_UDP"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
                                     check(withContext(Dispatchers.IO) {
                                         TunnelHealthProbe.checkBayUdp(legacyPort)
                                     }) { "LIC-Core / BAY_UDP_UNAVAILABLE" }
@@ -336,7 +339,7 @@ internal class NativeSession(
                             service.getPreferences().getBoolean("nlic_mobile_safe_mtu", true)
                         ).coerceIn(1280, 9000)
                         val compiledTun = NativeTunConfig.compile(plan.config, mtu)
-                        corePhase = "CORE_START"
+                        corePhase = "CORE_START"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
                         val box = LibboxRuntime(service, openAndroidTun = {
                             check(tunFd == null) { "Only one VPN TUN per session" }
                             val open = createTunnel ?: error("Android VPN service missing")
@@ -347,9 +350,9 @@ internal class NativeSession(
                         boxEngine = box
                         withContext(Dispatchers.IO) { box.start(compiledTun) }
                         check(tunFd != null) { "Android TUN was not opened by libbox" }
-                        corePhase = "CORE_SOCKS"
+                        corePhase = "CORE_SOCKS"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
                         withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port, auth) }
-                        corePhase = "REMOTE_TEST"
+                        corePhase = "REMOTE_TEST"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
                         withTimeout(28_000) { awaitRemoteReadiness(config.host, config.port, auth) }
                     } else {
                         val engine = withContext(Dispatchers.IO) { ByeDpiProxy() }
@@ -358,7 +361,7 @@ internal class NativeSession(
                         withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port) }
                     }
                     if (!coreMode) {
-                        corePhase = "TUN"
+                        corePhase = "TUN"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
                         createTunnel?.let { create ->
                         val underlyingLink = NetworkEnvironment.capture(service)
                         val tuneMobile = service.getPreferences().getBoolean("nlic_mobile_safe_mtu", true)
@@ -381,7 +384,7 @@ internal class NativeSession(
                                 appendLine("  password: ${it.password}")
                             }
                         }
-                        corePhase = "HEV"
+                        corePhase = "HEV"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
                         tunnelThread = runNative("HEV") { TProxyService.startTunnel(tunnelConfig, fd.fd) }
                         // Do not publish RUNNING when the native tunnel exited immediately.
                         delay(100)
@@ -390,6 +393,7 @@ internal class NativeSession(
                     }
                     if (state != EngineProtocol.STATE_STOPPING) {
                         state = EngineProtocol.STATE_RUNNING
+                        if (coreMode) CoreFailureTrace.clear(service)
                         reply(EngineProtocol.STARTED)
                     }
                 }
