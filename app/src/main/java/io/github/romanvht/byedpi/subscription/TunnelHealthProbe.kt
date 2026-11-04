@@ -12,7 +12,16 @@ internal data class LocalSocksAuth(val username: String, val password: String)
 internal object TunnelHealthProbe {
     private const val TARGET = "www.gstatic.com"
     private const val TIMEOUT = 4_000
-    private val TRUSTED_204_TARGETS = setOf(TARGET, "cp.cloudflare.com")
+    // Probe through the authenticated SOCKS tunnel only. Both Google and
+    // Cloudflare connectivity endpoints can be blocked even when a user's
+    // VPN server works. A regular HTTPS 200 is equally valid proof of egress.
+    // Never follow redirects or send credentials to an external site.
+    private val TRUSTED_HTTPS_PROBES = mapOf(
+        TARGET to "/generate_204",
+        "cp.cloudflare.com" to "/generate_204",
+        "example.com" to "/",
+        "www.wikipedia.org" to "/",
+    )
 
     // The selected hostname is a fixed allowlisted HTTPS connectivity
     // endpoint, NOT a provider-controlled URL. No cookies or tokens sent.
@@ -20,7 +29,7 @@ internal object TunnelHealthProbe {
         host: String, port: Int, auth: LocalSocksAuth? = null,
         target: String = TARGET,
     ): Boolean = try {
-        require(target in TRUSTED_204_TARGETS)
+        val path = requireNotNull(TRUSTED_HTTPS_PROBES[target])
         Socket().use { socket ->
             socket.connect(InetSocketAddress(host, port), TIMEOUT)
             socket.soTimeout = TIMEOUT
@@ -32,7 +41,7 @@ internal object TunnelHealthProbe {
                     endpointIdentificationAlgorithm = "HTTPS"
                 }
                 tls.startHandshake()
-                tls.outputStream.write(("GET /generate_204 HTTP/1.1\r\n" +
+                tls.outputStream.write(("GET $path HTTP/1.1\r\n" +
                     "Host: $target\r\nConnection: close\r\n\r\n").toByteArray(Charsets.US_ASCII))
                 tls.outputStream.flush()
                 // A bounded first line suffices; no cookies, body or redirects.
@@ -43,12 +52,21 @@ internal object TunnelHealthProbe {
                     if (c < 0 || c == 10) break
                     line.append(c.toChar())
                 }
-                line.toString().trimEnd('\r') in setOf("HTTP/1.1 204 No Content", "HTTP/1.0 204 No Content") ||
-                    line.toString().matches(Regex("HTTP/1\\.[01] 204(?: [^\\r\\n]*)?\\r?"))
+                acceptsHttpsResponse(line.toString())
             }
         }
     } catch (_: Exception) {
         false // TLS, credentials and provider errors never escape into logs.
+    }
+
+    /** A cert-verified HTTPS success (200-399) proves end-to-end egress.
+     * It must not depend on a particular CDN returning exactly 204.
+     */
+    internal fun acceptsHttpsResponse(statusLine: String): Boolean {
+        val normalized = statusLine.trimEnd('\r')
+        val match = Regex("^HTTP/1\\.[01] ([0-9]{3})(?: [^\\r\\n]*)?$")
+            .matchEntire(normalized) ?: return false
+        return match.groupValues[1].toInt() in 200..399
     }
 
     /**
