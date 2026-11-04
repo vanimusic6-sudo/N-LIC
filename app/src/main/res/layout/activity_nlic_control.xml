@@ -90,20 +90,4 @@
    android:text="@string/nlic_core_disconnect" android:textAllCaps="false"
    android:visibility="gone" android:textSize="16sp" app:cornerRadius="18dp"/>
  </FrameLayout>
- <LinearLayout android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone">
-  <TextView android:id="@+id/nlic_supported_protocols" android:layout_width="1dp" android:layout_height="1dp"/>
-  <TextView android:id="@+id/nlic_bay_hint" android:layout_width="1dp" android:layout_height="1dp"/>
-  <View android:id="@+id/nlic_advanced_panel" android:layout_width="1dp" android:layout_height="1dp"/>
-  <com.google.android.material.button.MaterialButton android:id="@+id/nlic_add_subscription" android:layout_width="1dp" android:layout_height="1dp"/>
-  <com.google.android.material.button.MaterialButton android:id="@+id/nlic_add_link" android:layout_width="1dp" android:layout_height="1dp"/>
-  <com.google.android.material.button.MaterialButton android:id="@+id/nlic_add_file" android:layout_width="1dp" android:layout_height="1dp"/>
-  <com.google.android.material.button.MaterialButton android:id="@+id/nlic_refresh_now" android:layout_width="1dp" android:layout_height="1dp"/>
-  <com.google.android.material.button.MaterialButton android:id="@+id/nlic_expand_advanced" android:layout_width="1dp" android:layout_height="1dp"/>
-  <com.google.android.material.button.MaterialButton android:id="@+id/nlic_privacy" android:layout_width="1dp" android:layout_height="1dp"/>
-  <com.google.android.material.button.MaterialButton android:id="@+id/nlic_help" android:layout_width="1dp" android:layout_height="1dp"/>
-  <com.google.android.material.button.MaterialButton android:id="@+id/nlic_refresh" android:layout_width="1dp" android:layout_height="1dp"/>
-  <com.google.android.material.button.MaterialButton android:id="@+id/nlic_tcp_check" android:layout_width="1dp" android:layout_height="1dp"/>
-  <com.google.android.material.button.MaterialButton android:id="@+id/nlic_legacy_mode" android:layout_width="1dp" android:layout_height="1dp"/>
-  <com.google.android.material.button.MaterialButton android:id="@+id/nlic_clear" android:layout_width="1dp" android:layout_height="1dp"/>
- </LinearLayout>
 </LinearLayout>
