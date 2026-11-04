@@ -15,6 +15,7 @@ on:
       - feature/nlic-2-adaptive-vpn-ui-import-20261104
       - fix/nlic-native-core-protocol-compat-20261104
       - feature/nlic-xray-core-20261104
+      - feature/nlic-dual-mode-resilience-20261104
   pull_request:
     branches:
       - master
