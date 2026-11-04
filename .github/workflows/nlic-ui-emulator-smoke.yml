@@ -88,7 +88,10 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            set -o pipefail
+            # android-emulator-runner executes this script with /bin/sh,
+            # not Bash. POSIX set -eu is sufficient: there are no pipelines
+            # whose exit status needs pipefail, and Gradle failure propagates.
+            set -eu
             mkdir -p app/build/emulator-diagnostics
             # Begin continuous capture BEFORE Gradle boots the test process:
             # an app or native Go panic may kill the instrumentation runner,
