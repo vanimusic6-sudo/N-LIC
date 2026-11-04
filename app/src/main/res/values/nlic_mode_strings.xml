@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="nlic_profiles_manage" translatable="false">Управление серверами</string>
     <string name="nlic_mode_label" translatable="false">РЕЖИМ СОЕДИНЕНИЯ</string>
     <string name="nlic_mode_local" translatable="false">Обход DPI</string>
     <string name="nlic_mode_subscription" translatable="false">VPN-сервер</string>
