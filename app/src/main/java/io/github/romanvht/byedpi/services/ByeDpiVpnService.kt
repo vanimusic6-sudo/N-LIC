@@ -17,6 +17,7 @@ import io.github.romanvht.byedpi.activities.MainActivity
 import io.github.romanvht.byedpi.data.*
 import io.github.romanvht.byedpi.receiver.ServiceActionReceiver
 import io.github.romanvht.byedpi.utility.*
+import io.github.romanvht.byedpi.subscription.NativeTunConfig
 
 @SuppressLint("VpnServicePolicy")
 class ByeDpiVpnService : VpnService() {
@@ -113,8 +114,10 @@ class ByeDpiVpnService : VpnService() {
 
         // The Android addresses MUST match the native sing-box TUN config.
         // A mismatch here causes native handshake success but no app traffic.
-        builder.addAddress(if (coreActive) "172.18.0.1" else "10.10.10.10", 32)
-            .addRoute("0.0.0.0", 0)
+        builder.addAddress(
+            if (coreActive) NativeTunConfig.IPV4_ADDRESS else "10.10.10.10",
+            if (coreActive) NativeTunConfig.IPV4_PREFIX else 32,
+        ).addRoute("0.0.0.0", 0)
 
         val mobileIpv6 = getPreferences().getBoolean("nlic_mobile_ipv6_auto", true)
         // An encrypted LIC-Core session must never accidentally let IPv6
@@ -123,7 +126,8 @@ class ByeDpiVpnService : VpnService() {
         if (coreActive ||
             AccessPolicy.shouldCaptureIpv6(configuration.ipv6, underlyingLink, mobileIpv6)) {
             builder.addAddress(
-                if (coreActive) "fdfe:dcba:9876::1" else "fd00::1", 128
+                if (coreActive) NativeTunConfig.IPV6_ADDRESS else "fd00::1",
+                if (coreActive) NativeTunConfig.IPV6_PREFIX else 128
             )
                 .addRoute("::", 0)
         }
@@ -131,7 +135,7 @@ class ByeDpiVpnService : VpnService() {
         if (coreActive) {
             // sing-box 1.14 native TUN hijacks port 53 on this synthetic IP;
             // visited domain names do not go to the carrier DNS resolver.
-            builder.addDnsServer("172.18.0.2")
+            builder.addDnsServer(NativeTunConfig.IPV4_DNS)
         } else if (configuration.dns.isNotBlank()) {
             builder.addDnsServer(configuration.dns)
         }
