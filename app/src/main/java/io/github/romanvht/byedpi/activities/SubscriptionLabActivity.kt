@@ -70,12 +70,6 @@ class SubscriptionLabActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_nlic_control)
-        // A separate experimental Xray engine has no verified LIC-Auto/Bay
-        // adapter yet. Never silently activate unsupported routing profiles.
-        if (BuildConfig.NLIC_XRAY_INCLUDED) {
-            prefs.edit().putBoolean("nlic_core_auto", false)
-                .putBoolean("nlic_core_bay", false).commit()
-        }
         setupToolbar()
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.setTitle(R.string.nlic_control_title)
@@ -264,8 +258,12 @@ class SubscriptionLabActivity : BaseActivity() {
         val store = SubscriptionVault.read(applicationContext)
         if (store.selectedNodeId != null &&
             store.allNodes.any { it.id == store.selectedNodeId }) return
-        val first = store.allNodes.firstOrNull {
-            SingBoxConfigCompiler.compile(it) is SingBoxConfigCompiler.Result.Compiled
+        val first = store.allNodes.firstOrNull { node ->
+            if (BuildConfig.NLIC_XRAY_INCLUDED) {
+                XrayConfigCompiler.compile(node, LocalSocksAuth("nlic", "a".repeat(48)))
+                    is XrayConfigCompiler.Result.Compiled
+            } else SingBoxConfigCompiler.compile(node)
+                is SingBoxConfigCompiler.Result.Compiled
         }
         if (first != null) SubscriptionVault.select(applicationContext, first.id)
     }
@@ -405,13 +403,20 @@ class SubscriptionLabActivity : BaseActivity() {
 
     private fun canConnect(catalog: SubscriptionCatalog): Boolean {
         if (BuildConfig.NLIC_XRAY_INCLUDED) {
-            if (prefs.getBoolean("nlic_core_auto", false) ||
-                prefs.getBoolean("nlic_core_bay", false)) return false
-            val selected = catalog.allNodes.firstOrNull { it.id == catalog.selectedNodeId }
-                ?: return false
-            return XrayConfigCompiler.compile(selected,
-                LocalSocksAuth("nlic", "a".repeat(48))
-            ) is XrayConfigCompiler.Result.Compiled
+            val bay = prefs.getBoolean("nlic_core_bay", false)
+            val relayPort = if (bay) XrayConfigCompiler.BAY_PORT else null
+            val auth = LocalSocksAuth("nlic", "a".repeat(48))
+            val supported: (SubscriptionNode) -> Boolean = { node ->
+                XrayConfigCompiler.compile(node, auth, relayPort)
+                    is XrayConfigCompiler.Result.Compiled
+            }
+            return if (prefs.getBoolean("nlic_core_auto", false)) {
+                io.github.romanvht.byedpi.subscription.XrayAutoSelector.candidates(
+                    catalog.allNodes, catalog.selectedNodeId, bay, supported
+                ).isNotEmpty()
+            } else {
+                catalog.allNodes.any { it.id == catalog.selectedNodeId && supported(it) }
+            }
         }
         if (!BuildConfig.NLIC_LIBBOX_INCLUDED) return false
         val bay = if (prefs.getBoolean("nlic_core_bay", false))
@@ -439,6 +444,8 @@ class SubscriptionLabActivity : BaseActivity() {
             getString(R.string.nlic_core_advice_tls_handshake)
         code == "REMOTE_TLS_EOF" || code == "REMOTE_TLS_IO" ->
             getString(R.string.nlic_core_advice_tls_eof)
+        code == "AUTO_NO_WORKING_SERVER" ->
+            getString(R.string.nlic_xray_auto_failed)
         code.startsWith("BAY_") ->
             getString(R.string.nlic_core_advice_bay)
         code.startsWith("XRAY_") ->
@@ -515,10 +522,14 @@ class SubscriptionLabActivity : BaseActivity() {
                                 if (auto) {
                                     prefs.edit().putBoolean("nlic_core_auto", false).commit()
                                 }
-                                if (bay && SingBoxConfigCompiler.compile(
-                                        node, SingBoxConfigCompiler.Bay.ON
-                                    ) !is SingBoxConfigCompiler.Result.Compiled
-                                ) {
+                                val bayCompatible = if (BuildConfig.NLIC_XRAY_INCLUDED) {
+                                    XrayConfigCompiler.compile(node, LocalSocksAuth(
+                                        "nlic", "a".repeat(48)), XrayConfigCompiler.BAY_PORT
+                                    ) is XrayConfigCompiler.Result.Compiled
+                                } else SingBoxConfigCompiler.compile(
+                                    node, SingBoxConfigCompiler.Bay.ON
+                                ) is SingBoxConfigCompiler.Result.Compiled
+                                if (bay && !bayCompatible) {
                                     prefs.edit().putBoolean("nlic_core_bay", false).commit()
                                 }
                                 latestMessage = null
@@ -547,14 +558,22 @@ class SubscriptionLabActivity : BaseActivity() {
         val autoSwitch = findViewById<SwitchMaterial>(R.id.nlic_auto_switch)
         autoSwitch.setOnCheckedChangeListener(null)
         autoSwitch.isChecked = auto
-        autoSwitch.isEnabled = !busy && BuildConfig.NLIC_LIBBOX_INCLUDED && all.isNotEmpty()
+        autoSwitch.isEnabled = !busy &&
+            (BuildConfig.NLIC_LIBBOX_INCLUDED || BuildConfig.NLIC_XRAY_INCLUDED) &&
+            all.isNotEmpty()
         autoSwitch.setOnCheckedChangeListener { _, value ->
             prefs.edit().putBoolean("nlic_core_auto", value).commit()
             latestMessage = null
             render()
         }
-        val bayEligible = if (BuildConfig.NLIC_XRAY_INCLUDED) false
-            else if (auto) all.any {
+        val bayEligible = if (BuildConfig.NLIC_XRAY_INCLUDED) {
+            val auth = LocalSocksAuth("nlic", "a".repeat(48))
+            val isValid: (SubscriptionNode) -> Boolean = { node ->
+                XrayConfigCompiler.compile(node, auth, XrayConfigCompiler.BAY_PORT)
+                    is XrayConfigCompiler.Result.Compiled
+            }
+            if (auto) all.any(isValid) else selected?.let(isValid) == true
+        } else if (auto) all.any {
             SingBoxConfigCompiler.compile(it, SingBoxConfigCompiler.Bay.ON) is
                 SingBoxConfigCompiler.Result.Compiled
         } else selected?.let {
@@ -564,13 +583,17 @@ class SubscriptionLabActivity : BaseActivity() {
         val baySwitch = findViewById<SwitchMaterial>(R.id.nlic_bay_switch)
         baySwitch.setOnCheckedChangeListener(null)
         baySwitch.isChecked = bay
-        baySwitch.isEnabled = !busy && BuildConfig.NLIC_LIBBOX_INCLUDED && (bay || bayEligible)
+        baySwitch.isEnabled = !busy &&
+            (BuildConfig.NLIC_LIBBOX_INCLUDED || BuildConfig.NLIC_XRAY_INCLUDED) &&
+            (bay || bayEligible)
         baySwitch.setOnCheckedChangeListener { _, value ->
             prefs.edit().putBoolean("nlic_core_bay", value).commit()
             latestMessage = null
             render()
         }
-        val bayHint = if (bayEligible) getString(R.string.nlic_control_bay_desc)
+        val bayHint = if (BuildConfig.NLIC_XRAY_INCLUDED) {
+            getString(R.string.nlic_xray_bay_hint)
+        } else if (bayEligible) getString(R.string.nlic_control_bay_desc)
             else getString(R.string.nlic_core_bay_udp)
         findViewById<TextView>(R.id.nlic_bay_hint).text =
             if (bay) bayHint + "\n" + getString(R.string.nlic_control_bay_risk) else bayHint
