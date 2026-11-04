@@ -140,7 +140,7 @@ internal object NlicV2Settings {
             val failure = ServiceManager.lastCoreFailureCode
                 ?.takeIf { it.matches(Regex("[A-Z0-9_]{1,64}")) } ?: "—"
             val report = "N-LIC ${BuildConfig.VERSION_NAME}\nAndroid API ${Build.VERSION.SDK_INT}" +
-                "\nРежим: ${if (mode == "local") "Обход DPI" else "VPN-сервер"}" +
+                "\nРежим: VPN-сервер" +
                 "\nЯдро: $engine\nVPN запущен: ${if (running) "да" else "нет"}" +
                 "\nПоследний код ошибки: $failure"
             AlertDialog.Builder(activity).setTitle("Диагностика")

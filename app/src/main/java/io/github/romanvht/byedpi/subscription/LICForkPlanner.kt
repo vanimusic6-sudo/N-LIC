@@ -71,7 +71,7 @@ internal object LICForkPlanner {
             .take(MAX_CHAIN)
             .map { LICForkPath(exit, it) }
             .toList()
-        return LICForkBatch(result.map(::LICForkPath), bridges)
+        return LICForkBatch(result.map { LICForkPath(it) }, bridges)
     }
 }
 
