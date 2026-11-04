@@ -374,7 +374,12 @@
     <string name="nlic_control_bay_risk">⚠ Local ByeDPI SOCKS has no password and can be accessed by other apps. LIC-Bay is experimental only.</string>
     <string name="nlic_core_advice_bay">ByeDPI could not open TCP to the selected VPN server. Check your LIC-Bay strategy or try another server. Disable LIC-Bay to compare.</string>
     <string name="nlic_core_advice_socks">The internal sing-box SOCKS5 listener failed to start or authenticate. This is a local engine problem, not server speed.</string>
-    <string name="nlic_core_advice_https">The local engine responds, but HTTPS through the remote VPN could not be verified. Check TLS/REALITY or another server.</string>
+    <string name="nlic_core_advice_https">The local SOCKS5 listener responds, but HTTPS to a public test site through the selected VPN failed. This is not proof that the VPN server's TLS/REALITY handshake failed; routing, the tunnel, the endpoint or the test site may be involved.</string>
+    <string name="nlic_core_advice_tls_cert">Android could not validate the public HTTPS test site's TLS certificate over the VPN. This may indicate interception, incorrect device time or a certificate problem. Never disable certificate verification.</string>
+    <string name="nlic_core_advice_tls_timeout">SOCKS5 accepted the request, but the public test site's TLS response never arrived through the VPN. SOCKS CONNECT alone does not prove VLESS/REALITY or WireGuard connectivity. Check the server and the actual route.</string>
+    <string name="nlic_core_advice_tls_handshake">The TLS handshake to a public HTTPS test site failed through the selected VPN. This is not necessarily the VPN server's REALITY handshake; inspect the safe diagnostic stage and the egress route.</string>
+    <string name="nlic_core_advice_tls_eof">The public HTTPS connection closed before the TLS handshake finished. SOCKS5 is running, but the VPN server may still be unreachable or resetting traffic.</string>
+    <string name="nlic_home_supported_xray_protocols">Xray Preview: VLESS/REALITY, VMess, Trojan, Shadowsocks and WireGuard .conf. LIC-Auto and LIC-Bay are not yet available. Other protocol links may be imported but cannot connect until supported by Xray.</string>
     <string name="nlic_core_advice_tun">The engine reached Android VPN setup, but the system tunnel failed. Check VPN permission and stop other VPNs.</string>
     <string name="nlic_core_advice_config">The native engine rejected the server settings. Check protocol, TLS/REALITY and supported transport.</string>
     <string name="nlic_core_advice_catalog">Could not read settings or the encrypted subscription vault. Do not uninstall before checking your subscription data.</string>
