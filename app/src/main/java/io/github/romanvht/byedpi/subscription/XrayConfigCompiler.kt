@@ -40,6 +40,9 @@ internal object XrayConfigCompiler {
             outbound.addProperty("tag", PROXY_TAG)
             val root = JsonObject().apply {
                 add("log", JsonObject().apply { addProperty("loglevel", "warning") })
+                // AndroidLibXrayLite obtains stats.Manager at startup; supply
+                // the feature explicitly instead of relying on a Go nil cast.
+                add("stats", JsonObject())
                 add("inbounds", JsonArray().apply {
                     add(JsonObject().apply {
                         addProperty("tag", "nlic-local-socks")
