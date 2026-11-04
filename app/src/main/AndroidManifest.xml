@@ -26,6 +26,8 @@
 
     <application
         android:allowBackup="false"
+        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/nlic_network_security_config"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:logo="@drawable/nlic_icon_legacy"
