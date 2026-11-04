@@ -117,6 +117,27 @@ class SubscriptionLabActivity : BaseActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.setTitle(R.string.nlic_control_title)
 
+        findViewById<MaterialButton>(R.id.nlic_manage_profiles).setOnClickListener {
+            if (busy) return@setOnClickListener
+            val labels = arrayOf(
+                getString(R.string.nlic_control_add_subscription),
+                getString(R.string.nlic_control_add_link),
+                getString(R.string.nlic_home_file_import),
+                getString(R.string.nlic_home_refresh_subscriptions)
+            )
+            AlertDialog.Builder(this)
+                .setTitle(R.string.nlic_profiles_manage)
+                .setItems(labels) { _, selected ->
+                    when (selected) {
+                        0 -> showImportDialog(subscription = true)
+                        1 -> showImportDialog(subscription = false)
+                        2 -> filePicker.launch(arrayOf("*/*"))
+                        3 -> refreshSubscriptions()
+                    }
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
         findViewById<MaterialButton>(R.id.nlic_add_subscription).setOnClickListener {
             showImportDialog(subscription = true)
         }
@@ -691,6 +712,7 @@ class SubscriptionLabActivity : BaseActivity() {
             visibility = if (runningVpn) View.VISIBLE else View.GONE
             isEnabled = !busy
         }
+        findViewById<MaterialButton>(R.id.nlic_manage_profiles).isEnabled = !busy
         listOf(R.id.nlic_add_subscription, R.id.nlic_add_link,
             R.id.nlic_add_file, R.id.nlic_refresh_now, R.id.nlic_refresh, R.id.nlic_tcp_check, R.id.nlic_legacy_mode,
             R.id.nlic_clear).forEach { id ->
