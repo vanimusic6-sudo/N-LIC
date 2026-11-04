@@ -6,11 +6,15 @@ plugins {
 }
 
 val includeNativeLibbox = System.getenv("NLIC_INCLUDE_LIBBOX") == "true"
+val includeNativeXray = System.getenv("NLIC_INCLUDE_XRAY") == "true"
+require(!(includeNativeLibbox && includeNativeXray)) {
+    "N-LIC preview must bundle exactly one core, not both"
+}
 // The emulator test exercises the EXACT pinned libbox Go library on x86_64,
 // without changing the arm64-only consumer Release DEV artifact.
 val abis = when {
     System.getenv("NLIC_EMULATOR_X86_ONLY") == "true" -> setOf("x86_64")
-    includeNativeLibbox && System.getenv("NLIC_ARM64_ONLY") == "true" -> setOf("arm64-v8a")
+    (includeNativeLibbox || includeNativeXray) && System.getenv("NLIC_ARM64_ONLY") == "true" -> setOf("arm64-v8a")
     else -> setOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
 }
 
@@ -49,13 +53,16 @@ android {
         applicationId = "io.github.vanimusic6sudo.nlic"
         // The pinned third-party libbox AAR declares minSdk 24.
         // Legacy ByeDPI builds keep Android 5 support.
-        minSdk = if (includeNativeLibbox) 24 else 21
+        minSdk = if (includeNativeLibbox || includeNativeXray) 24 else 21
         //noinspection OldTargetApi
         targetSdk = 34
         versionCode = 2002
         versionName = "2.0.2"
         buildConfigField("boolean", "NLIC_LIBBOX_INCLUDED",
             if (includeNativeLibbox) "true" else "false")
+
+        buildConfigField("boolean", "NLIC_XRAY_INCLUDED",
+            if (includeNativeXray) "true" else "false")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -158,6 +165,15 @@ dependencies {
             "NLIC_INCLUDE_LIBBOX=true requires pinned app/libs/libbox.aar"
         }
         implementation(files(pinnedAar))
+    }
+    if (includeNativeXray) {
+        // Exact version and SHA-256 are enforced in the dedicated Xray
+        // preview workflow. Never download an unpinned native engine in app.
+        val xrayAar = file("libs/libv2ray.aar")
+        require(xrayAar.isFile) {
+            "NLIC_INCLUDE_XRAY=true requires pinned app/libs/libv2ray.aar"
+        }
+        implementation(files(xrayAar))
     }
     //noinspection GradleDependency
     implementation("androidx.core:core-ktx:1.17.0")
