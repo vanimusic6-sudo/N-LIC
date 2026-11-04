@@ -65,6 +65,11 @@ internal class LibboxRuntime(
             set(setup, "basePath", workspace.absolutePath)
             set(setup, "workingPath", workspace.absolutePath)
             set(setup, "tempPath", context.cacheDir.absolutePath)
+            // Pinned libbox 1.14.3 exposes an Android Go stack workaround
+            // for upstream golang/go#68760. Without it the Go JNI runtime
+            // can abort before a structured error reaches the UI.
+            set(setup, "fixAndroidStack", true)
+            set(setup, "crashReportSource", "nlic-native")
             set(setup, "debug", false)
             set(setup, "logMaxLines", 128L)
             set(setup, "commandServerSecret", java.util.UUID.randomUUID().toString())
