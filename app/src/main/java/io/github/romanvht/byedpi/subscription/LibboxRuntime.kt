@@ -73,8 +73,8 @@ internal class LibboxRuntime(
             set(setup, "debug", false)
             set(setup, "logMaxLines", 128L)
             set(setup, "commandServerSecret", java.util.UUID.randomUUID().toString())
-            set(setup, "appVersion", "nlic-2.0.1")
-            set(setup, "appMarketingVersion", "2.0.1")
+            set(setup, "appVersion", "nlic-2.0.2")
+            set(setup, "appMarketingVersion", "2.0.2")
             val libbox = Class.forName(LIBBOX + "Libbox")
             libbox.getMethod("setup", setupClass).invoke(null, setup)
 
