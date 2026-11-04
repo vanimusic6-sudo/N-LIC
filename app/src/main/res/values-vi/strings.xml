@@ -410,4 +410,5 @@
     <string name="nlic_privacy_description">Trong cài đặt VPN Android, hãy cân nhắc VPN luôn bật và Chặn kết nối khi không có VPN. Nếu không, ứng dụng có thể truy cập trực tiếp khi kết nối lại.</string>
     <string name="nlic_privacy_confirmation">Mở cài đặt VPN của hệ thống? N-LIC không thể tự bật chặn kết nối khi không có VPN.</string>
     <string name="nlic_privacy_unavailable">Không mở được cài đặt VPN trên thiết bị này.</string>
+    <string name="nlic_core_advice_native_crash">Lõi Android dừng trong khi khởi động. Mã bên dưới chỉ ra giai đoạn cuối trước khi lỗi. Đây có thể là lỗi ứng dụng hoặc tương thích động cơ, không nhất thiết do máy chủ. Chỉ chia sẻ mã, không gửi khóa.</string>
 </resources>
