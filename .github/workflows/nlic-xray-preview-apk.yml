@@ -73,6 +73,13 @@ jobs:
             "https://github.com/2dust/AndroidLibXrayLite/releases/download/v26.10.31/libv2ray.aar"
           echo "2efdf731b1ed624eb1cb0d5a4d0aa95c0672e89f9702226d1ba2dc90308630b6  app/libs/libv2ray.aar" | sha256sum --check
           unzip -tqq app/libs/libv2ray.aar
+          unzip -p app/libs/libv2ray.aar classes.jar > /tmp/nlic-xray-classes.jar
+          javap -classpath /tmp/nlic-xray-classes.jar libv2ray.Libv2ray > /tmp/nlic-xray-api.txt
+          javap -classpath /tmp/nlic-xray-classes.jar libv2ray.CoreController >> /tmp/nlic-xray-api.txt
+          grep -q 'newCoreController' /tmp/nlic-xray-api.txt
+          grep -q 'initCoreEnv' /tmp/nlic-xray-api.txt
+          grep -q 'startLoop' /tmp/nlic-xray-api.txt
+          grep -q 'stopLoop' /tmp/nlic-xray-api.txt
 
       - name: Restore isolated DEV signing identity
         shell: bash
