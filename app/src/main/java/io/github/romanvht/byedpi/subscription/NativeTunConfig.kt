@@ -14,6 +14,13 @@ import com.google.gson.JsonParser
  */
 internal object NativeTunConfig {
     const val TAG = "lic-tun-in"
+    // Keep VpnService.Builder and sing-box TUN addresses exactly aligned.
+    // A /32 Android address with a /30 native address can break DNS/routing.
+    const val IPV4_ADDRESS = "172.18.0.1"
+    const val IPV4_PREFIX = 30
+    const val IPV4_DNS = "172.18.0.2"
+    const val IPV6_ADDRESS = "fdfe:dcba:9876::1"
+    const val IPV6_PREFIX = 126
     fun compile(proxyConfig: String, mtu: Int): String {
         require(mtu in 1280..9000)
         val root = JsonParser.parseString(proxyConfig).asJsonObject.deepCopy()
@@ -28,8 +35,8 @@ internal object NativeTunConfig {
             // Android gives the interface name itself. We own exactly one
             // VpnService, unlike desktop TUN auto-routing.
             add("address", JsonArray().apply {
-                add("172.18.0.1/30")
-                add("fdfe:dcba:9876::1/126")
+                add("$IPV4_ADDRESS/$IPV4_PREFIX")
+                add("$IPV6_ADDRESS/$IPV6_PREFIX")
             })
             addProperty("auto_route", true)
             addProperty("stack", "mixed")
