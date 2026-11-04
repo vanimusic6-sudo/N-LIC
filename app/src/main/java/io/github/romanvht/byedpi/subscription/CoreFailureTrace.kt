@@ -19,14 +19,15 @@ internal object CoreFailureTrace {
     private const val MAX_AGE_MS = 180_000L
     private val allowed = setOf(
         "PREPARE", "CATALOG", "CONFIG_PREPARE", "CONFIG_COMPILE",
-        "BAY_PROXY", "BAY_UPSTREAM", "BAY_UDP",
+        "BAY_PROXY", "BAY_UPSTREAM", "BAY_UDP", "BAY_UNREACHABLE",
+        "BAY_UDP_UNAVAILABLE", "BAY_UNSUPPORTED", "NO_SERVER", "ENGINE",
         "CORE_START", "SETUP", "CONFIG", "INTERFACES", "COMMAND", "OUTBOUND",
         "CREDENTIAL_STORAGE", "CORE_SOCKS", "REMOTE_TEST",
         "TUN", "HEV", "RUNNING"
     )
 
     fun mark(context: Context, stage: String) {
-        if (stage !in allowed) return
+        if (!isAllowed(stage)) return
         runCatching {
             val file = AtomicFile(File(context.filesDir, NAME))
             val bytes = "${System.currentTimeMillis()}:$stage".toByteArray(Charsets.US_ASCII)
@@ -41,6 +42,17 @@ internal object CoreFailureTrace {
         }
     }
 
+    /** Distinguish a *controlled* failed readiness check from a Go process crash.
+     * A deliberate failed startup terminates :native too, and used to be
+     * misreported as NATIVE_AT_REMOTE_TEST due to a Binder delivery race.
+     */
+    fun markFailure(context: Context, safeStage: String) {
+        if (safeStage in allowed) mark(context, "FAILED_$safeStage")
+    }
+
+    private fun isAllowed(stage: String): Boolean = stage in allowed ||
+        (stage.startsWith("FAILED_") && stage.removePrefix("FAILED_") in allowed)
+
     fun recent(context: Context): String? {
         return runCatching {
         val file = AtomicFile(File(context.filesDir, NAME))
@@ -49,7 +61,7 @@ internal object CoreFailureTrace {
         val timestamp = value.substringBefore(":").toLongOrNull() ?: return@runCatching null
         val stage = value.substringAfter(":", "")
         val elapsed = System.currentTimeMillis() - timestamp
-        stage.takeIf { it in allowed && elapsed in 0..MAX_AGE_MS }
+        stage.takeIf { isAllowed(it) && elapsed in 0..MAX_AGE_MS }
         }.getOrNull()
     }
 
