@@ -70,8 +70,8 @@ internal class CoreLocalDnsResolver(context: Context) {
                 "raw" -> false
                 "lookup" -> {
                     val exchange = requireNotNull(args?.getOrNull(0))
-                    val family = args.getOrNull(1) as? String ?: "ip"
-                    val domain = args.getOrNull(2) as? String
+                    val family = args?.getOrNull(1) as? String ?: "ip"
+                    val domain = args?.getOrNull(2) as? String
                         ?: throw IllegalArgumentException("Missing lookup name")
                     lookup(exchange, family, domain)
                     null
