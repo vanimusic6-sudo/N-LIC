@@ -34,6 +34,12 @@ class SubscriptionFetcherTest {
         }
         assertFalse(SubscriptionFetcher.validSubscriptionUrl(
             "https://[fd12:3456::1]/subscription"))
+        // IPv6-only mobile networks use NAT64 to reach public IPv4 hosts.
+        // Permit DNS64 only for public IPv4; do not reintroduce SSRF.
+        assertTrue(SubscriptionFetcher.publicAddress(
+            InetAddress.getByName("64:ff9b::8.8.8.8")))
+        assertFalse(SubscriptionFetcher.publicAddress(
+            InetAddress.getByName("64:ff9b::10.0.0.1")))
     }
 
     @Test fun `an entire DNS response is rejected when any answer is private`() {
