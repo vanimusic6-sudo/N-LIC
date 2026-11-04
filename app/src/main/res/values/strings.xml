@@ -415,4 +415,5 @@
     <string name="nlic_home_policy_baseline">Нет свежих проверок · используется щадящий базовый профиль</string>
     <string name="nlic_home_policy_off">Авто-стратегия отключена</string>
     <string name="nlic_core_advice_native_crash">Нативное ядро Android завершилось во время запуска. Код ниже показывает последний этап перед сбоем. Это ошибка приложения или совместимости движка, а не обязательно сервера. Пришли этот код без конфигов и ключей.</string>
+    <string name="nlic_ui_help_steps_xray">Для Xray Preview: добавь VLESS/REALITY, VMess, Trojan, Shadowsocks или WireGuard .conf, выбери сервер и нажми «Подключиться». Проверка HTTPS выполняется через локальный SOCKS до открытия VPN-туннеля. Ошибка REMOTE_TLS относится к тестовому HTTPS-сайту, а не обязательно к REALITY-серверу. LIC-Auto и LIC-Bay в этой версии не подключены, пока не проверена работа основного ядра. Для проверки работоспособности необходимо проверить HTTPS, DNS, IPv4/IPv6 и отсутствие утечек.</string>
 </resources>
