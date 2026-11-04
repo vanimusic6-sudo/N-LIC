@@ -1,4 +1,4 @@
-name: N-LIC 2.0.1 Core Preview APK (pinned libbox)
+name: N-LIC 2.0.2 Core Preview APK (pinned libbox)
 
 on:
   push:
@@ -101,7 +101,7 @@ jobs:
             apk="$(find app/build/outputs/apk/release -type f -name '*universal*release*.apk' -print -quit)"
           fi
           test -s "$apk"
-          output="core-preview/N-LIC-2.0.1-CorePreview-arm64-Release-DEV.apk"
+          output="core-preview/N-LIC-2.0.2-CorePreview-arm64-Release-DEV.apk"
           cp "$apk" "$output"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$output" > core-preview/SIGNATURE.txt
           grep -iq '9eac8ece5fb89eeacb03c5eff20155724a206d73180d58c78fc7d3911dbee5c5' core-preview/SIGNATURE.txt
@@ -111,7 +111,7 @@ jobs:
           # Verify the actual gomobile JNI library in the APK.
           python3 scripts/verify-core-apk.py "$output"
           cat > core-preview/READ_ME_FIRST.txt <<'EOF'
-          N-LIC 2.0.1 LIC-Core Preview — not production software.
+          N-LIC 2.0.2 LIC-Core Preview — not production software.
           APK uses the N-LIC DEV certificate, NOT an official release key.
           ARM64 only. N-LIC's old ByeDPI is the default. Import a subscription,
           select a supported node, and explicitly enable LIC-Core in Settings.
@@ -130,7 +130,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: N-LIC-2.0.1-Core-Lint
+          name: N-LIC-2.0.2-Core-Lint
           path: app/build/reports/lint-results-release.*
           if-no-files-found: ignore
           retention-days: 14
@@ -138,7 +138,7 @@ jobs:
       - name: Publish experimental Core Preview APK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: N-LIC-2.0.1-CorePreview-ARM64-DevSigned
+          name: N-LIC-2.0.2-CorePreview-ARM64-DevSigned
           path: core-preview/
           retention-days: 14
           if-no-files-found: error
