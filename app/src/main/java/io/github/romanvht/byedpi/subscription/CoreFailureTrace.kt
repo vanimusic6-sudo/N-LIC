@@ -44,7 +44,7 @@ internal object CoreFailureTrace {
     fun recent(context: Context): String? {
         return runCatching {
         val file = AtomicFile(File(context.filesDir, NAME))
-        if (!file.baseFile.exists() || file.baseFile.length() !in 1..48) return@runCatching null
+        if (!file.baseFile.exists() || file.baseFile.length() !in 1L..48L) return@runCatching null
         val value = file.openRead().bufferedReader(Charsets.US_ASCII).use { it.readText() }
         val timestamp = value.substringBefore(":").toLongOrNull() ?: return@runCatching null
         val stage = value.substringAfter(":", "")
