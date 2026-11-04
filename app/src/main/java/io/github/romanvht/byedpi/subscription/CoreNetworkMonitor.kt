@@ -100,7 +100,12 @@ internal class CoreNetworkMonitor(context: Context) : AutoCloseable {
                     !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED))
                 val strings = Class.forName(PREFIX + "StringIterator")
                 set("setAddresses", strings, iterator("StringIterator",
-                    links.linkAddresses.map { it.toString() }))
+                    links.linkAddresses.mapNotNull { link ->
+                        CoreNetworkAddress.prefix(
+                            link.address.hostAddress,
+                            link.prefixLength,
+                        )
+                    }))
                 set("setDNSServer", strings, iterator("StringIterator",
                     links.dnsServers.mapNotNull { it.hostAddress }))
                 entry
