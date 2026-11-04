@@ -149,16 +149,16 @@ class SubscriptionLabActivity : BaseActivity() {
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
         }
-        findViewById<MaterialButton>(R.id.nlic_add_subscription).setOnClickListener {
+        findViewById<MaterialButton>(R.id.nlic_add_subscription)?.setOnClickListener {
             showImportDialog(subscription = true)
         }
-        findViewById<MaterialButton>(R.id.nlic_add_link).setOnClickListener {
+        findViewById<MaterialButton>(R.id.nlic_add_link)?.setOnClickListener {
             showImportDialog(subscription = false)
         }
-        findViewById<MaterialButton>(R.id.nlic_add_file).setOnClickListener {
+        findViewById<MaterialButton>(R.id.nlic_add_file)?.setOnClickListener {
             if (!busy) filePicker.launch(arrayOf("*/*"))
         }
-        findViewById<MaterialButton>(R.id.nlic_refresh_now).setOnClickListener {
+        findViewById<MaterialButton>(R.id.nlic_refresh_now)?.setOnClickListener {
             refreshSubscriptions()
         }
         findViewById<MaterialButton>(R.id.nlic_mode_bypass).setOnClickListener {
@@ -169,11 +169,11 @@ class SubscriptionLabActivity : BaseActivity() {
         }
         findViewById<MaterialButton>(R.id.nlic_connect).setOnClickListener { requestConnection() }
         findViewById<MaterialButton>(R.id.nlic_disconnect).setOnClickListener { disconnectCore() }
-        findViewById<MaterialButton>(R.id.nlic_expand_advanced).setOnClickListener {
+        findViewById<MaterialButton>(R.id.nlic_expand_advanced)?.setOnClickListener {
             val panel = findViewById<View>(R.id.nlic_advanced_panel)
             panel.visibility = if (panel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         }
-        findViewById<MaterialButton>(R.id.nlic_privacy).setOnClickListener {
+        findViewById<MaterialButton>(R.id.nlic_privacy)?.setOnClickListener {
             AlertDialog.Builder(this)
                 .setTitle(R.string.nlic_privacy_title)
                 .setMessage(R.string.nlic_privacy_confirmation)
@@ -186,15 +186,15 @@ class SubscriptionLabActivity : BaseActivity() {
                 }
                 .setNegativeButton(android.R.string.cancel, null).show()
         }
-        findViewById<MaterialButton>(R.id.nlic_help).setOnClickListener {
+        findViewById<MaterialButton>(R.id.nlic_help)?.setOnClickListener {
             AlertDialog.Builder(this).setTitle(R.string.nlic_ui_help)
                 .setMessage(if (BuildConfig.NLIC_XRAY_INCLUDED) R.string.nlic_ui_help_steps_xray
                     else R.string.nlic_ui_help_steps)
                 .setPositiveButton(android.R.string.ok, null).show()
         }
-        findViewById<MaterialButton>(R.id.nlic_refresh).setOnClickListener { refreshSubscriptions() }
-        findViewById<MaterialButton>(R.id.nlic_tcp_check).setOnClickListener { checkTcpEndpoints() }
-        findViewById<MaterialButton>(R.id.nlic_legacy_mode).setOnClickListener {
+        findViewById<MaterialButton>(R.id.nlic_refresh)?.setOnClickListener { refreshSubscriptions() }
+        findViewById<MaterialButton>(R.id.nlic_tcp_check)?.setOnClickListener { checkTcpEndpoints() }
+        findViewById<MaterialButton>(R.id.nlic_legacy_mode)?.setOnClickListener {
             AlertDialog.Builder(this).setTitle(R.string.nlic_ui_legacy_action)
                 .setMessage(R.string.nlic_ui_legacy_confirm)
                 .setPositiveButton(android.R.string.ok) { _, _ ->
@@ -211,7 +211,7 @@ class SubscriptionLabActivity : BaseActivity() {
                 }
                 .setNegativeButton(android.R.string.cancel, null).show()
         }
-        findViewById<MaterialButton>(R.id.nlic_clear).setOnClickListener {
+        findViewById<MaterialButton>(R.id.nlic_clear)?.setOnClickListener {
             AlertDialog.Builder(this).setTitle(R.string.nlic_subscriptions_clear)
                 .setMessage(R.string.nlic_subscriptions_clear_confirm)
                 .setPositiveButton(android.R.string.ok) { _, _ ->
@@ -585,11 +585,11 @@ class SubscriptionLabActivity : BaseActivity() {
         findViewById<View>(R.id.nlic_subscription_panel).visibility =
             if (local) View.GONE else View.VISIBLE
         listOf(R.id.nlic_refresh, R.id.nlic_tcp_check).forEach { id ->
-            findViewById<View>(id).visibility = if (local) View.GONE else View.VISIBLE
+            findViewById<View>(id)?.visibility = if (local) View.GONE else View.VISIBLE
         }
         updateModeButton(findViewById(R.id.nlic_mode_bypass), local)
         updateModeButton(findViewById(R.id.nlic_mode_subscription), !local)
-        findViewById<TextView>(R.id.nlic_supported_protocols).setText(
+        findViewById<TextView>(R.id.nlic_supported_protocols)?.setText(
             if (BuildConfig.NLIC_XRAY_INCLUDED) R.string.nlic_home_supported_xray_protocols
             else R.string.nlic_home_supported_protocols
         )
@@ -730,7 +730,7 @@ class SubscriptionLabActivity : BaseActivity() {
             getString(R.string.nlic_xray_bay_hint)
         } else if (bayEligible) getString(R.string.nlic_control_bay_desc)
             else getString(R.string.nlic_core_bay_udp)
-        findViewById<TextView>(R.id.nlic_bay_hint).text =
+        findViewById<TextView>(R.id.nlic_bay_hint)?.text =
             if (bay) bayHint + "\n" + getString(R.string.nlic_control_bay_risk) else bayHint
 
         findViewById<SwitchMaterial>(R.id.nlic_adaptive_switch).apply {
@@ -756,7 +756,7 @@ class SubscriptionLabActivity : BaseActivity() {
         listOf(R.id.nlic_add_subscription, R.id.nlic_add_link,
             R.id.nlic_add_file, R.id.nlic_refresh_now, R.id.nlic_refresh, R.id.nlic_tcp_check, R.id.nlic_legacy_mode,
             R.id.nlic_clear).forEach { id ->
-            findViewById<MaterialButton>(id).isEnabled = !busy
+            findViewById<MaterialButton>(id)?.isEnabled = !busy
         }
     }
 
