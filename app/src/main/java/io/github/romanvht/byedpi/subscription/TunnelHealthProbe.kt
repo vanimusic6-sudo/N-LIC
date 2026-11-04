@@ -1,8 +1,15 @@
 package io.github.romanvht.byedpi.subscription
 
 import java.io.DataInputStream
+import java.io.EOFException
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.net.SocketException
+import java.net.SocketTimeoutException
+import java.security.cert.CertificateException
+import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLPeerUnverifiedException
+import javax.net.ssl.SSLProtocolException
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
@@ -11,7 +18,7 @@ internal data class LocalSocksAuth(val username: String, val password: String)
 
 internal object TunnelHealthProbe {
     private const val TARGET = "www.gstatic.com"
-    private const val TIMEOUT = 4_000
+    private const val TIMEOUT = 5_000
     // Probe through the authenticated SOCKS tunnel only. Both Google and
     // Cloudflare connectivity endpoints can be blocked even when a user's
     // VPN server works. A regular HTTPS 200 is equally valid proof of egress.
@@ -26,7 +33,29 @@ internal object TunnelHealthProbe {
     // The selected hostname is a fixed allowlisted HTTPS connectivity
     // endpoint, NOT a provider-controlled URL. No cookies or tokens sent.
     /** This result contains only a phase, never a server/hostname or secret. */
-    internal enum class EgressResult { OK, CONNECT, SOCKS, TLS, HTTP }
+    internal enum class EgressResult {
+        OK, CONNECT, SOCKS, TLS, HTTP,
+        TLS_CERT, TLS_TIMEOUT, TLS_HANDSHAKE, TLS_PROTOCOL, TLS_EOF, TLS_IO
+    }
+
+    /**
+     * This is TLS between Android's probe and a public HTTPS test host,
+     * NOT necessarily the proxy server's VLESS/REALITY handshake.
+     * Report only exception categories: messages may contain addresses,
+     * SNI, routes, and other private connection details.
+     */
+    internal fun classifyTlsFailure(error: Exception): EgressResult {
+        val hasCertError = generateSequence(error as Throwable?) { it.cause }
+            .take(8).any { it is CertificateException || it is SSLPeerUnverifiedException }
+        return when {
+            hasCertError -> EgressResult.TLS_CERT
+            error is SocketTimeoutException -> EgressResult.TLS_TIMEOUT
+            error is SSLProtocolException -> EgressResult.TLS_PROTOCOL
+            error is SSLHandshakeException -> EgressResult.TLS_HANDSHAKE
+            error is EOFException || error is SocketException -> EgressResult.TLS_EOF
+            else -> EgressResult.TLS_IO
+        }
+    }
 
     fun check(
         host: String, port: Int, auth: LocalSocksAuth? = null,
@@ -69,9 +98,12 @@ internal object TunnelHealthProbe {
                     else EgressResult.HTTP
                 }
             }
-        } catch (_: Exception) {
-            // No nested exception text: it can contain SNI, server IP, keys.
-            stage
+        } catch (error: Exception) {
+            // Only stage and exception *type*, never nested exception text.
+            // SOCKS5 CONNECT may succeed before the remote encrypted
+            // protocol authenticates, so TLS failures do not prove that
+            // a VLESS/REALITY or WireGuard server itself failed TLS.
+            if (stage == EgressResult.TLS) classifyTlsFailure(error) else stage
         }
     }
 
