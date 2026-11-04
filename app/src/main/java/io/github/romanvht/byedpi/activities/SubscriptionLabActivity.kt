@@ -186,7 +186,18 @@ class SubscriptionLabActivity : BaseActivity() {
         findViewById<MaterialButton>(R.id.nlic_legacy_mode).setOnClickListener {
             AlertDialog.Builder(this).setTitle(R.string.nlic_ui_legacy_action)
                 .setMessage(R.string.nlic_ui_legacy_confirm)
-                .setPositiveButton(android.R.string.ok) { _, _ -> disconnectCore() }
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    if (BuildConfig.NLIC_XRAY_INCLUDED) {
+                        runOperation {
+                            ServiceManager.waitStop()
+                            prefs.edit().putBoolean("nlic_core_mode", false).commit()
+                            startActivity(android.content.Intent(
+                                this@SubscriptionLabActivity, MainActivity::class.java
+                            ).putExtra("nlic_legacy_screen", true))
+                            finish()
+                        }
+                    } else disconnectCore()
+                }
                 .setNegativeButton(android.R.string.cancel, null).show()
         }
         findViewById<MaterialButton>(R.id.nlic_clear).setOnClickListener {
