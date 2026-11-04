@@ -383,6 +383,7 @@ object ServiceManager {
                             "REMOTE_TLS_EOF", "REMOTE_TLS_IO",
                             "TUN", "HEV", "HEV_EXIT", "ENGINE_EXIT",
                             "XRAY_START", "XRAY_SOCKS", "XRAY_TUN", "XRAY_HEV",
+                            "XRAY_HTTPS",
                             "XRAY_MODE_UNSUPPORTED"
                         )
                         val lastNativeStage = application?.let {
