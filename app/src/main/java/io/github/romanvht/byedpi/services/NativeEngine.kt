@@ -386,15 +386,19 @@ internal class NativeEngine(
                 putStringArray(EngineProtocol.APPS, configuration.apps.toTypedArray())
             })
         }
-        awaitStarted()
+        awaitStarted(
+            if (configuration.args.firstOrNull() == "--nlic-xray" &&
+                configuration.args.getOrNull(2) == "--nlic-auto"
+            ) 95_000L else 60_000L
+        )
     }
 
     suspend fun awaitConfigured() {
         configured.await()
     }
 
-    suspend fun awaitStarted() {
-        withTimeout(60_000) { started.await() }
+    suspend fun awaitStarted(timeoutMs: Long = 60_000L) {
+        withTimeout(timeoutMs) { started.await() }
         check(!closing && !exited.isCompleted) { failure ?: "Native engine stopped during startup" }
     }
 
