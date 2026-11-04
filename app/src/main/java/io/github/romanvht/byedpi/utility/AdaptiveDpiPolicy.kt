@@ -51,6 +51,11 @@ internal object AdaptiveDpiPolicy {
         // reduce battery, heat and network retries.
         val best = credible.sortedWith(
             compareByDescending<StrategyResult> { confidenceScore(it) }
+                // Sustained media transfer is a stronger signal than a
+                // single reachable homepage: reward completed streaming
+                // before the packet-cost/latency tie breakers.
+                .thenByDescending { StrategyRanking.mediaRank(it) }
+                .thenByDescending { it.streamProbe?.transferBytesPerSecond ?: 0L }
                 .thenBy { StrategyRanking.estimatedPacketCost(it.command) }
                 .thenBy { StrategyRanking.medianSuccessLatencyMs(it) ?: Long.MAX_VALUE }
         ).firstOrNull()
