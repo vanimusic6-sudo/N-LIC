@@ -114,8 +114,19 @@ class SubscriptionLabActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_nlic_control)
         setupToolbar()
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        supportActionBar?.setTitle(R.string.nlic_control_title)
+        supportActionBar?.setDisplayHomeAsUpEnabled(false)
+        supportActionBar?.title = "N-LIC"
+        findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).apply {
+            val settingsItem = menu.add(0, 48162, 0, "Настройки")
+            settingsItem.setIcon(android.R.drawable.ic_menu_manage)
+            settingsItem.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+            setOnMenuItemClickListener { item ->
+                if (item.itemId == 48162) {
+                    showCompactSettings()
+                    true
+                } else false
+            }
+        }
 
         findViewById<MaterialButton>(R.id.nlic_manage_profiles).setOnClickListener {
             if (busy) return@setOnClickListener
@@ -234,6 +245,20 @@ class SubscriptionLabActivity : BaseActivity() {
     override fun onSupportNavigateUp(): Boolean {
         finish()
         return true
+    }
+
+    private fun showCompactSettings() = NlicV2Settings.show(this) {
+        runOperation {
+            ServiceManager.waitStop()
+            prefs.edit().putBoolean("nlic_core_mode", false)
+                .putBoolean("nlic_core_auto", false)
+                .putBoolean("nlic_core_bay", false).commit()
+            withContext(Dispatchers.IO) {
+                SubscriptionVault.clear(applicationContext)
+            }
+            latestMessage = null
+            locallyVerified = false
+        }
     }
 
     private fun toast(id: Int) =
@@ -594,6 +619,8 @@ class SubscriptionLabActivity : BaseActivity() {
             runningVpn -> getString(R.string.nlic_control_verified)
             else -> getString(R.string.nlic_control_status_hint)
         }
+        stage.visibility = if (!local && failure != null && !runningVpn)
+            View.VISIBLE else View.GONE
         stage.text = when {
             local && runningVpn -> getString(R.string.nlic_bypass_status)
             local -> getString(R.string.nlic_mode_local)
