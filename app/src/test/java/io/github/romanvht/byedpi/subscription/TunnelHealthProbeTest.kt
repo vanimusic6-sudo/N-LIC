@@ -9,6 +9,24 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TunnelHealthProbeTest {
+    @Test fun `HTTPS probe distinguishes certificate timeout and abort without secrets`() {
+        val handshake = javax.net.ssl.SSLHandshakeException("hostname contains private-key")
+        handshake.initCause(java.security.cert.CertificateException("credential redacted"))
+        assertEquals(TunnelHealthProbe.EgressResult.TLS_CERT,
+            TunnelHealthProbe.classifyTlsFailure(handshake))
+        assertEquals(TunnelHealthProbe.EgressResult.TLS_TIMEOUT,
+            TunnelHealthProbe.classifyTlsFailure(
+                java.net.SocketTimeoutException("test domain withheld")))
+        assertEquals(TunnelHealthProbe.EgressResult.TLS_HANDSHAKE,
+            TunnelHealthProbe.classifyTlsFailure(
+                javax.net.ssl.SSLHandshakeException("remote closed")))
+        assertEquals(TunnelHealthProbe.EgressResult.TLS_EOF,
+            TunnelHealthProbe.classifyTlsFailure(java.io.EOFException()))
+        assertEquals(TunnelHealthProbe.EgressResult.TLS_PROTOCOL,
+            TunnelHealthProbe.classifyTlsFailure(
+                javax.net.ssl.SSLProtocolException("TLS protocol mismatch")))
+    }
+
     @Test fun localProxyRefusalIsDistinguishedFromRemoteTlsFailure() {
         val port = ServerSocket(0).use { it.localPort }
         assertEquals(TunnelHealthProbe.EgressResult.CONNECT,
