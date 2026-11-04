@@ -158,6 +158,14 @@ class MainActivity : BaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Xray preview now launches into the actual two-mode cockpit,
+        // preserving the old interface behind an explicit legacy action.
+        if (BuildConfig.NLIC_XRAY_INCLUDED && savedInstanceState == null &&
+            !intent.getBooleanExtra("nlic_legacy_screen", false)) {
+            startActivity(Intent(this, SubscriptionLabActivity::class.java))
+            finish()
+            return
+        }
         ServiceManager.refresh(this)
 
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -183,7 +191,7 @@ class MainActivity : BaseActivity() {
             val (status, _) = appStatus
             when (status) {
                 AppStatus.Halted -> {
-                    if (BuildConfig.NLIC_LIBBOX_INCLUDED) {
+                    if (BuildConfig.NLIC_LIBBOX_INCLUDED || BuildConfig.NLIC_XRAY_INCLUDED) {
                         startActivity(Intent(this, SubscriptionLabActivity::class.java).apply {
                             putExtra("nlic_quick_connect", true)
                         })
@@ -209,7 +217,8 @@ class MainActivity : BaseActivity() {
         // Some resource configurations use a compact alternative home layout.
         // ViewBinding therefore exposes this optional button as nullable.
         binding.nlicCoreButton?.apply {
-            visibility = if (BuildConfig.NLIC_LIBBOX_INCLUDED) View.VISIBLE else View.GONE
+            visibility = if (BuildConfig.NLIC_LIBBOX_INCLUDED || BuildConfig.NLIC_XRAY_INCLUDED)
+                View.VISIBLE else View.GONE
             setOnClickListener {
                 startActivity(Intent(this@MainActivity, SubscriptionLabActivity::class.java))
             }
