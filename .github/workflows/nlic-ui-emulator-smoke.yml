@@ -98,7 +98,10 @@ jobs:
               > app/build/emulator-diagnostics/full-logcat.txt 2>&1 &
             log_pid=$!
             trap 'adb logcat -d -b crash -v threadtime > app/build/emulator-diagnostics/crash-buffer.txt 2>&1 || true; kill "$log_pid" 2>/dev/null || true' EXIT
-            ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
+            # Isolate the native Go schema contract test; do not let an
+            # unrelated Espresso/UI test hide the underlying parser failure.
+            ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace \
+              -Pandroid.testInstrumentationRunnerArguments.class=io.github.romanvht.byedpi.subscription.NlicNativeGoContractTest
 
       - name: Publish UI crash and instrumentation results
         if: always()
