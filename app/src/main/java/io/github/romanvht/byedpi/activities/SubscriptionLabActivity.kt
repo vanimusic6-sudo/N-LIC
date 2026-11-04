@@ -116,17 +116,11 @@ class SubscriptionLabActivity : BaseActivity() {
         setupToolbar()
         supportActionBar?.setDisplayHomeAsUpEnabled(false)
         supportActionBar?.title = "N-LIC"
-        findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).apply {
-            val settingsItem = menu.add(0, 48162, 0, "Настройки")
-            settingsItem.setIcon(android.R.drawable.ic_menu_manage)
-            settingsItem.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
-            setOnMenuItemClickListener { item ->
-                if (item.itemId == 48162) {
-                    showCompactSettings()
-                    true
-                } else false
-            }
-        }
+        // ActionBar owns Toolbar menu dispatch. Bind a real view instead
+        // so Settings stays available even when the support menu is rebuilt.
+        findViewById<androidx.appcompat.widget.AppCompatImageButton>(
+            R.id.nlic_settings_button
+        ).setOnClickListener { showCompactSettings() }
 
         findViewById<MaterialButton>(R.id.nlic_manage_profiles).setOnClickListener {
             if (busy) return@setOnClickListener
