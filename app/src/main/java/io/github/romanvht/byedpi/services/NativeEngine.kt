@@ -62,7 +62,10 @@ internal class NativeEngine(
                 val catalog = runCatching { SubscriptionVault.read(context) }
                     .getOrElse { throw CoreStartException("CATALOG") }
                 val auto = preferences.getBoolean("nlic_core_auto", false)
-                val bay = preferences.getBoolean("nlic_core_bay", false)
+                // LIC-Fork VPN does not start ByeDPI. Ignore stale Bay prefs:
+                // existing subscriptions are preserved, no downgrade to a
+                // local packet-splitting proxy is allowed.
+                val bay = false
                 val bayPort = io.github.romanvht.byedpi.subscription.XrayConfigCompiler.BAY_PORT
                 val authForValidation =
                     io.github.romanvht.byedpi.subscription.LocalSocksAuth("nlic", "a".repeat(48))

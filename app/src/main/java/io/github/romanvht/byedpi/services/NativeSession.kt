@@ -266,105 +266,93 @@ internal class NativeSession(
                                 ) is XrayConfigCompiler.Result.Compiled
                             }
                         corePhase = "CONFIG_COMPILE"; CoreFailureTrace.mark(service, corePhase)
-                        val candidates = if (autoEnabled) {
-                            io.github.romanvht.byedpi.subscription.XrayAutoSelector.candidates(
-                                catalog.allNodes, catalog.selectedNodeId, bayEnabled, validate
-                            )
-                        } else {
-                            catalog.allNodes.filter { it.id == catalog.selectedNodeId && validate(it) }
-                        }
-                        if (candidates.isEmpty()) throw CoreStartException(
+                        val physicalForChoice = NetworkEnvironment.capture(service)
+                        val batch = io.github.romanvht.byedpi.subscription.LICForkPlanner.plan(
+                            catalog.allNodes, catalog.selectedNodeId, physicalForChoice, validate
+                        )
+                        val directRoutes = if (autoEnabled) batch.direct else
+                            batch.direct.filter { it.exit.id == catalog.selectedNodeId }
+                        if (directRoutes.isEmpty()) throw CoreStartException(
                             if (autoEnabled) "AUTO_NO_WORKING_SERVER" else "PROTOCOL_UNSUPPORTED"
                         )
 
-                        if (bayEnabled) {
-                            // Spawn a real, loopback-only ByeDPI SOCKS5 relay.
-                            // Never use a direct fallback if the relay fails.
-                            corePhase = "BAY_PROXY"; CoreFailureTrace.mark(service, corePhase)
-                            val relayArgs = config.args.drop(3)
-                            // Defense in depth: even IPC/tampered
-                            // profiles cannot expose an unauthenticated
-                            // SOCKS5 relay on the physical LAN.
-                            if (!XrayBayArgs.validLoopback(relayArgs, bayPort)) {
-                                throw CoreStartException("BAY_PROFILE")
-                            }
-                            val engine = withContext(Dispatchers.IO) { ByeDpiProxy() }
-                            proxy = engine
-                            proxyThread = runNative("ByeDPI-Bay") {
-                                engine.startProxy(relayArgs.toTypedArray())
-                            }
-                            withTimeout(START_TIMEOUT) { awaitProxy("127.0.0.1", bayPort) }
-                        }
-                        val udpReady = if (bayEnabled && candidates.any {
-                                LICBay.plan(it).transport == BayTransport.UDP_ASSOCIATE
-                            }) {
-                            corePhase = "BAY_UDP"; CoreFailureTrace.mark(service, corePhase)
-                            withContext(Dispatchers.IO) {
-                                TunnelHealthProbe.checkBayUdp(bayPort)
-                            }
-                        } else true
-                        val eligible = candidates.filter {
-                            !bayEnabled || udpReady ||
-                                LICBay.plan(it).transport != BayTransport.UDP_ASSOCIATE
-                        }
-                        if (eligible.isEmpty()) throw CoreStartException("BAY_UDP_UNAVAILABLE")
-
-                        // LIC-Auto tests a bounded set with the ACTUAL
-                        // encrypted Xray outbound (not TCP endpoint ping).
-                        // Every failed candidate is stopped before trying
-                        // another. No VPN routes exist until a winner passes.
-                        val selected = if (autoEnabled) {
-                            val measurements = mutableListOf<
-                                io.github.romanvht.byedpi.subscription.XrayAutoSelector.Measurement>()
-                            for (candidate in eligible) {
+                        // Each trial uses the real Xray engine and its own
+                        // certificate-verified HTTPS egress. Neither a local
+                        // SOCKS handshake nor a TCP connection is success.
+                        // Only direct transports are tried initially. If all
+                        // fail, try at most two explicit TLS/REALITY chains.
+                        suspend fun measureRoute(
+                            route: io.github.romanvht.byedpi.subscription.LICForkPath,
+                        ): Long? {
+                            val compiled = if (route.bridge == null)
+                                XrayConfigCompiler.compile(route.exit, auth)
+                            else XrayConfigCompiler.compileChain(route.exit, route.bridge, auth)
+                            val plan = compiled as? XrayConfigCompiler.Result.Compiled
+                                ?: return null
+                            val trial = XrayRuntime(service)
+                            xrayEngine = trial
+                            var verifiedMs: Long? = null
+                            try {
                                 corePhase = "AUTO_PROBE"; CoreFailureTrace.mark(service, corePhase)
-                                val compiled = XrayConfigCompiler.compile(
-                                    candidate, auth, if (bayEnabled) bayPort else null
-                                ) as? XrayConfigCompiler.Result.Compiled ?: continue
-                                val trial = XrayRuntime(service)
-                                xrayEngine = trial
-                                try {
-                                    withContext(Dispatchers.IO) { trial.start(compiled.json) }
-                                    withTimeout(5_000) {
-                                        awaitProxy(config.host, config.port, auth)
-                                    }
-                                    val began = android.os.SystemClock.elapsedRealtime()
-                                    val nativeMs = withContext(Dispatchers.IO) {
-                                        trial.measureHttpsLatencyMs()
-                                    }
-                                    // Go core.Dial is certificate-validated
-                                    // and bounded to 12 s. Never equate a
-                                    // plain TCP or local SOCKS handshake with
-                                    // an Auto candidate working over VPN.
-                                    if (nativeMs != null) measurements +=
-                                        io.github.romanvht.byedpi.subscription.XrayAutoSelector.Measurement(
-                                            candidate.id,
-                                            nativeMs ?: (android.os.SystemClock.elapsedRealtime() -
-                                                began).coerceAtLeast(1),
-                                        )
-                                } catch (_: TimeoutCancellationException) {
-                                    // Candidate timed out: do not promote it.
-                                } catch (cancelled: CancellationException) {
-                                    throw cancelled
-                                } catch (_: Exception) {
-                                    // Only a safe code is exposed; configs and
-                                    // JNI exceptions may contain credentials.
-                                } finally {
-                                    withContext(NonCancellable + Dispatchers.IO) {
-                                        trial.close()
-                                    }
-                                    if (xrayEngine === trial) xrayEngine = null
-                                    delay(200) // release the previous SOCKS port
+                                withContext(Dispatchers.IO) { trial.start(plan.json) }
+                                withTimeout(5_000) {
+                                    awaitProxy(config.host, config.port, auth)
                                 }
+                                verifiedMs = withContext(Dispatchers.IO) {
+                                    trial.measureHttpsLatencyMs()
+                                }
+                                return verifiedMs
+                            } catch (_: TimeoutCancellationException) {
+                                return null
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (_: Exception) {
+                                return null // Never log transport secrets.
+                            } finally {
+                                io.github.romanvht.byedpi.subscription.LICForkLearning.record(
+                                    physicalForChoice, route, verifiedMs != null, verifiedMs
+                                )
+                                withContext(NonCancellable + Dispatchers.IO) {
+                                    trial.close()
+                                }
+                                if (xrayEngine === trial) xrayEngine = null
+                                delay(200) // release local SOCKS before next Xray core
                             }
-                            val best = io.github.romanvht.byedpi.subscription.XrayAutoSelector
-                                .best(measurements) ?: throw CoreStartException("AUTO_NO_WORKING_SERVER")
-                            eligible.first { it.id == best.id }
-                        } else eligible.first()
+                        }
 
-                        val plan = XrayConfigCompiler.compile(
-                            selected, auth, if (bayEnabled) bayPort else null
-                        ) as? XrayConfigCompiler.Result.Compiled
+                        val winningRoute = if (autoEnabled) {
+                            val verifiedDirect = mutableListOf<Pair<
+                                io.github.romanvht.byedpi.subscription.LICForkPath, Long>>()
+                            for (route in directRoutes) {
+                                val ms = measureRoute(route)
+                                if (ms != null) verifiedDirect.add(route to ms)
+                                // Avoid additional probes when the selected
+                                // direct path is already fast and verified.
+                                if (ms != null && ms <= 800) break
+                            }
+                            if (verifiedDirect.isNotEmpty()) {
+                                verifiedDirect.minByOrNull { it.second }!!.first
+                            } else {
+                                val verifiedChains = mutableListOf<Pair<
+                                    io.github.romanvht.byedpi.subscription.LICForkPath, Long>>()
+                                for (route in batch.chained) {
+                                    val ms = measureRoute(route)
+                                    if (ms != null) {
+                                        verifiedChains.add(route to ms)
+                                        break
+                                    }
+                                }
+                                verifiedChains.minByOrNull { it.second }?.first
+                                    ?: throw CoreStartException("AUTO_NO_WORKING_SERVER")
+                            }
+                        } else directRoutes.first()
+
+                        val selected = winningRoute.exit
+                        val plan = (if (winningRoute.bridge == null)
+                            XrayConfigCompiler.compile(selected, auth)
+                        else XrayConfigCompiler.compileChain(
+                            selected, winningRoute.bridge, auth
+                        )) as? XrayConfigCompiler.Result.Compiled
                             ?: throw CoreStartException("PROTOCOL_UNSUPPORTED")
                         corePhase = "XRAY_START"; CoreFailureTrace.mark(service, corePhase)
                         val xray = XrayRuntime(service)
