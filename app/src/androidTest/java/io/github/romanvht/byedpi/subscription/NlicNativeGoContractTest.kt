@@ -87,5 +87,75 @@ class NlicNativeGoContractTest {
                     error.targetException.message, error)
             }
         }
+
+        // A parsed JSON config alone does not verify that libbox can start
+        // its Go runtime or accept a local SOCKS handshake. Exercise the
+        // actual JNI CommandServer with a synthetic loopback-only config.
+        // No real VPN server, physical tunnel or secrets are used.
+        val smokePort = java.net.ServerSocket(0).use { it.localPort }
+        val smokeConfig = """
+            {
+              "log": {"level":"warn"},
+              "inbounds": [
+                {"type":"socks","tag":"smoke-in","listen":"127.0.0.1",
+                 "listen_port":$smokePort}
+              ],
+              "outbounds":[{"type":"direct","tag":"smoke-direct"}],
+              "route":{"final":"smoke-direct","auto_detect_interface":false}
+            }
+        """.trimIndent()
+        check.invoke(null, smokeConfig)
+        val handlerType = Class.forName("io.nekohasekai.libbox.CommandServerHandler")
+        val platformType = Class.forName("io.nekohasekai.libbox.PlatformInterface")
+        val interfacesType = Class.forName("io.nekohasekai.libbox.NetworkInterfaceIterator")
+        val emptyInterfaces = java.lang.reflect.Proxy.newProxyInstance(
+            interfacesType.classLoader, arrayOf(interfacesType)
+        ) { _, method, _ ->
+            when (method.name) {
+                "hasNext" -> false
+                "next" -> null
+                else -> null
+            }
+        }
+        val handler = java.lang.reflect.Proxy.newProxyInstance(
+            handlerType.classLoader, arrayOf(handlerType)
+        ) { _, method, _ ->
+            when (method.returnType) {
+                Boolean::class.javaPrimitiveType -> false
+                Int::class.javaPrimitiveType -> 0
+                Long::class.javaPrimitiveType -> 0L
+                else -> null
+            }
+        }
+        val platform = java.lang.reflect.Proxy.newProxyInstance(
+            platformType.classLoader, arrayOf(platformType)
+        ) { _, method, _ ->
+            when (method.name) {
+                "getInterfaces" -> emptyInterfaces
+                "startDefaultInterfaceMonitor",
+                "closeDefaultInterfaceMonitor" -> null
+                else -> when (method.returnType) {
+                    Boolean::class.javaPrimitiveType -> false
+                    Int::class.javaPrimitiveType -> 0
+                    Long::class.javaPrimitiveType -> 0L
+                    else -> null
+                }
+            }
+        }
+        val serverType = Class.forName("io.nekohasekai.libbox.CommandServer")
+        val server = serverType.getConstructor(handlerType, platformType)
+            .newInstance(handler, platform)
+        try {
+            serverType.getMethod("start").invoke(server)
+            val override = Class.forName("io.nekohasekai.libbox.OverrideOptions")
+                .getConstructor().newInstance()
+            serverType.getMethod("startOrReloadService", String::class.java,
+                override.javaClass).invoke(server, smokeConfig, override)
+            assertTrue("Native sing-box started but its SOCKS listener is unreachable",
+                TunnelHealthProbe.checkLocal("127.0.0.1", smokePort, null))
+        } finally {
+            runCatching { serverType.getMethod("closeService").invoke(server) }
+            runCatching { serverType.getMethod("close").invoke(server) }
+        }
     }
 }
