@@ -200,6 +200,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:lineSpacingExtra="2dp"
+                android:id="@+id/nlic_supported_protocols"
                 android:text="@string/nlic_home_supported_protocols"
                 android:textSize="12sp"
                 android:textColor="@color/nlic_muted" />
