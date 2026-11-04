@@ -415,4 +415,5 @@
     <string name="nlic_home_policy_baseline">No recent test results · using conservative fallback</string>
     <string name="nlic_home_policy_off">Automatic strategy disabled</string>
     <string name="nlic_core_advice_native_crash">The Android native core exited during startup. The code below shows the last stage before the crash. This may be an app or engine compatibility issue, not the server. Share the stage code without configs or keys.</string>
+    <string name="nlic_ui_help_steps_xray">For Xray Preview: import VLESS/REALITY, VMess, Trojan, Shadowsocks or a WireGuard .conf, select a server, then tap Connect. The HTTPS check uses the local SOCKS listener before the VPN tunnel opens. REMOTE_TLS refers to the public HTTPS test host, not necessarily the REALITY server. LIC-Auto and LIC-Bay are not yet integrated until basic core routing is verified. Check HTTPS, DNS, IPv4/IPv6 and leaks before trusting this preview.</string>
 </resources>
