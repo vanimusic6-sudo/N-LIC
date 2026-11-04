@@ -28,7 +28,7 @@ internal object CoreFailureTrace {
         "CORE_START", "SETUP", "CONFIG", "INTERFACES", "COMMAND", "OUTBOUND",
         "CREDENTIAL_STORAGE", "CORE_SOCKS", "REMOTE_TEST",
         "TUN", "HEV", "RUNNING", "XRAY_START", "XRAY_SOCKS",
-        "XRAY_TUN", "XRAY_HEV", "XRAY_MODE_UNSUPPORTED"
+        "XRAY_TUN", "XRAY_HEV", "XRAY_HTTPS", "XRAY_MODE_UNSUPPORTED"
     )
 
     fun mark(context: Context, stage: String) {
