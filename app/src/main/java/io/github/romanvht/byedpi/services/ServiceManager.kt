@@ -374,7 +374,7 @@ object ServiceManager {
                             "TUNNEL_TEST", "ENGINE", "CATALOG", "PREPARE",
                             "CONFIG_COMPILE", "BAY_PROXY", "BAY_PROXY_EXIT",
                             "BAY_UPSTREAM", "BAY_UDP", "BAY_UDP_UNAVAILABLE",
-                            "BAY_UNSUPPORTED", "CORE_START", "CORE_SOCKS",
+                            "BAY_UNSUPPORTED", "BAY_PROFILE", "CORE_START", "CORE_SOCKS",
                             "CONFIG_PREPARE", "PROTOCOL_UNSUPPORTED", "NATIVE_PROCESS",
                             "REMOTE_TEST", "TUN", "HEV", "HEV_EXIT", "ENGINE_EXIT"
                         )
