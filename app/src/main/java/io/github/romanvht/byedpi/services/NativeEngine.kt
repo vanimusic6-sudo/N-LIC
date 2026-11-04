@@ -57,6 +57,36 @@ internal class NativeEngine(
             // ENGINE failure before the native core even initialized.
             val isCore = preferences.getBoolean("nlic_core_mode", false) &&
                 preferences.getStringNotNull("byedpi_mode", "vpn") == "vpn"
+            if (isCore && BuildConfig.NLIC_XRAY_INCLUDED) {
+                // Xray migration is a separate opt-in native build. Do not
+                // accidentally feed sing-box JSON to the Xray interpreter.
+                // LIC-Auto and LIC-Bay require their own Xray adapters and
+                // therefore fail closed in this first preview.
+                if (preferences.getBoolean("nlic_core_auto", false) ||
+                    preferences.getBoolean("nlic_core_bay", false)) {
+                    throw CoreStartException("XRAY_MODE_UNSUPPORTED")
+                }
+                val catalog = runCatching { SubscriptionVault.read(context) }
+                    .getOrElse { throw CoreStartException("CATALOG") }
+                val node = catalog.allNodes.firstOrNull { it.id == catalog.selectedNodeId }
+                    ?: throw CoreStartException("NO_SERVER")
+                if (io.github.romanvht.byedpi.subscription.XrayConfigCompiler.compile(
+                        node, io.github.romanvht.byedpi.subscription.LocalSocksAuth(
+                            "nlic", "a".repeat(48))
+                    ) !is io.github.romanvht.byedpi.subscription.XrayConfigCompiler.Result.Compiled) {
+                    throw CoreStartException("PROTOCOL_UNSUPPORTED")
+                }
+                return Configuration(
+                    args = listOf("--nlic-xray"),
+                    host = "127.0.0.1",
+                    port = io.github.romanvht.byedpi.subscription.XrayConfigCompiler.SOCKS_PORT,
+                    dns = preferences.getStringNotNull("dns_ip", "1.1.1.1")
+                        .ifBlank { "1.1.1.1" },
+                    ipv6 = true,
+                    appListType = preferences.getStringNotNull("applist_type", "disable"),
+                    apps = preferences.getSelectedApps(),
+                )
+            }
             if (isCore) {
                 check(BuildConfig.NLIC_LIBBOX_INCLUDED) {
                     "Core preview runtime not bundled"
