@@ -35,6 +35,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -233,7 +234,10 @@ internal class NativeSession(
             var corePhase = "PREPARE"
             if (coreMode) CoreFailureTrace.mark(service, corePhase)
             try {
-                withTimeout(50_000) {
+                // Auto must sample more than one real encrypted server.
+                // The pinned Go delay probe has a 12 s per-node bound.
+                withTimeout(if (xrayMode && config.args.getOrNull(2) == "--nlic-auto")
+                    85_000L else 50_000L) {
                     if (xrayMode) {
                         check(createTunnel != null) { "Xray VPN requires Android TUN" }
                         val bayEnabled = config.args.getOrNull(1) == "--nlic-bay"
@@ -316,14 +320,11 @@ internal class NativeSession(
                                     val nativeMs = withContext(Dispatchers.IO) {
                                         trial.measureHttpsLatencyMs()
                                     }
-                                    val checked = nativeMs != null || withContext(Dispatchers.IO) {
-                                        TunnelHealthProbe.check(
-                                            config.host, config.port, auth, "example.com"
-                                        ) || TunnelHealthProbe.check(
-                                            config.host, config.port, auth, "www.gstatic.com"
-                                        )
-                                    }
-                                    if (checked) measurements +=
+                                    // Go core.Dial is certificate-validated
+                                    // and bounded to 12 s. Never equate a
+                                    // plain TCP or local SOCKS handshake with
+                                    // an Auto candidate working over VPN.
+                                    if (nativeMs != null) measurements +=
                                         io.github.romanvht.byedpi.subscription.XrayAutoSelector.Measurement(
                                             candidate.id,
                                             nativeMs ?: (android.os.SystemClock.elapsedRealtime() -
@@ -337,7 +338,9 @@ internal class NativeSession(
                                     // Only a safe code is exposed; configs and
                                     // JNI exceptions may contain credentials.
                                 } finally {
-                                    withContext(Dispatchers.IO) { trial.close() }
+                                    withContext(NonCancellable + Dispatchers.IO) {
+                                        trial.close()
+                                    }
                                     if (xrayEngine === trial) xrayEngine = null
                                     delay(200) // release the previous SOCKS port
                                 }
