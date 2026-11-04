@@ -100,7 +100,8 @@ class ByeDpiVpnService : VpnService() {
         val builder = Builder()
         builder.setSession("N-LIC")
         val coreActive = configuration.args.firstOrNull() == "--nlic-libbox"
-        if (coreActive || (underlyingLink.isCellular && mtu < 8500)) {
+        val xrayActive = configuration.args.firstOrNull() == "--nlic-xray"
+        if (coreActive || xrayActive || (underlyingLink.isCellular && mtu < 8500)) {
             builder.setMtu(mtu)
         }
         builder.setConfigureIntent(
