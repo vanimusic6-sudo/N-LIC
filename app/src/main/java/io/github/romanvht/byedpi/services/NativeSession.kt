@@ -236,25 +236,121 @@ internal class NativeSession(
                 withTimeout(50_000) {
                     if (xrayMode) {
                         check(createTunnel != null) { "Xray VPN requires Android TUN" }
+                        val bayEnabled = config.args.getOrNull(1) == "--nlic-bay"
+                        val autoEnabled = config.args.getOrNull(2) == "--nlic-auto"
+                        val bayPort = XrayConfigCompiler.BAY_PORT
                         corePhase = "CATALOG"; CoreFailureTrace.mark(service, corePhase)
                         val catalog = withContext(Dispatchers.IO) {
                             SubscriptionVault.read(service)
                         }
-                        val node = catalog.allNodes.firstOrNull {
-                            it.id == catalog.selectedNodeId
-                        } ?: throw CoreStartException("NO_SERVER")
                         val secret = ByteArray(24).also {
                             SecureRandom().nextBytes(it)
                         }.joinToString("") { "%02x".format(it.toInt() and 255) }
                         val auth = LocalSocksAuth("nlic", secret)
                         localAuth = auth
+                        val validate: (io.github.romanvht.byedpi.subscription.SubscriptionNode) ->
+                            Boolean = { candidate ->
+                                XrayConfigCompiler.compile(
+                                    candidate, auth, if (bayEnabled) bayPort else null
+                                ) is XrayConfigCompiler.Result.Compiled
+                            }
                         corePhase = "CONFIG_COMPILE"; CoreFailureTrace.mark(service, corePhase)
-                        val result = XrayConfigCompiler.compile(node, auth)
-                        val plan = result as? XrayConfigCompiler.Result.Compiled
-                            ?: throw CoreStartException("PROTOCOL_UNSUPPORTED")
+                        val candidates = if (autoEnabled) {
+                            io.github.romanvht.byedpi.subscription.XrayAutoSelector.candidates(
+                                catalog.allNodes, catalog.selectedNodeId, bayEnabled, validate
+                            )
+                        } else {
+                            catalog.allNodes.filter { it.id == catalog.selectedNodeId && validate(it) }
+                        }
+                        if (candidates.isEmpty()) throw CoreStartException(
+                            if (autoEnabled) "AUTO_NO_WORKING_SERVER" else "PROTOCOL_UNSUPPORTED"
+                        )
 
-                        // Start authenticated SOCKS before installing Android TUN.
-                        // If proxy health fails, no VPN interface is exposed.
+                        if (bayEnabled) {
+                            // Spawn a real, loopback-only ByeDPI SOCKS5 relay.
+                            // Never use a direct fallback if the relay fails.
+                            corePhase = "BAY_PROXY"; CoreFailureTrace.mark(service, corePhase)
+                            val relayArgs = config.args.drop(3)
+                            if (relayArgs.isEmpty()) throw CoreStartException("BAY_PROFILE")
+                            val engine = withContext(Dispatchers.IO) { ByeDpiProxy() }
+                            proxy = engine
+                            proxyThread = runNative("ByeDPI-Bay") {
+                                engine.startProxy(relayArgs.toTypedArray())
+                            }
+                            withTimeout(START_TIMEOUT) { awaitProxy("127.0.0.1", bayPort) }
+                        }
+                        val udpReady = if (bayEnabled && candidates.any {
+                                LICBay.plan(it).transport == BayTransport.UDP_ASSOCIATE
+                            }) {
+                            corePhase = "BAY_UDP"; CoreFailureTrace.mark(service, corePhase)
+                            withContext(Dispatchers.IO) {
+                                TunnelHealthProbe.checkBayUdp(bayPort)
+                            }
+                        } else true
+                        val eligible = candidates.filter {
+                            !bayEnabled || udpReady ||
+                                LICBay.plan(it).transport != BayTransport.UDP_ASSOCIATE
+                        }
+                        if (eligible.isEmpty()) throw CoreStartException("BAY_UDP_UNAVAILABLE")
+
+                        // LIC-Auto tests a bounded set with the ACTUAL
+                        // encrypted Xray outbound (not TCP endpoint ping).
+                        // Every failed candidate is stopped before trying
+                        // another. No VPN routes exist until a winner passes.
+                        val selected = if (autoEnabled) {
+                            val measurements = mutableListOf<
+                                io.github.romanvht.byedpi.subscription.XrayAutoSelector.Measurement>()
+                            for (candidate in eligible) {
+                                corePhase = "AUTO_PROBE"; CoreFailureTrace.mark(service, corePhase)
+                                val compiled = XrayConfigCompiler.compile(
+                                    candidate, auth, if (bayEnabled) bayPort else null
+                                ) as? XrayConfigCompiler.Result.Compiled ?: continue
+                                val trial = XrayRuntime(service)
+                                xrayEngine = trial
+                                try {
+                                    withContext(Dispatchers.IO) { trial.start(compiled.json) }
+                                    withTimeout(5_000) {
+                                        awaitProxy(config.host, config.port, auth)
+                                    }
+                                    val began = android.os.SystemClock.elapsedRealtime()
+                                    val nativeMs = withContext(Dispatchers.IO) {
+                                        trial.measureHttpsLatencyMs()
+                                    }
+                                    val checked = nativeMs != null || withContext(Dispatchers.IO) {
+                                        TunnelHealthProbe.check(
+                                            config.host, config.port, auth, "example.com"
+                                        ) || TunnelHealthProbe.check(
+                                            config.host, config.port, auth, "www.gstatic.com"
+                                        )
+                                    }
+                                    if (checked) measurements +=
+                                        io.github.romanvht.byedpi.subscription.XrayAutoSelector.Measurement(
+                                            candidate.id,
+                                            nativeMs ?: (android.os.SystemClock.elapsedRealtime() -
+                                                began).coerceAtLeast(1),
+                                        )
+                                } catch (_: TimeoutCancellationException) {
+                                    // Candidate timed out: do not promote it.
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    // Only a safe code is exposed; configs and
+                                    // JNI exceptions may contain credentials.
+                                } finally {
+                                    withContext(Dispatchers.IO) { trial.close() }
+                                    if (xrayEngine === trial) xrayEngine = null
+                                    delay(200) // release the previous SOCKS port
+                                }
+                            }
+                            val best = io.github.romanvht.byedpi.subscription.XrayAutoSelector
+                                .best(measurements) ?: throw CoreStartException("AUTO_NO_WORKING_SERVER")
+                            eligible.first { it.id == best.id }
+                        } else eligible.first()
+
+                        val plan = XrayConfigCompiler.compile(
+                            selected, auth, if (bayEnabled) bayPort else null
+                        ) as? XrayConfigCompiler.Result.Compiled
+                            ?: throw CoreStartException("PROTOCOL_UNSUPPORTED")
                         corePhase = "XRAY_START"; CoreFailureTrace.mark(service, corePhase)
                         val xray = XrayRuntime(service)
                         xrayEngine = xray
@@ -264,11 +360,6 @@ internal class NativeSession(
                             awaitProxy(config.host, config.port, auth)
                         }
                         corePhase = "XRAY_HTTPS"; CoreFailureTrace.mark(service, corePhase)
-                        // Native Xray uses its own authenticated core.Dial and
-                        // Go's certificate-validating HTTPS client; if it
-                        // succeeds the tunnel is genuinely reachable. If not,
-                        // the independent SOCKS + Android TLS probe below
-                        // gives a more specific, secret-free failure category.
                         val nativeHttpsOk = withContext(Dispatchers.IO) {
                             xray.verifyHttpsViaCore()
                         }
