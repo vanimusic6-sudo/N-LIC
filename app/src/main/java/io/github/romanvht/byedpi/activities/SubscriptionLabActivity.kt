@@ -524,11 +524,9 @@ class SubscriptionLabActivity : BaseActivity() {
             auto -> getString(R.string.nlic_core_auto_desc)
             selected == null -> getString(R.string.nlic_ui_step_choose)
             (if (BuildConfig.NLIC_XRAY_INCLUDED) {
-                XrayConfigCompiler.compile(selected, LocalSocksAuth("nlic", "a".repeat(48)))
-                    is XrayConfigCompiler.Result.Compiled
+                XrayConfigCompiler.compile(selected, LocalSocksAuth("nlic", "a".repeat(48))) is XrayConfigCompiler.Result.Compiled
             } else {
-                SingBoxConfigCompiler.compile(selected)
-                    is SingBoxConfigCompiler.Result.Compiled
+                SingBoxConfigCompiler.compile(selected) is SingBoxConfigCompiler.Result.Compiled
             }) -> getString(R.string.nlic_control_selected_ok)
             else -> getString(R.string.nlic_control_unsupported)
         }
