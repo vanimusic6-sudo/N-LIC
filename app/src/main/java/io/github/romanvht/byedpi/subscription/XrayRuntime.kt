@@ -64,16 +64,18 @@ internal class XrayRuntime(private val context: Context) : AutoCloseable {
      * credential-free diagnostic phase. Never interpret mere core start
      * or SOCKS CONNECT as proof that encrypted egress works.
      */
-    internal fun verifyHttpsViaCore(): Boolean {
-        val active = controller ?: return false
-        if (closed.get()) return false
+    internal fun measureHttpsLatencyMs(): Long? {
+        val active = controller ?: return null
+        if (closed.get()) return null
         return runCatching {
             val ms = active.javaClass
                 .getMethod("measureDelay", String::class.java)
                 .invoke(active, "https://example.com/") as? Number
-            ms != null && ms.toLong() >= 0L
-        }.getOrDefault(false)
+            ms?.toLong()?.takeIf { it in 1L..30_000L }
+        }.getOrNull()
     }
+
+    internal fun verifyHttpsViaCore(): Boolean = measureHttpsLatencyMs() != null
 
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
