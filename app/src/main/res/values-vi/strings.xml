@@ -305,7 +305,7 @@
     <string name="nlic_core_reconnect">Thay đổi áp dụng ở lần kết nối tiếp theo. Hãy kết nối lại VPN thủ công.</string>
     <string name="nlic_core_bay_toggle">LIC-Bay · bảo vệ kết nối VPN bằng ByeDPI</string>
     <string name="nlic_core_bay_desc">ByeDPI SOCKS chỉ được dùng cho kết nối TCP bên ngoài tới máy chủ VPN. Tắt LIC-Bay nếu kết nối lỗi.</string>
-    <string name="nlic_core_bay_udp">Phương pháp TCP của ByeDPI không dùng được cho Hysteria2/TUIC. Hãy chọn máy chủ TCP.</string>
+    <string name="nlic_core_bay_udp">UDP dùng SOCKS5 UDP ASSOCIATE. Nếu nhà mạng chặn UDP, hãy thử máy chủ hoặc giao thức khác.</string>
     <string name="nlic_core_profile_check">Kiểm tra cấu hình LIC-Core</string>
     <string name="nlic_core_profile_ready">Thông số đã chuyển thành sing-box JSON. Chưa kiểm tra được VPN thực tế.</string>
     <string name="nlic_core_profile_unsupported">Chưa chọn máy chủ hoặc thông số chưa được hỗ trợ. Không thể kết nối.</string>
@@ -350,7 +350,7 @@
     <string name="nlic_control_auto_title">LIC-Auto · máy chủ tốt nhất</string>
     <string name="nlic_control_auto_desc">Kiểm tra kết nối mã hóa tới nhiều máy chủ và chọn máy chủ hoạt động.</string>
     <string name="nlic_control_bay_title">LIC-Bay · qua ByeDPI</string>
-    <string name="nlic_control_bay_desc">Đường TCP tùy chọn đến máy chủ VPN qua ByeDPI cục bộ. Bật khi kết nối trực tiếp không hoạt động.</string>
+    <string name="nlic_control_bay_desc">LIC-Bay chuyển tiếp TCP và UDP qua SOCKS5 ByeDPI cục bộ. WireGuard/Hysteria2/TUIC dùng UDP ASSOCIATE, không phải TCP. Không bảo đảm vượt chặn UDP.</string>
     <string name="nlic_control_more">Thêm  ·  chẩn đoán và cài đặt</string>
     <string name="nlic_control_connect">Kết nối</string>
     <string name="nlic_control_running">VPN đang chạy</string>
@@ -410,4 +410,5 @@
     <string name="nlic_privacy_description">Trong cài đặt VPN Android, hãy cân nhắc VPN luôn bật và Chặn kết nối khi không có VPN. Nếu không, ứng dụng có thể truy cập trực tiếp khi kết nối lại.</string>
     <string name="nlic_privacy_confirmation">Mở cài đặt VPN của hệ thống? N-LIC không thể tự bật chặn kết nối khi không có VPN.</string>
     <string name="nlic_privacy_unavailable">Không mở được cài đặt VPN trên thiết bị này.</string>
+    <string name="nlic_core_advice_native_crash">Lõi Android dừng trong khi khởi động. Mã bên dưới chỉ ra giai đoạn cuối trước khi lỗi. Đây có thể là lỗi ứng dụng hoặc tương thích động cơ, không nhất thiết do máy chủ. Chỉ chia sẻ mã, không gửi khóa.</string>
 </resources>

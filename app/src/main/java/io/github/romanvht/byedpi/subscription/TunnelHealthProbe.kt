@@ -12,43 +12,77 @@ internal data class LocalSocksAuth(val username: String, val password: String)
 internal object TunnelHealthProbe {
     private const val TARGET = "www.gstatic.com"
     private const val TIMEOUT = 4_000
-    private val TRUSTED_204_TARGETS = setOf(TARGET, "cp.cloudflare.com")
+    // Probe through the authenticated SOCKS tunnel only. Both Google and
+    // Cloudflare connectivity endpoints can be blocked even when a user's
+    // VPN server works. A regular HTTPS 200 is equally valid proof of egress.
+    // Never follow redirects or send credentials to an external site.
+    private val TRUSTED_HTTPS_PROBES = mapOf(
+        TARGET to "/generate_204",
+        "cp.cloudflare.com" to "/generate_204",
+        "example.com" to "/",
+        "www.wikipedia.org" to "/",
+    )
 
     // The selected hostname is a fixed allowlisted HTTPS connectivity
     // endpoint, NOT a provider-controlled URL. No cookies or tokens sent.
+    /** This result contains only a phase, never a server/hostname or secret. */
+    internal enum class EgressResult { OK, CONNECT, SOCKS, TLS, HTTP }
+
     fun check(
         host: String, port: Int, auth: LocalSocksAuth? = null,
         target: String = TARGET,
-    ): Boolean = try {
-        require(target in TRUSTED_204_TARGETS)
-        Socket().use { socket ->
-            socket.connect(InetSocketAddress(host, port), TIMEOUT)
-            socket.soTimeout = TIMEOUT
-            connectDomain(socket, target, 443, auth)
-            val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
-            (factory.createSocket(socket, target, 443, true) as SSLSocket).use { tls ->
-                tls.soTimeout = TIMEOUT
-                tls.sslParameters = tls.sslParameters.apply {
-                    endpointIdentificationAlgorithm = "HTTPS"
+    ): Boolean = probe(host, port, auth, target) == EgressResult.OK
+
+    internal fun probe(
+        host: String, port: Int, auth: LocalSocksAuth? = null,
+        target: String = TARGET,
+    ): EgressResult {
+        val path = requireNotNull(TRUSTED_HTTPS_PROBES[target])
+        var stage = EgressResult.CONNECT
+        return try {
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress(host, port), TIMEOUT)
+                socket.soTimeout = TIMEOUT
+                stage = EgressResult.SOCKS
+                connectDomain(socket, target, 443, auth)
+                stage = EgressResult.TLS
+                val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
+                (factory.createSocket(socket, target, 443, true) as SSLSocket).use { tls ->
+                    tls.soTimeout = TIMEOUT
+                    tls.sslParameters = tls.sslParameters.apply {
+                        endpointIdentificationAlgorithm = "HTTPS"
+                    }
+                    tls.startHandshake()
+                    stage = EgressResult.HTTP
+                    tls.outputStream.write(("GET $path HTTP/1.1\r\n" +
+                        "Host: $target\r\nConnection: close\r\n\r\n")
+                        .toByteArray(Charsets.US_ASCII))
+                    tls.outputStream.flush()
+                    val line = StringBuilder()
+                    val input = tls.inputStream
+                    while (line.length < 128) {
+                        val c = input.read()
+                        if (c < 0 || c == 10) break
+                        line.append(c.toChar())
+                    }
+                    if (acceptsHttpsResponse(line.toString())) EgressResult.OK
+                    else EgressResult.HTTP
                 }
-                tls.startHandshake()
-                tls.outputStream.write(("GET /generate_204 HTTP/1.1\r\n" +
-                    "Host: $target\r\nConnection: close\r\n\r\n").toByteArray(Charsets.US_ASCII))
-                tls.outputStream.flush()
-                // A bounded first line suffices; no cookies, body or redirects.
-                val line = StringBuilder()
-                val input = tls.inputStream
-                while (line.length < 128) {
-                    val c = input.read()
-                    if (c < 0 || c == 10) break
-                    line.append(c.toChar())
-                }
-                line.toString().trimEnd('\r') in setOf("HTTP/1.1 204 No Content", "HTTP/1.0 204 No Content") ||
-                    line.toString().matches(Regex("HTTP/1\\.[01] 204(?: [^\\r\\n]*)?\\r?"))
             }
+        } catch (_: Exception) {
+            // No nested exception text: it can contain SNI, server IP, keys.
+            stage
         }
-    } catch (_: Exception) {
-        false // TLS, credentials and provider errors never escape into logs.
+    }
+
+    /** A cert-verified HTTPS success (200-399) proves end-to-end egress.
+     * It must not depend on a particular CDN returning exactly 204.
+     */
+    internal fun acceptsHttpsResponse(statusLine: String): Boolean {
+        val normalized = statusLine.trimEnd('\r')
+        val match = Regex("^HTTP/1\\.[01] ([0-9]{3})(?: [^\\r\\n]*)?$")
+            .matchEntire(normalized) ?: return false
+        return match.groupValues[1].toInt() in 200..399
     }
 
     /**
@@ -65,6 +99,50 @@ internal object TunnelHealthProbe {
                 socket.soTimeout = 4_000
                 connectDomain(socket, endpointHost, endpointPort)
                 true
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * The pinned ByeDPI implementation implements SOCKS5 UDP ASSOCIATE.
+     * Verify that the actual local engine accepts the command BEFORE
+     * sing-box starts a QUIC/WireGuard UDP dial. Does not claim that the
+     * remote UDP packets crossed a censoring network.
+     */
+    fun checkBayUdp(proxyPort: Int): Boolean {
+        if (proxyPort !in 1..65535) return false
+        return try {
+            java.net.DatagramSocket(
+                InetSocketAddress("127.0.0.1", 0)
+            ).use { udp ->
+                Socket().use { socket ->
+                    socket.connect(InetSocketAddress("127.0.0.1", proxyPort), TIMEOUT)
+                    socket.soTimeout = TIMEOUT
+                    negotiate(socket, null)
+                    val port = udp.localPort
+                    val output = socket.getOutputStream()
+                    output.write(byteArrayOf(5, 3, 0, 1, 127, 0, 0, 1,
+                        (port ushr 8).toByte(), port.toByte()))
+                    output.flush()
+                    val input = DataInputStream(socket.getInputStream())
+                    check(input.readUnsignedByte() == 5 &&
+                        input.readUnsignedByte() == 0 &&
+                        input.readUnsignedByte() == 0) {
+                        "UDP ASSOCIATE was not accepted"
+                    }
+                    val addrLength = when (input.readUnsignedByte()) {
+                        1 -> 4
+                        4 -> 16
+                        3 -> input.readUnsignedByte()
+                        else -> error("Invalid UDP ASSOCIATE reply")
+                    }
+                    input.readFully(ByteArray(addrLength))
+                    val relayPort = input.readUnsignedShort()
+                    check(relayPort in 1..65535)
+                    true
+                }
             }
         } catch (_: Exception) {
             false

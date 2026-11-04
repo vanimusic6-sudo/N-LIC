@@ -304,7 +304,7 @@
     <string name="nlic_core_reconnect">Выбранная конфигурация применяется при следующем подключении. Переподключи VPN вручную.</string>
     <string name="nlic_core_bay_toggle">LIC-Bay · защищать подключение к серверу через ByeDPI</string>
     <string name="nlic_core_bay_desc">Дополнительный локальный ByeDPI SOCKS используется только для внешнего TCP-соединения к VPN-серверу. Если комбинация не работает, отключи LIC-Bay.</string>
-    <string name="nlic_core_bay_udp">Для Hysteria2 и TUIC обработка TCP-пакетов ByeDPI не подходит. Выбери TCP-сервер.</string>
+    <string name="nlic_core_bay_udp">UDP поддерживается через SOCKS5 UDP ASSOCIATE. Если оператор блокирует сам UDP, LIC-Bay может не помочь; попробуй другой сервер или протокол.</string>
     <string name="nlic_core_profile_check">Проверка конфигурации для LIC-Core</string>
     <string name="nlic_core_profile_ready">Параметры совместимы с генератором конфигурации sing-box. Сам VPN ещё не проверялся.</string>
     <string name="nlic_core_profile_unsupported">Выбранный сервер отсутствует или его параметры пока не поддерживаются. Подключение запрещено.</string>
@@ -349,7 +349,7 @@
     <string name="nlic_control_auto_title">LIC-Auto · лучший сервер</string>
     <string name="nlic_control_auto_desc">Проверяет зашифрованное соединение нескольких серверов и выбирает доступный. Можно выключить.</string>
     <string name="nlic_control_bay_title">LIC-Bay · через ByeDPI</string>
-    <string name="nlic_control_bay_desc">Дополнительный путь к VPN-серверу через локальный ByeDPI. Только TCP; включай, если прямое соединение не проходит.</string>
+    <string name="nlic_control_bay_desc">LIC-Bay направляет TCP и UDP к VPN-серверу через локальный SOCKS5 ByeDPI. Для WireGuard/Hysteria2/TUIC используется UDP ASSOCIATE, а не TCP. Это не гарантирует обход блокировки UDP.</string>
     <string name="nlic_control_more">Дополнительно  ·  проверка и настройки</string>
     <string name="nlic_control_connect">Подключиться</string>
     <string name="nlic_control_running">VPN запущен</string>
@@ -409,4 +409,5 @@
     <string name="nlic_home_policy_measured">Стратегия выбрана по последним проверкам этой сети</string>
     <string name="nlic_home_policy_baseline">Нет свежих проверок · используется щадящий базовый профиль</string>
     <string name="nlic_home_policy_off">Авто-стратегия отключена</string>
+    <string name="nlic_core_advice_native_crash">Нативное ядро Android завершилось во время запуска. Код ниже показывает последний этап перед сбоем. Это ошибка приложения или совместимости движка, а не обязательно сервера. Пришли этот код без конфигов и ключей.</string>
 </resources>

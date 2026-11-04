@@ -1,8 +1,8 @@
-name: N-LIC 2.0.0 Core Preview APK (pinned libbox)
+name: N-LIC 2.0.2 Core Preview APK (pinned libbox)
 
 on:
   push:
-    branches: [feature/nlic-libbox-config-20261103, feature/nlic-vpn-runtime-20261103, fix/nlic-core-bay-ui-security-20261103, feature/nlic-2-adaptive-vpn-ui-import-20261104]
+    branches: [feature/nlic-libbox-config-20261103, feature/nlic-vpn-runtime-20261103, fix/nlic-core-bay-ui-security-20261103, feature/nlic-2-adaptive-vpn-ui-import-20261104, fix/nlic-native-core-protocol-compat-20261104]
     paths:
       - app/**
       - scripts/verify-core-apk.py
@@ -51,11 +51,26 @@ jobs:
         with:
           packages: platform-tools
 
-      - name: Install native SDK toolchain
+      - name: Install native SDK toolchain (retry transient NDK ZIP errors)
         shell: bash
         run: |
           set -euo pipefail
-          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1" "ndk;27.2.12479018"
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1"
+          # Google Android SDK CDN has sporadically served corrupt/truncated
+          # NDK ZIP archives (ZipFile unknown archive). Install separately,
+          # clean its partial downloads and retry; do not bypass checksums.
+          for attempt in 1 2 3 4; do
+            if sdkmanager --install "ndk;27.2.12479018"; then
+              test -f "$ANDROID_HOME/ndk/27.2.12479018/source.properties"
+              break
+            fi
+            if [[ "$attempt" == "4" ]]; then
+              echo "::error::Android NDK CDN failed after four verified attempts"
+              exit 1
+            fi
+            rm -rf "$ANDROID_HOME/.temp"
+            sleep $((attempt * 6))
+          done
 
       - name: Download exact pinned libbox AAR with SHA256 verification
         shell: bash
@@ -101,7 +116,7 @@ jobs:
             apk="$(find app/build/outputs/apk/release -type f -name '*universal*release*.apk' -print -quit)"
           fi
           test -s "$apk"
-          output="core-preview/N-LIC-2.0.0-CorePreview-arm64-Release-DEV.apk"
+          output="core-preview/N-LIC-2.0.2-CorePreview-arm64-Release-DEV.apk"
           cp "$apk" "$output"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$output" > core-preview/SIGNATURE.txt
           grep -iq '9eac8ece5fb89eeacb03c5eff20155724a206d73180d58c78fc7d3911dbee5c5' core-preview/SIGNATURE.txt
@@ -111,11 +126,11 @@ jobs:
           # Verify the actual gomobile JNI library in the APK.
           python3 scripts/verify-core-apk.py "$output"
           cat > core-preview/READ_ME_FIRST.txt <<'EOF'
-          N-LIC 2.0.0 LIC-Core Preview — not production software.
+          N-LIC 2.0.2 LIC-Core Preview — not production software.
           APK uses the N-LIC DEV certificate, NOT an official release key.
           ARM64 only. N-LIC's old ByeDPI is the default. Import a subscription,
           select a supported node, and explicitly enable LIC-Core in Settings.
-          LIC-Bay (TCP only) is optional and defaults to OFF.
+          LIC-Bay (experimental TCP/UDP SOCKS5 relay) is optional and defaults to OFF.
           This experiment has not yet passed a physical Android VPN/QUIC leak audit.
           WARNING: Play Protect has previously flagged N-LIC builds.
           Do not turn off Play Protect; do not use this APK for sensitive traffic.
@@ -130,7 +145,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: N-LIC-2.0.0-Core-Lint
+          name: N-LIC-2.0.2-Core-Lint
           path: app/build/reports/lint-results-release.*
           if-no-files-found: ignore
           retention-days: 14
@@ -138,7 +153,7 @@ jobs:
       - name: Publish experimental Core Preview APK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: N-LIC-2.0.0-CorePreview-ARM64-DevSigned
+          name: N-LIC-2.0.2-CorePreview-ARM64-DevSigned
           path: core-preview/
           retention-days: 14
           if-no-files-found: error

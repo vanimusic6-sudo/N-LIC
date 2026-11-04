@@ -43,19 +43,15 @@ internal object SingBoxConfigCompiler {
             return Result.Unsupported("Invalid or conflicting LIC-Bay port")
         }
         if (node.protocol == "WIREGUARD") {
-            if (bay == Bay.ON) return Result.Unsupported("WireGuard UDP cannot use TCP-only LIC-Bay")
-            return compileWireGuard(node, localPassword)
+            return compileWireGuard(node, bay, bayPort, localPassword)
         }
         return try {
             val outbound = decodeOutbound(node) ?: return Result.Unsupported(
                 "This configuration or transport is not supported by LIC-Core yet"
             )
             val protocol = node.protocol.uppercase()
-            if (bay == Bay.ON && protocol in setOf("HYSTERIA2", "HY2", "TUIC")) {
-                return Result.Unsupported("LIC-Bay requires a TCP-based outbound")
-            }
-            if (bay == Bay.ON && !LICBay.plan(node).canWrapTcp) {
-                return Result.Unsupported("LIC-Bay is not supported for this outbound")
+            if (bay == Bay.ON && !LICBay.plan(node).supported) {
+                return Result.Unsupported("LIC-Bay cannot route this protocol")
             }
             val root = JsonObject()
             root.add("log", JsonObject().apply {
@@ -159,7 +155,7 @@ internal object SingBoxConfigCompiler {
             outbounds.add(outbound)
         }
         if (bay == Bay.ON) {
-            // Every TCP candidate shares ONE local ByeDPI outbound.
+            // Both TCP CONNECT and UDP ASSOCIATE use the same local SOCKS5.
             outbounds.add(valid.first().second.getAsJsonArray("outbounds")[1].deepCopy())
         }
         outbounds.add(JsonObject().apply {
@@ -370,7 +366,9 @@ internal object SingBoxConfigCompiler {
      * Do not paste a whole provider profile into the runtime config. Rebuild
      * the single allowed peer from validated wg-quick keys.
      */
-    private fun compileWireGuard(node: SubscriptionNode, auth: String?): Result {
+    private fun compileWireGuard(
+        node: SubscriptionNode, bay: Bay, bayPort: Int, auth: String?,
+    ): Result {
         return try {
             if (auth != null && (auth.length !in 24..128 ||
                     !auth.all { it in "0123456789abcdef" })) {
@@ -396,8 +394,22 @@ internal object SingBoxConfigCompiler {
                     addProperty("password", auth)
                 }) })
             }) })
-            root.add("outbounds", JsonArray())
-            root.add("endpoints", JsonArray().apply { add(wg.endpoint) })
+            // In sing-box 1.14 WireGuard is a dial-capable ENDPOINT. Its
+            // detour supports SOCKS5 UDP ASSOCIATE in the pinned ByeDPI.
+            val endpoint = wg.endpoint.deepCopy()
+            if (bay == Bay.ON) {
+                endpoint.addProperty("detour", BAY_TAG)
+            }
+            root.add("outbounds", JsonArray().apply {
+                if (bay == Bay.ON) add(JsonObject().apply {
+                    addProperty("type", "socks")
+                    addProperty("tag", BAY_TAG)
+                    addProperty("server", "127.0.0.1")
+                    addProperty("server_port", bayPort)
+                    addProperty("version", "5")
+                })
+            })
+            root.add("endpoints", JsonArray().apply { add(endpoint) })
             root.add("route", JsonObject().apply {
                 addProperty("final", PROXY_TAG)
                 addProperty("auto_detect_interface", false)
@@ -430,7 +442,33 @@ internal object SingBoxConfigCompiler {
                 })
                 return true
             }
-            else -> return false // Do not silently drop XHTTP/H2/KCP.
+            "httpupgrade" -> {
+                out.add("transport", JsonObject().apply {
+                    addProperty("type", "httpupgrade")
+                    addProperty("path", query["path"]?.ifBlank { "/" } ?: "/")
+                    query["host"]?.takeIf { it.isNotBlank() }?.let {
+                        addProperty("host", it)
+                    }
+                })
+                return true
+            }
+            "h2", "http" -> {
+                out.add("transport", JsonObject().apply {
+                    addProperty("type", "http")
+                    addProperty("path", query["path"]?.ifBlank { "/" } ?: "/")
+                    query["host"]?.takeIf { it.isNotBlank() }?.let {
+                        add("host", JsonArray().apply { add(it) })
+                    }
+                })
+                return true
+            }
+            "quic" -> {
+                out.add("transport", JsonObject().apply {
+                    addProperty("type", "quic")
+                })
+                return true
+            }
+            else -> return false // XHTTP and mKCP are not in pinned sing-box.
         }
     }
 

@@ -9,6 +9,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TunnelHealthProbeTest {
+    @Test fun localProxyRefusalIsDistinguishedFromRemoteTlsFailure() {
+        val port = ServerSocket(0).use { it.localPort }
+        assertEquals(TunnelHealthProbe.EgressResult.CONNECT,
+            TunnelHealthProbe.probe("127.0.0.1", port))
+    }
+
+    @Test fun `verified HTTPS response accepts normal successful sites not only 204`() {
+        assertTrue(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 204 No Content\r"))
+        assertTrue(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 200 OK"))
+        assertTrue(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 301 Moved Permanently"))
+        assertFalse(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 403 Forbidden"))
+        assertFalse(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 500 Server Error"))
+        assertFalse(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 invalid status"))
+    }
+
     @Test fun `probe sends a domain to SOCKS without resolving it on the device`() {
         val executor = Executors.newSingleThreadExecutor()
         try {
@@ -106,6 +121,57 @@ class TunnelHealthProbeTest {
                 executor.shutdownNow()
             }
         }
+    }
+
+    @Test fun `ByeDPI UDP relay requires a successful SOCKS5 UDP ASSOCIATE reply`() {
+        val executor = Executors.newSingleThreadExecutor()
+        try {
+            ServerSocket(0).use { server ->
+                val handshake = executor.submit<Boolean> {
+                    server.accept().use { client ->
+                        client.soTimeout = 3_000
+                        val inp = DataInputStream(client.getInputStream())
+                        val out = client.getOutputStream()
+                        val hello = ByteArray(3).also(inp::readFully)
+                        assertArrayEquals(byteArrayOf(5, 1, 0), hello)
+                        out.write(byteArrayOf(5, 0)); out.flush()
+                        val request = ByteArray(10).also(inp::readFully)
+                        assertArrayEquals(byteArrayOf(5, 3, 0, 1, 127, 0, 0, 1),
+                            request.take(8).toByteArray())
+                        val port = (request[8].toInt() and 255) * 256 +
+                            (request[9].toInt() and 255)
+                        assertTrue(port > 0)
+                        out.write(byteArrayOf(5, 0, 0, 1, 127, 0, 0, 1, 0x12, 0x34))
+                        out.flush()
+                        true
+                    }
+                }
+                assertTrue(TunnelHealthProbe.checkBayUdp(server.localPort))
+                assertTrue(handshake.get(3, TimeUnit.SECONDS))
+            }
+        } finally { executor.shutdownNow() }
+    }
+
+    @Test fun `ByeDPI UDP relay rejects SOCKS5 response failure`() {
+        val executor = Executors.newSingleThreadExecutor()
+        try {
+            ServerSocket(0).use { server ->
+                val task = executor.submit<Unit> {
+                    server.accept().use { client ->
+                        client.soTimeout = 3_000
+                        val inp = DataInputStream(client.getInputStream())
+                        val out = client.getOutputStream()
+                        inp.readFully(ByteArray(3))
+                        out.write(byteArrayOf(5, 0)); out.flush()
+                        inp.readFully(ByteArray(10))
+                        out.write(byteArrayOf(5, 7, 0, 1, 127, 0, 0, 1, 0, 1))
+                        out.flush()
+                    }
+                }
+                assertFalse(TunnelHealthProbe.checkBayUdp(server.localPort))
+                task.get(3, TimeUnit.SECONDS)
+            }
+        } finally { executor.shutdownNow() }
     }
 
     @Test fun `proxy refusal cannot be reported as a healthy tunnel`() {

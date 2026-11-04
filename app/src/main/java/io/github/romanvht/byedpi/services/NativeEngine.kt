@@ -31,6 +31,7 @@ import io.github.romanvht.byedpi.utility.*
 import io.github.romanvht.byedpi.BuildConfig
 import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
+import io.github.romanvht.byedpi.subscription.CoreStartException
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
@@ -50,32 +51,68 @@ internal class NativeEngine(
         fun configuration(context: Context): Configuration {
             val preferences = context.getPreferences()
 
-            // Direct sing-box is a standalone VPN runtime, not a ByeDPI
-            // wrapper. Avoid parsing stale or malformed ByeDPI flags/ports
-            // when LIC-Bay is explicitly disabled.
-            val directCore = preferences.getBoolean("nlic_core_mode", false) &&
-                preferences.getStringNotNull("byedpi_mode", "vpn") == "vpn" &&
-                !preferences.getBoolean("nlic_core_bay", false)
-            if (directCore) {
+            // LIC-Core is now a standalone, explicit VPN runtime.
+            // Neither normal VPN nor LIC-Bay may parse legacy UI flags/ports:
+            // those often contain stale values and previously caused a global
+            // ENGINE failure before the native core even initialized.
+            val isCore = preferences.getBoolean("nlic_core_mode", false) &&
+                preferences.getStringNotNull("byedpi_mode", "vpn") == "vpn"
+            if (isCore) {
                 check(BuildConfig.NLIC_LIBBOX_INCLUDED) {
-                    "Selected APK does not contain the LIC-Core runtime"
+                    "Core preview runtime not bundled"
                 }
-                val catalog = SubscriptionVault.read(context)
+                val catalog = try {
+                    SubscriptionVault.read(context)
+                } catch (_: Exception) {
+                    // No user secrets or Java exception messages in logs/UI.
+                    throw CoreStartException("CATALOG")
+                }
                 val auto = preferences.getBoolean("nlic_core_auto", false)
-                val supported = if (auto) {
-                    SingBoxConfigCompiler.compileAuto(catalog.allNodes)
+                val bay = preferences.getBoolean("nlic_core_bay", false)
+                val bayPort = 11088 // Dedicated loopback port, never a public listener.
+                val bayMode = if (bay) SingBoxConfigCompiler.Bay.ON
+                    else SingBoxConfigCompiler.Bay.OFF
+                val chosen = if (auto) {
+                    SingBoxConfigCompiler.compileAuto(catalog.allNodes, bayMode, bayPort)
                 } else {
                     val node = catalog.allNodes.firstOrNull {
                         it.id == catalog.selectedNodeId
-                    } ?: error("Select a VPN server before connecting")
-                    SingBoxConfigCompiler.compile(node)
+                    } ?: error("Select a VPN server first")
+                    SingBoxConfigCompiler.compile(node, bayMode, bayPort)
                 }
-                check(supported is SingBoxConfigCompiler.Result.Compiled) {
-                    "Selected VPN server configuration is unsupported"
+                if (chosen !is SingBoxConfigCompiler.Result.Compiled) {
+                    throw CoreStartException("PROTOCOL_UNSUPPORTED")
                 }
+                val bayArgs = if (bay) {
+                    val strategy = AdaptiveDpiPolicy.decide(
+                        context,
+                        preferences.getBoolean(AdaptiveDpiPolicy.KEY, true),
+                        "-s0+sm",
+                    )?.command ?: "-s0+sm"
+                    // All selected ByeDPI strategies are local. No arguments
+                    // from an imported config can change the listener or run
+                    // external commands. ByeDPI's SOCKS5 UDP is enabled by
+                    // default; there is no --no-udp in this dedicated profile.
+                    val proxy = try {
+                        ByeDpiProxyCmdPreferences(
+                            context, strategy, "127.0.0.1", bayPort,
+                        )
+                    } catch (_: Exception) {
+                        throw CoreStartException("BAY_PROFILE")
+                    }
+                    proxy.args.drop(1).also {
+                        check(it.none { option ->
+                            option == "-U" || option == "--no-udp" ||
+                                option == "--transparent" || option == "-E"
+                        }) { "LIC-Bay requires SOCKS5 UDP and loopback mode" }
+                    }
+                } else emptyList()
                 return Configuration(
-                    args = listOf("--nlic-libbox", "--nlic-direct",
-                        if (auto) "--nlic-auto" else "--nlic-fixed"),
+                    args = listOf(
+                        "--nlic-libbox",
+                        if (bay) "--nlic-bay" else "--nlic-direct",
+                        if (auto) "--nlic-auto" else "--nlic-fixed",
+                    ) + bayArgs,
                     host = "127.0.0.1",
                     port = SingBoxConfigCompiler.PROXY_PORT,
                     dns = preferences.getStringNotNull("dns_ip", "1.1.1.1")
@@ -133,49 +170,8 @@ internal class NativeEngine(
                 appListType = preferences.getStringNotNull("applist_type", "disable"),
                 apps = preferences.getSelectedApps(),
             )
-            // This is an OPT-IN mode, never enabled in the ordinary 3 MiB APK.
-            // The existing ByeDPI/HEV flow remains the default and rollback.
-            if (!preferences.getBoolean("nlic_core_mode", false) ||
-                preferences.getStringNotNull("byedpi_mode", "vpn") != "vpn") {
-                return legacy
-            }
-            check(BuildConfig.NLIC_LIBBOX_INCLUDED) {
-                "This N-LIC APK has no integrated libbox engine. Install Core Preview or disable LIC-Core."
-            }
-            val saved = SubscriptionVault.read(context)
-            val autoEnabled = preferences.getBoolean("nlic_core_auto", false)
-            val bayEnabled = preferences.getBoolean("nlic_core_bay", false)
-            val bayHost = host ?: defaultHost
-            check(!bayEnabled || bayHost == "127.0.0.1") {
-                "LIC-Bay requires ByeDPI to listen on 127.0.0.1"
-            }
-            check(!bayEnabled || resolvedPort != SingBoxConfigCompiler.PROXY_PORT) {
-                "LIC-Bay port conflicts with LIC-Core"
-            }
-            val bay = if (bayEnabled) SingBoxConfigCompiler.Bay.ON
-                else SingBoxConfigCompiler.Bay.OFF
-            val compiled = if (autoEnabled) {
-                SingBoxConfigCompiler.compileAuto(saved.allNodes, bay, resolvedPort)
-            } else {
-                val node = saved.allNodes.firstOrNull { it.id == saved.selectedNodeId }
-                    ?: error("Select a subscription server before starting LIC-Core")
-                SingBoxConfigCompiler.compile(node, bay, resolvedPort)
-            }
-            check(compiled is SingBoxConfigCompiler.Result.Compiled) {
-                "Selected server uses unsupported or insecure transport"
-            }
-            return legacy.copy(
-                // Carry the explicit Bay choice through the native process IPC.
-                args = listOf("--nlic-libbox",
-                    if (bayEnabled) "--nlic-bay" else "--nlic-direct",
-                    if (autoEnabled) "--nlic-auto" else "--nlic-fixed") + legacy.args,
-                host = "127.0.0.1",
-                port = SingBoxConfigCompiler.PROXY_PORT,
-                // Avoid leaving mobile IPv6 outside the encrypted VPN tunnel.
-                ipv6 = true,
-                // Explicit DNS destination is captured by HEV and the encrypted outbound.
-                dns = legacy.dns.ifBlank { "1.1.1.1" },
-            )
+            // Legacy ByeDPI remains a separate, explicit mode.
+            return legacy
         }
 
         private fun serviceClass(mode: Mode): Class<out Service> = when (mode) {

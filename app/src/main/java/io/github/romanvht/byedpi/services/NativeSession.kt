@@ -23,6 +23,10 @@ import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
 import io.github.romanvht.byedpi.subscription.LibboxRuntime
 import io.github.romanvht.byedpi.subscription.CoreStartException
+import io.github.romanvht.byedpi.subscription.NativeTunConfig
+import io.github.romanvht.byedpi.subscription.CoreFailureTrace
+import io.github.romanvht.byedpi.subscription.BayTransport
+import io.github.romanvht.byedpi.subscription.LICBay
 import io.github.romanvht.byedpi.subscription.LocalSocksAuth
 import java.security.SecureRandom
 import kotlinx.coroutines.CancellationException
@@ -219,8 +223,9 @@ internal class NativeSession(
         startJob = scope.launch {
             // Only fixed phase identifiers appear in logs and UI: neither
             // outbound JSON nor VPN credentials may leave the native process.
-            var corePhase = "PREPARE"
             val coreMode = config.args.firstOrNull() == "--nlic-libbox"
+            var corePhase = "PREPARE"
+            if (coreMode) CoreFailureTrace.mark(service, corePhase)
             try {
                 withTimeout(50_000) {
                     if (config.args.firstOrNull() == "--nlic-libbox") {
@@ -228,9 +233,9 @@ internal class NativeSession(
                             "LIC-Core requires VPN mode; proxy-only service is unsupported"
                         }
                         val preferences = service.getPreferences()
-                        corePhase = "CATALOG"
+                        corePhase = "CATALOG"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
                         val saved = withContext(Dispatchers.IO) { SubscriptionVault.read(service) }
-                        corePhase = "PREPARE"
+                        corePhase = "PREPARE"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
                         val bayEnabled = config.args.getOrNull(1) == "--nlic-bay"
                         val autoEnabled = config.args.getOrNull(2) == "--nlic-auto"
                         // LIC-Core DIRECT must not depend on the old ByeDPI
@@ -260,7 +265,7 @@ internal class NativeSession(
                             .joinToString("") { "%02x".format(it.toInt() and 255) }
                         val auth = LocalSocksAuth("nlic", password)
                         localAuth = auth
-                        corePhase = "CONFIG_COMPILE"
+                        corePhase = "CONFIG_COMPILE"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
                         val compiled = if (autoEnabled) {
                             SingBoxConfigCompiler.compileAuto(saved.allNodes, bay, legacyPort, auth.password)
                         } else {
@@ -271,7 +276,7 @@ internal class NativeSession(
                         val plan = compiled as? SingBoxConfigCompiler.Result.Compiled
                             ?: error("Selected LIC-Core configuration cannot be used")
                         if (bayEnabled) {
-                            corePhase = "BAY_PROXY"
+                            corePhase = "BAY_PROXY"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
                             check(legacyArgs.isNotEmpty()) { "Missing LIC-Bay command" }
                             val engine = withContext(Dispatchers.IO) { ByeDpiProxy() }
                             proxy = engine
@@ -279,38 +284,78 @@ internal class NativeSession(
                                 engine.startProxy(legacyArgs.toTypedArray())
                             }
                             withTimeout(START_TIMEOUT) { awaitProxy(legacyHost, legacyPort) }
-                            // Fast, explicit validation of SOCKS5 detour: it must
-                            // reach the selected server BEFORE sing-box uses it.
-                            // In URLTest mode let the core test candidates itself.
+                            // The native ByeDPI revision supports SOCKS5
+                            // CONNECT and UDP ASSOCIATE. Check the appropriate
+                            // transport before starting libbox, never treat a
+                            // TCP handshake as evidence a UDP server works.
                             if (!autoEnabled) {
-                                corePhase = "BAY_UPSTREAM"
                                 val selected = saved.allNodes.firstOrNull {
                                     it.id == saved.selectedNodeId
                                 } ?: error("LIC-Core / NO_SERVER")
-                                // DPI evasion may add latency; a single 2.5 s
-                                // SYN timeout is not evidence of a broken Bay
-                                // route. Retry without sending private keys.
-                                var bayWorking = false
-                                repeat(3) { attempt ->
-                                    if (!bayWorking) {
-                                        bayWorking = withContext(Dispatchers.IO) {
-                                            TunnelHealthProbe.checkBay(
-                                                legacyPort, selected.host, selected.port
-                                            )
+                                val transport = LICBay.plan(selected).transport
+                                    ?: error("LIC-Core / BAY_UNSUPPORTED")
+                                corePhase = if (transport == BayTransport.UDP_ASSOCIATE)
+                                    "BAY_UDP" else "BAY_UPSTREAM"
+                                if (coreMode) CoreFailureTrace.mark(service, corePhase)
+                                // A bare SOCKS5 CONNECT to a VLESS/Reality
+                                // server is NOT a reliable readiness test:
+                                // some DPI middleboxes and ByeDPI strategies
+                                // open the real TCP connection only after a
+                                // TLS ClientHello has been sent. Rejecting
+                                // the node at this point makes valid TCP
+                                // subscriptions fail as BAY_UNREACHABLE.
+                                // The actual authenticated HTTPS-through-
+                                // sing-box probe below validates TCP end-to-end.
+                                if (transport == BayTransport.UDP_ASSOCIATE) {
+                                    var bayReady = false
+                                    repeat(3) { attempt ->
+                                        if (!bayReady) {
+                                            bayReady = withContext(Dispatchers.IO) {
+                                                TunnelHealthProbe.checkBayUdp(legacyPort)
+                                            }
                                         }
+                                        if (!bayReady && attempt < 2) delay(450)
                                     }
-                                    if (!bayWorking && attempt < 2) delay(450)
+                                    check(bayReady) { "LIC-Core / BAY_UDP_UNAVAILABLE" }
                                 }
-                                check(bayWorking) { "LIC-Core / BAY_UNREACHABLE" }
+                            } else {
+                                // A mixed URLTest set needs both capabilities
+                                // whenever UDP candidates are present.
+                                if (saved.allNodes.any {
+                                        LICBay.plan(it).transport == BayTransport.UDP_ASSOCIATE
+                                    }) {
+                                    corePhase = "BAY_UDP"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
+                                    check(withContext(Dispatchers.IO) {
+                                        TunnelHealthProbe.checkBayUdp(legacyPort)
+                                    }) { "LIC-Core / BAY_UDP_UNAVAILABLE" }
+                                }
                             }
                         }
-                        corePhase = "CORE_START"
-                        val box = LibboxRuntime(service)
+                        // Native-first: sing-box opens ONE Android TUN using
+                        // VpnService.Builder via our PlatformInterface.
+                        // HEV is kept ONLY for the standalone legacy ByeDPI
+                        // mode. This removes the double proxy/TUN loop and
+                        // allows UDP and TCP to be handled by sing-box itself.
+                        val physical = NetworkEnvironment.capture(service)
+                        val mtu = AccessPolicy.tunMtu(
+                            physical,
+                            service.getPreferences().getBoolean("nlic_mobile_safe_mtu", true)
+                        ).coerceIn(1280, 9000)
+                        val compiledTun = NativeTunConfig.compile(plan.config, mtu)
+                        corePhase = "CORE_START"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
+                        val box = LibboxRuntime(service, openAndroidTun = {
+                            check(tunFd == null) { "Only one VPN TUN per session" }
+                            val open = createTunnel ?: error("Android VPN service missing")
+                            val descriptor = open(config, physical, mtu)
+                            tunFd = descriptor
+                            descriptor.fd
+                        })
                         boxEngine = box
-                        withContext(Dispatchers.IO) { box.start(plan.config) }
-                        corePhase = "CORE_SOCKS"
+                        withContext(Dispatchers.IO) { box.start(compiledTun) }
+                        check(tunFd != null) { "Android TUN was not opened by libbox" }
+                        corePhase = "CORE_SOCKS"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
                         withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port, auth) }
-                        corePhase = "REMOTE_TEST"
+                        corePhase = "REMOTE_TEST"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
                         withTimeout(28_000) { awaitRemoteReadiness(config.host, config.port, auth) }
                     } else {
                         val engine = withContext(Dispatchers.IO) { ByeDpiProxy() }
@@ -318,8 +363,9 @@ internal class NativeSession(
                         proxyThread = runNative("ByeDPI") { engine.startProxy(config.args.toTypedArray()) }
                         withTimeout(START_TIMEOUT) { awaitProxy(config.host, config.port) }
                     }
-                    corePhase = "TUN"
-                    createTunnel?.let { create ->
+                    if (!coreMode) {
+                        corePhase = "TUN"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
+                        createTunnel?.let { create ->
                         val underlyingLink = NetworkEnvironment.capture(service)
                         val tuneMobile = service.getPreferences().getBoolean("nlic_mobile_safe_mtu", true)
                         val mtu = AccessPolicy.tunMtu(underlyingLink, tuneMobile)
@@ -341,14 +387,16 @@ internal class NativeSession(
                                 appendLine("  password: ${it.password}")
                             }
                         }
-                        corePhase = "HEV"
+                        corePhase = "HEV"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
                         tunnelThread = runNative("HEV") { TProxyService.startTunnel(tunnelConfig, fd.fd) }
                         // Do not publish RUNNING when the native tunnel exited immediately.
                         delay(100)
                         check(tunnelThread?.isAlive == true) { "HEV tunnel exited during startup" }
+                        }
                     }
                     if (state != EngineProtocol.STATE_STOPPING) {
                         state = EngineProtocol.STATE_RUNNING
+                        if (coreMode) CoreFailureTrace.clear(service)
                         reply(EngineProtocol.STARTED)
                     }
                 }
@@ -369,6 +417,8 @@ internal class NativeSession(
                     val safeCode = when {
                         e is CoreStartException -> e.stage
                         e.message == "LIC-Core / BAY_UNREACHABLE" -> "BAY_UNREACHABLE"
+                        e.message == "LIC-Core / BAY_UDP_UNAVAILABLE" -> "BAY_UDP_UNAVAILABLE"
+                        e.message == "LIC-Core / BAY_UNSUPPORTED" -> "BAY_UNSUPPORTED"
                         e.message == "LIC-Core / NO_SERVER" -> "NO_SERVER"
                         else -> corePhase
                     }
@@ -431,23 +481,40 @@ internal class NativeSession(
         // Do not declare a working encrypted VPN dead solely because one
         // CDN blocks a captive-portal test path. Require a real validated TLS
         // + 204 response from either of two fixed public endpoints.
+        // Four *independent* cert-verified HTTPS targets, not the same
+        // two 204-only URLs twice. A blocked connectivity-check endpoint
+        // alone must not make a healthy VPN look disconnected.
         val targets = listOf(
             "www.gstatic.com", "cp.cloudflare.com",
-            "www.gstatic.com", "cp.cloudflare.com",
+            "example.com", "www.wikipedia.org",
         )
+        val outcomes = mutableListOf<TunnelHealthProbe.EgressResult>()
         for ((index, target) in targets.withIndex()) {
-            val ok = withContext(Dispatchers.IO) {
-                TunnelHealthProbe.check(host, port, auth, target)
+            val result = withContext(Dispatchers.IO) {
+                TunnelHealthProbe.probe(host, port, auth, target)
             }
-            if (ok) return
+            if (result == TunnelHealthProbe.EgressResult.OK) return
+            outcomes += result
             if (index < targets.lastIndex) delay(300)
         }
-        error("LIC-Core could not validate HTTPS through the selected server")
+        // Differentiate local connection, SOCKS outbound, verified TLS and
+        // HTTP response failures. Persist only enum names, not destinations.
+        val mostFrequent = outcomes.groupingBy { it }.eachCount()
+            .maxByOrNull { it.value }?.key ?: TunnelHealthProbe.EgressResult.CONNECT
+        throw CoreStartException("REMOTE_${mostFrequent.name}")
     }
 
     private fun fail(error: String) {
         if (state == EngineProtocol.STATE_STOPPING) return
         Log.e(TAG, error)
+        if (configuration?.args?.firstOrNull() == "--nlic-libbox") {
+            // The service intentionally exits on a failed health check.
+            // Persist only its credential-free code so the UI does not
+            // confuse that controlled exit with a Go panic at REMOTE_TEST.
+            val code = Regex("^LIC-Core / ([A-Z_]+)$")
+                .matchEntire(error)?.groupValues?.getOrNull(1) ?: "ENGINE"
+            CoreFailureTrace.markFailure(service, code)
+        }
         state = EngineProtocol.STATE_STOPPING
         reply(EngineProtocol.FAILED, Bundle().apply {
             putString(EngineProtocol.ERROR, error)
@@ -456,7 +523,7 @@ internal class NativeSession(
         // with delivery to the UI, so the actual safe error phase is lost
         // and the app displays only ENGINE. Give Binder a bounded 350 ms to
         // deliver FAILED before terminating the failed service.
-        handler.postDelayed({ terminate() }, 350L)
+        handler.postDelayed({ terminate() }, 1_000L)
     }
 
     private fun reply(what: Int, data: Bundle = Bundle()) {

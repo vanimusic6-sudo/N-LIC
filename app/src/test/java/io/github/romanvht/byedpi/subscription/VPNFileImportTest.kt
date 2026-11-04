@@ -48,8 +48,11 @@ class VPNFileImportTest {
         assertNull(VPNFileImport.wireguard(wireguard().replace("PrivateKey = $key",
             "PrivateKey = broken")))
         val node = VPNFileImport.parse("test.conf", wireguard()).single()
-        assertTrue(SingBoxConfigCompiler.compile(node, SingBoxConfigCompiler.Bay.ON) is
-            SingBoxConfigCompiler.Result.Unsupported)
+        val bay = SingBoxConfigCompiler.compile(node, SingBoxConfigCompiler.Bay.ON)
+            as SingBoxConfigCompiler.Result.Compiled
+        val config = JsonParser.parseString(bay.config).asJsonObject
+        assertEquals("lic-bay-local-socks", config.getAsJsonArray("endpoints")[0]
+            .asJsonObject.get("detour").asString)
     }
 
     @Test fun `JSON imports only secure outbounds and discards untrusted route`() {

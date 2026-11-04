@@ -304,7 +304,7 @@
     <string name="nlic_core_reconnect">Өзгерістер келесі қосылымда қолданылады. VPN-ді қолмен қайта қосыңыз.</string>
     <string name="nlic_core_bay_toggle">LIC-Bay · VPN қосылымын ByeDPI арқылы қорғау</string>
     <string name="nlic_core_bay_desc">ByeDPI SOCKS тек VPN серверіне сыртқы TCP қосылымы үшін қолданылады. Байланыс істемесе өшіріңіз.</string>
-    <string name="nlic_core_bay_udp">ByeDPI TCP тәсілдері Hysteria2/TUIC үшін жарамайды. TCP серверін таңдаңыз.</string>
+    <string name="nlic_core_bay_udp">UDP трафигі SOCKS5 UDP ASSOCIATE арқылы өтеді. Оператор UDP-ны бұғаттаса, басқа серверді не протоколды таңдаңыз.</string>
     <string name="nlic_core_profile_check">LIC-Core конфигурациясын тексеру</string>
     <string name="nlic_core_profile_ready">Параметрлер sing-box JSON форматына келеді. VPN қосылымы әлі тексерілмеді.</string>
     <string name="nlic_core_profile_unsupported">Сервер таңдалмады немесе параметрлері қолдау таппайды. Қосылу өшірулі.</string>
@@ -349,7 +349,7 @@
     <string name="nlic_control_auto_title">LIC-Auto · үздік сервер</string>
     <string name="nlic_control_auto_desc">Бірнеше сервердің шифрланған байланысын тексеріп, қолжетімдісін таңдайды.</string>
     <string name="nlic_control_bay_title">LIC-Bay · ByeDPI арқылы</string>
-    <string name="nlic_control_bay_desc">VPN серверіне жергілікті ByeDPI арқылы қосымша TCP жолы. Тікелей байланыс жұмыс істемесе қолданыңыз.</string>
+    <string name="nlic_control_bay_desc">LIC-Bay TCP және UDP трафигін жергілікті ByeDPI SOCKS5 арқылы өткізеді. WireGuard/Hysteria2/TUIC UDP ASSOCIATE қолданады. UDP бұғаттауын айналып өтуге кепіл жоқ.</string>
     <string name="nlic_control_more">Қосымша  ·  диагностика және баптау</string>
     <string name="nlic_control_connect">Қосылу</string>
     <string name="nlic_control_running">VPN жұмыс істеп тұр</string>
@@ -409,4 +409,5 @@
     <string name="nlic_privacy_description">Android VPN параметрлерінде «Әрқашан қосулы VPN» және «VPN-сіз қосылымдарды блоктау» опцияларын қарастырыңыз. Оларсыз қайта қосылғанда трафик VPN-сыз өтуі мүмкін.</string>
     <string name="nlic_privacy_confirmation">Жүйелік VPN параметрлерін ашу керек пе? N-LIC Android-тың VPN-сіз трафикті бұғаттауын өзі қоса алмайды.</string>
     <string name="nlic_privacy_unavailable">Бұл құрылғыда VPN параметрлерін ашу мүмкін болмады.</string>
+    <string name="nlic_core_advice_native_crash">Android жүйесіндегі жергілікті ядро іске қосу кезінде тоқтады. Төмендегі код соңғы кезеңді көрсетеді. Бұл сервер емес, ядро үйлесімділігі болуы мүмкін. Тек кодты жіберіңіз.</string>
 </resources>

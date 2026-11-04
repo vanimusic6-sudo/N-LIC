@@ -23,7 +23,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal class CoreStartException(val stage: String) :
     IllegalStateException("LIC-Core / $stage")
 
-internal class LibboxRuntime(private val context: Context) : AutoCloseable {
+internal class LibboxRuntime(
+    private val context: Context,
+    /** Returns an Android VpnService-owned TUN descriptor; libbox dup()s it. */
+    private val openAndroidTun: (() -> Int)? = null,
+) : AutoCloseable {
     companion object {
         private const val TAG = "LICCore"
         private const val LIBBOX = "io.nekohasekai.libbox."
@@ -42,12 +46,14 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
     private var workspaceDir: File? = null
     private var serverClass: Class<*>? = null
     private val networkMonitor = CoreNetworkMonitor(context)
+    private val localDnsResolver = CoreLocalDnsResolver(context)
 
     @Synchronized
     fun start(config: String) {
         require(!closed.get() && server == null) { "Native core already started or stopped" }
         check(installed()) { "This APK does not contain LIC-Core native engine" }
         var stage = "SETUP"
+        CoreFailureTrace.mark(context, "SETUP")
         try {
             val setupClass = Class.forName(LIBBOX + "SetupOptions")
             val setup = setupClass.getConstructor().newInstance()
@@ -60,20 +66,27 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
             set(setup, "basePath", workspace.absolutePath)
             set(setup, "workingPath", workspace.absolutePath)
             set(setup, "tempPath", context.cacheDir.absolutePath)
+            // Pinned libbox 1.14.3 exposes an Android Go stack workaround
+            // for upstream golang/go#68760. Without it the Go JNI runtime
+            // can abort before a structured error reaches the UI.
+            set(setup, "fixAndroidStack", true)
+            set(setup, "crashReportSource", "nlic-native")
             set(setup, "debug", false)
             set(setup, "logMaxLines", 128L)
             set(setup, "commandServerSecret", java.util.UUID.randomUUID().toString())
-            set(setup, "appVersion", "nlic-2.0.0")
-            set(setup, "appMarketingVersion", "2.0.0")
+            set(setup, "appVersion", "nlic-2.0.2")
+            set(setup, "appMarketingVersion", "2.0.2")
             val libbox = Class.forName(LIBBOX + "Libbox")
             libbox.getMethod("setup", setupClass).invoke(null, setup)
 
             // Validate against the *native* pinned sing-box schema before dial.
             // The full credential-bearing reflection exception is never logged.
             stage = "CONFIG"
+            CoreFailureTrace.mark(context, "CONFIG")
             libbox.getMethod("checkConfig", String::class.java).invoke(null, config)
 
             stage = "INTERFACES"
+            CoreFailureTrace.mark(context, "INTERFACES")
             val platformType = Class.forName(LIBBOX + "PlatformInterface")
             val handlerType = Class.forName(LIBBOX + "CommandServerHandler")
             val platform = Proxy.newProxyInstance(
@@ -81,6 +94,8 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
                 PlatformHandler(
                     context as? VpnService ?: error("Core must run inside Android VpnService"),
                     networkMonitor,
+                    localDnsResolver,
+                    openAndroidTun,
                 ),
             )
             val handler = Proxy.newProxyInstance(
@@ -93,16 +108,19 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
             server = instance
             serverClass = cls
             stage = "COMMAND"
+            CoreFailureTrace.mark(context, "COMMAND")
             cls.getMethod("start").invoke(instance)
             val override = Class.forName(LIBBOX + "OverrideOptions")
                 .getConstructor().newInstance()
             stage = "OUTBOUND"
+            CoreFailureTrace.mark(context, "OUTBOUND")
             try {
                 cls.getMethod("startOrReloadService", String::class.java, override.javaClass)
                     .invoke(instance, config, override)
             } finally {
                 if (!eraseSnapshot()) {
                     stage = "CREDENTIAL_STORAGE"
+            CoreFailureTrace.mark(context, "CREDENTIAL_STORAGE")
                     throw CoreStartException(stage)
                 }
             }
@@ -167,6 +185,8 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
     private class PlatformHandler(
         private val vpn: VpnService,
         private val monitor: CoreNetworkMonitor,
+        private val localDnsResolver: CoreLocalDnsResolver,
+        private val openAndroidTun: (() -> Int)?,
     ) : InvocationHandler {
         override fun invoke(proxy: Any, method: Method, args: Array<out Any?>?): Any? =
             when (method.name) {
@@ -183,16 +203,28 @@ internal class LibboxRuntime(private val context: Context) : AutoCloseable {
                     }
                     null
                 }
-                "openTun" -> throw SecurityException(
-                    "Second TUN disallowed: N-LIC VpnService must own the tunnel"
-                )
+                "openTun" -> {
+                    // Android's only TUN is created lazily by libbox while
+                    // initializing the native sing-box service. No extra HEV
+                    // TUN or loopback translation path is used.
+                    val opener = openAndroidTun
+                        ?: error("Native TUN service missing Android VPN descriptor")
+                    CoreFailureTrace.mark(vpn, "TUN")
+                    val fd = opener()
+                    check(fd >= 0) { "Android VPN tunnel could not be created" }
+                    fd
+                }
                 "startDefaultInterfaceMonitor" -> {
                     args?.firstOrNull()?.let(monitor::start)
                     null
                 }
                 "closeDefaultInterfaceMonitor" -> { monitor.close(); null }
                 "getInterfaces" -> monitor.interfaces()
-                "readWIFIState", "localDNSTransport", "findConnectionOwner" -> null
+                // A null LocalDNSTransport is not a functioning Android
+                // DNS implementation. Without this bridge Go's "local"
+                // DNS often cannot bootstrap the encrypted server hostname.
+                "localDNSTransport" -> localDnsResolver.transport()
+                "readWIFIState", "findConnectionOwner" -> null
                 "underNetworkExtension", "includeAllNetworks" -> false
                 "usePlatformShell", "usePlatformBridge", "usePlatformAutoRedirect" -> false
                 "toString" -> "N-LIC Android platform"

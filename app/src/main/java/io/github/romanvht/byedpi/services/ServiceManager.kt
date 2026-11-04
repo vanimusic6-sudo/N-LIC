@@ -118,6 +118,10 @@ object ServiceManager {
 
 
     private class Session(val mode: Mode, val engine: NativeEngine) {
+        // Snapshot the intended runtime before the UI resets the core-mode
+        // preference after a failed start. Otherwise failure classification
+        // races with the preference rollback and always falls to ENGINE.
+        var expectedCore: Boolean = false
         val configuration = CompletableDeferred<Configuration>()
         val configured = CompletableDeferred<Boolean>()
         val started = CompletableDeferred<Boolean>()
@@ -247,9 +251,15 @@ object ServiceManager {
         if (TestService.isRunning || commands.get() != command) return@withLock false
 
         val current = Session(mode, NativeEngine(app, mode))
+        // Mark the request BEFORE compiling imported profiles. A failure in
+        // settings/vault/Bay validation otherwise resets into generic ENGINE.
+        current.expectedCore = mode == Mode.VPN &&
+            app.getPreferences().getBoolean("nlic_core_mode", false)
         session = current
-        if (app.getPreferences().getBoolean("nlic_core_mode", false)) {
+        if (current.expectedCore) {
             lastCoreFailureCode = null
+            io.github.romanvht.byedpi.subscription.CoreFailureTrace.clear(app)
+            io.github.romanvht.byedpi.subscription.CoreFailureTrace.mark(app, "CONFIG_PREPARE")
         }
         if (mode == Mode.VPN) beginNetworkObservation(app)
         configure(current, app)
@@ -278,8 +288,18 @@ object ServiceManager {
     private fun configure(current: Session, app: Application) {
         if (current.configuration.isCompleted || current.started.isCompleted) return
         try {
-            current.configuration.complete(NativeEngine.configuration(app))
+            val config = NativeEngine.configuration(app)
+            current.expectedCore = config.args.firstOrNull() == "--nlic-libbox"
+            current.configuration.complete(config)
         } catch (e: Exception) {
+            if (current.expectedCore) {
+                val code = when (e) {
+                    is io.github.romanvht.byedpi.subscription.CoreStartException -> e.stage
+                    else -> "CONFIG_PREPARE"
+                }
+                lastCoreFailureCode = code
+                Log.e(TAG, "LIC-Core compilation failed ($code); details withheld")
+            }
             current.configuration.completeExceptionally(e)
         }
     }
@@ -344,7 +364,8 @@ object ServiceManager {
             } catch (e: Exception) {
                 failed = !current.stopping
                 if (failed) {
-                    if (application?.getPreferences()?.getBoolean("nlic_core_mode", false) == true) {
+                    if (current.expectedCore ||
+                        e.message.orEmpty().contains("LIC-Core / ")) {
                         val code = Regex("LIC-Core / ([A-Z_]+)")
                             .find(e.message.orEmpty())?.groupValues?.getOrNull(1)
                         val safeStages = setOf(
@@ -352,12 +373,26 @@ object ServiceManager {
                             "CREDENTIAL_STORAGE", "BAY_UNREACHABLE", "NO_SERVER",
                             "TUNNEL_TEST", "ENGINE", "CATALOG", "PREPARE",
                             "CONFIG_COMPILE", "BAY_PROXY", "BAY_PROXY_EXIT",
-                            "BAY_UPSTREAM", "CORE_START", "CORE_SOCKS",
-                            "REMOTE_TEST", "TUN", "HEV", "HEV_EXIT", "ENGINE_EXIT"
+                            "BAY_UPSTREAM", "BAY_UDP", "BAY_UDP_UNAVAILABLE",
+                            "BAY_UNSUPPORTED", "BAY_PROFILE", "CORE_START", "CORE_SOCKS",
+                            "CONFIG_PREPARE", "PROTOCOL_UNSUPPORTED", "NATIVE_PROCESS",
+                            "REMOTE_TEST", "REMOTE_CONNECT", "REMOTE_SOCKS", "REMOTE_TLS",
+                            "REMOTE_HTTP", "TUN", "HEV", "HEV_EXIT", "ENGINE_EXIT"
                         )
+                        val lastNativeStage = application?.let {
+                            io.github.romanvht.byedpi.subscription.CoreFailureTrace.recent(it)
+                        }
                         lastCoreFailureCode = code?.takeIf {
                             it in safeStages || it.removeSuffix("_TIMEOUT") in safeStages
-                        } ?: "ENGINE"
+                        } ?: lastCoreFailureCode?.takeIf { it in safeStages }
+                            // A controlled health-check failure also kills :native.
+                            // Never label it a native crash just because its
+                            // IPC error was lost while the service was exiting.
+                            ?: lastNativeStage?.takeIf { it.startsWith("FAILED_") }
+                                ?.removePrefix("FAILED_")?.takeIf { it in safeStages }
+                            ?: lastNativeStage?.takeIf { it != "RUNNING" }?.let {
+                                "NATIVE_AT_$it"
+                            } ?: "ENGINE"
                         Log.e(TAG, "LIC-Core failed at safe stage $lastCoreFailureCode")
                     } else {
                         Log.e(TAG, "Native service failed", e)
