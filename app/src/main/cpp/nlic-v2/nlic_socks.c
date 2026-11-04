@@ -146,6 +146,14 @@ static int connect_target(int sock,char *host,size_t cap,char *port,size_t pcap)
     if(socks_reply(sock,0)){close(upstream);return -1;}
     return upstream;
 }
+/* Reading a fragmented ClientHello can otherwise stall by 2 seconds per
+ * fragment. Use one monotonic budget for the entire TLS first flight,
+ * then forward the original bytes unchanged if incomplete. */
+static long monotonic_ms(void) {
+    struct timespec ts;
+    if(clock_gettime(CLOCK_MONOTONIC,&ts))return 0;
+    return (long)ts.tv_sec*1000L+ts.tv_nsec/1000000L;
+}
 static int forward_first(int sock,int upstream,const nlic_config *cfg,
                          uint8_t *buffer,uint8_t *scratch) {
     ssize_t n=recv(sock,buffer,READBUF-5,0);
@@ -156,19 +164,31 @@ static int forward_first(int sock,int upstream,const nlic_config *cfg,
     if(size>=5) {
         size_t record=(size_t)(((unsigned)buffer[3]<<8)|buffer[4])+5;
         if(record>0&&record<=READBUF-5) {
+            const long deadline=monotonic_ms()+180L;
             while(size<record&&!g_stop) {
+                const long left=deadline-monotonic_ms();
+                if(left<=0)break;
                 struct pollfd pfd={sock,POLLIN,0};
-                if(poll(&pfd,1,2000)!=1)break;
+                int ready=poll(&pfd,1,(int)(left<60L?left:60L));
+                if(ready<0&&errno==EINTR)continue;
+                if(ready<=0||!(pfd.revents&POLLIN))break;
                 n=recv(sock,buffer+size,record-size,0);
+                if(n<0&&errno==EINTR)continue;
                 if(n<=0)break;
                 size+=(size_t)n;
             }
             if(size>=record) {
+                // Never split a blind midpoint. Only validated SNI boundaries
+                // are transformed; this avoids breaking ECH/no-SNI flows.
                 size_t offset=nlic_tls_sni_midpoint(buffer,size);
-                if(offset==0&&record>20)offset=record/2-5;
-                const size_t transformed=nlic_tls_split_record(
-                    buffer,size,scratch,READBUF,offset);
-                if(transformed)return send_full(upstream,scratch,transformed);
+                if(offset>0) {
+                    const size_t triple=nlic_tls_split_sni_record(
+                        buffer,size,scratch,READBUF);
+                    if(triple)return send_full(upstream,scratch,triple);
+                    const size_t dual=nlic_tls_split_record(
+                        buffer,size,scratch,READBUF,offset);
+                    if(dual)return send_full(upstream,scratch,dual);
+                }
             }
         }
     }
