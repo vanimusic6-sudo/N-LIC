@@ -88,8 +88,16 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
+            set -o pipefail
             mkdir -p app/build/emulator-diagnostics
-            trap 'adb logcat -d -v threadtime -t 5000 > app/build/emulator-diagnostics/logcat.txt || true' EXIT
+            # Begin continuous capture BEFORE Gradle boots the test process:
+            # an app or native Go panic may kill the instrumentation runner,
+            # and a delayed logcat -d can miss the fatal signal.
+            adb logcat -c || true
+            adb logcat -v threadtime -b main -b system -b crash \
+              > app/build/emulator-diagnostics/full-logcat.txt 2>&1 &
+            log_pid=$!
+            trap 'adb logcat -d -b crash -v threadtime > app/build/emulator-diagnostics/crash-buffer.txt 2>&1 || true; kill "$log_pid" 2>/dev/null || true' EXIT
             ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
 
       - name: Publish UI crash and instrumentation results
