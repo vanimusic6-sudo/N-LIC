@@ -1,4 +1,4 @@
-name: N-LIC Xray Core Preview APK (DEV signed Release)
+name: N-LIC V2 Release APK (DEV signed)
 
 on:
   push:
@@ -109,12 +109,13 @@ jobs:
           mkdir -p xray-preview
           apk="$(find app/build/outputs/apk/release -type f -name '*arm64-v8a*release*.apk' -print -quit)"
           test -s "$apk"
-          cp "$apk" xray-preview/N-LIC-XrayPreview-arm64-Release-DEV.apk
-          apk=xray-preview/N-LIC-XrayPreview-arm64-Release-DEV.apk
+          cp "$apk" xray-preview/N-LIC-V2-2.1.0-arm64-Release-DEV.apk
+          apk=xray-preview/N-LIC-V2-2.1.0-arm64-Release-DEV.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$apk" > xray-preview/SIGNATURE.txt
           grep -iq '9eac8ece5fb89eeacb03c5eff20155724a206d73180d58c78fc7d3911dbee5c5' xray-preview/SIGNATURE.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" > xray-preview/APK_METADATA.txt
           grep -q 'io.github.vanimusic6sudo.nlic' xray-preview/APK_METADATA.txt
+          grep -q "versionCode='2100'" xray-preview/APK_METADATA.txt
           if grep -q '^application-debuggable' xray-preview/APK_METADATA.txt; then exit 1; fi
           python3 - "$apk" <<'PY'
           import sys,zipfile
@@ -124,15 +125,21 @@ jobs:
               libs = [n for n in entries if n.startswith('lib/arm64-v8a/') and n.endswith('.so')]
               assert libs, 'Native ARM64 library missing'
               assert any('gojni' in n.lower() for n in libs), f'Gomobile JNI missing: {libs}'
+              assert 'lib/arm64-v8a/libnlicv2.so' in entries, 'Experimental V2 native core missing'
+              assert 'lib/arm64-v8a/libbyedpi.so' in entries, 'Stable ByeDPI rollback missing'
           PY
           cat > xray-preview/READ_ME_FIRST.txt <<'EOF'
-          N-LIC experimental Xray preview, DEV-signed optimized Release.
+          N-LIC V2 version 2.1.0-v2-preview (versionCode 2100).
+          DEV-signed optimized Release APK, not a production signing key.
           Xray-core provided by 2dust/AndroidLibXrayLite v26.10.31.
           Native AAR SHA256:
           2efdf731b1ed624eb1cb0d5a4d0aa95c0672e89f9702226d1ba2dc90308630b6
           Supported experimental profiles: VLESS TLS/REALITY, VMess,
           Trojan, Shadowsocks, wg-quick WireGuard.
-          LIC-Auto and LIC-Bay are unavailable in this preview.
+          LIC-Auto and LIC-Bay remain available with the proven Xray engine.
+          V2 clean-room native core is opt-in for local DPI mode only, in Settings.
+          Experimental native core has no universal DPI bypass guarantee.
+          Keep the stable engine selected if native TCP/UDP field tests fail.
           Xray uses an authenticated private SOCKS inbound plus HEV Android TUN.
           This is not a production security-tested VPN. Check for leaks.
           Do not disable Play Protect and do not use for sensitive data.
@@ -143,7 +150,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: N-LIC-XrayPreview-ARM64-DevSigned
+          name: N-LIC-V2-ARM64-DevSigned
           path: xray-preview/
           if-no-files-found: error
           retention-days: 14
