@@ -51,6 +51,62 @@ class XrayConfigCompilerTest {
         assertTrue(out.getAsJsonObject("settings").get("noKernelTun").asBoolean)
     }
 
+    @Test fun bayVlessUsesOnlyLoopbackSocksDialerProxy() {
+        val raw = "vless://$uuid@edge.example:443?encryption=none&security=reality" +
+            "&sni=www.example.com&fp=chrome&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+            "&sid=11&flow=xtls-rprx-vision&type=tcp#Reality"
+        val compiled = XrayConfigCompiler.compile(
+            node(raw), auth, XrayConfigCompiler.BAY_PORT
+        ) as XrayConfigCompiler.Result.Compiled
+        val root = JsonParser.parseString(compiled.json).asJsonObject
+        val outbounds = root.getAsJsonArray("outbounds")
+        assertEquals(2, outbounds.size())
+        val encrypted = outbounds[0].asJsonObject
+        assertEquals("vless", encrypted.get("protocol").asString)
+        assertEquals(XrayConfigCompiler.BAY_TAG,
+            encrypted.getAsJsonObject("streamSettings")
+                .getAsJsonObject("sockopt").get("dialerProxy").asString)
+        val relay = outbounds[1].asJsonObject
+        assertEquals("socks", relay.get("protocol").asString)
+        assertEquals("127.0.0.1", relay.getAsJsonObject("settings")
+            .getAsJsonArray("servers")[0].asJsonObject.get("address").asString)
+        assertEquals(XrayConfigCompiler.BAY_PORT, relay.getAsJsonObject("settings")
+            .getAsJsonArray("servers")[0].asJsonObject.get("port").asInt)
+        assertFalse(relay.has("streamSettings"))
+    }
+
+    @Test fun bayWireguardHasUdpDialerProxyWithNoDirectFallback() {
+        val key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        val nodes = VPNFileImport.parse("wg.conf", """
+            [Interface]
+            PrivateKey = $key
+            Address = 10.99.0.2/32
+            [Peer]
+            PublicKey = $key
+            Endpoint = example.com:51820
+            AllowedIPs = 0.0.0.0/0, ::/0
+        """.trimIndent())
+        val result = XrayConfigCompiler.compile(
+            nodes.single(), auth, XrayConfigCompiler.BAY_PORT
+        ) as XrayConfigCompiler.Result.Compiled
+        val outbounds = JsonParser.parseString(result.json).asJsonObject
+            .getAsJsonArray("outbounds")
+        assertEquals("wireguard", outbounds[0].asJsonObject.get("protocol").asString)
+        assertEquals(XrayConfigCompiler.BAY_TAG, outbounds[0].asJsonObject
+            .getAsJsonObject("streamSettings")
+            .getAsJsonObject("sockopt").get("dialerProxy").asString)
+        assertEquals("socks", outbounds[1].asJsonObject.get("protocol").asString)
+    }
+
+    @Test fun invalidBayPortFailsClosed() {
+        val raw = "vless://$uuid@test.example:443?encryption=none&security=tls" +
+            "&sni=example.com&type=tcp"
+        assertTrue(XrayConfigCompiler.compile(node(raw), auth, -1)
+            is XrayConfigCompiler.Result.Unsupported)
+        assertTrue(XrayConfigCompiler.compile(node(raw), auth, XrayConfigCompiler.SOCKS_PORT)
+            is XrayConfigCompiler.Result.Unsupported)
+    }
+
     @Test fun arbitraryAuthenticationIsRejected() {
         val raw = "vless://$uuid@test.example:443?encryption=none&security=tls&type=tcp"
         assertTrue(XrayConfigCompiler.compile(node(raw),
