@@ -488,14 +488,20 @@ internal class NativeSession(
             "www.gstatic.com", "cp.cloudflare.com",
             "example.com", "www.wikipedia.org",
         )
+        val outcomes = mutableListOf<TunnelHealthProbe.EgressResult>()
         for ((index, target) in targets.withIndex()) {
-            val ok = withContext(Dispatchers.IO) {
-                TunnelHealthProbe.check(host, port, auth, target)
+            val result = withContext(Dispatchers.IO) {
+                TunnelHealthProbe.probe(host, port, auth, target)
             }
-            if (ok) return
+            if (result == TunnelHealthProbe.EgressResult.OK) return
+            outcomes += result
             if (index < targets.lastIndex) delay(300)
         }
-        error("LIC-Core could not validate HTTPS through the selected server")
+        // Differentiate local connection, SOCKS outbound, verified TLS and
+        // HTTP response failures. Persist only enum names, not destinations.
+        val mostFrequent = outcomes.groupingBy { it }.eachCount()
+            .maxByOrNull { it.value }?.key ?: TunnelHealthProbe.EgressResult.CONNECT
+        throw CoreStartException("REMOTE_${mostFrequent.name}")
     }
 
     private fun fail(error: String) {
