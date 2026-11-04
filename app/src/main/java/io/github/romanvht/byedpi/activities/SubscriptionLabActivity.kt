@@ -269,7 +269,30 @@ class SubscriptionLabActivity : BaseActivity() {
         latestMessage = getString(R.string.nlic_subscriptions_imported, nodes.size)
     }
 
-    private fun importSubscription(url: String) = runOperation {
+    /** The app UID is excluded from its own VPN TUN to prevent routing
+     * loops. Subscription refresh may therefore use the physical network.
+     * HTTPS protects credentials in transit but not necessarily the domain.
+     */
+    private fun confirmSubscriptionFetch(action: () -> Unit) {
+        val activeVpn = appStatus.first == AppStatus.Running &&
+            appStatus.second == Mode.VPN
+        if (!activeVpn) {
+            action()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.nlic_subscription_fetch_title)
+            .setMessage(R.string.nlic_subscription_fetch_privacy)
+            .setPositiveButton(android.R.string.ok) { _, _ -> action() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun importSubscription(url: String) {
+        confirmSubscriptionFetch { performImportSubscription(url) }
+    }
+
+    private fun performImportSubscription(url: String) = runOperation {
         require(SubscriptionFetcher.validSubscriptionUrl(url)) { "INVALID_URL" }
         val nodes = withContext(Dispatchers.IO) {
             val body = SubscriptionFetcher.fetch(url)
@@ -303,7 +326,11 @@ class SubscriptionLabActivity : BaseActivity() {
         if (first != null) SubscriptionVault.select(applicationContext, first.id)
     }
 
-    private fun refreshSubscriptions() = runOperation {
+    private fun refreshSubscriptions() {
+        confirmSubscriptionFetch { performRefreshSubscriptions() }
+    }
+
+    private fun performRefreshSubscriptions() = runOperation {
         val groups = withContext(Dispatchers.IO) {
             SubscriptionVault.read(applicationContext).groups
         }
