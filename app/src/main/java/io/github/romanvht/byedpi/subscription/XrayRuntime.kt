@@ -53,6 +53,28 @@ internal class XrayRuntime(private val context: Context) : AutoCloseable {
         }
     }
 
+    /**
+     * A second, independent HTTPS verification using Xray-core's own
+     * authenticated outbound dialer (core.Dial), rather than Java's
+     * SOCKS + JSSE stack. The pinned AndroidLibXrayLite measureDelay uses
+     * Go's certificate-validating HTTP transport and accepts only 200/204.
+     * It cannot silently fall back to a direct Android socket.
+     *
+     * On failure the normal SOCKS/JSSE probe still runs and reports a
+     * credential-free diagnostic phase. Never interpret mere core start
+     * or SOCKS CONNECT as proof that encrypted egress works.
+     */
+    internal fun verifyHttpsViaCore(): Boolean {
+        val active = controller ?: return false
+        if (closed.get()) return false
+        return runCatching {
+            val ms = active.javaClass
+                .getMethod("measureDelay", String::class.java)
+                .invoke(active, "https://example.com/") as? Number
+            ms != null && ms.toLong() >= 0L
+        }.getOrDefault(false)
+    }
+
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
         controller?.let { instance ->
