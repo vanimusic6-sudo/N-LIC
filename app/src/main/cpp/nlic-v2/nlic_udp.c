@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "nlic_udp.h"
+extern int nlic_v2_stopping(void);
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netdb.h>
@@ -141,7 +142,7 @@ int nlic_udp_associate(int client,unsigned idle_seconds) {
     udp_cache_entry dns_cache[DNS_CACHE_SLOTS]={0};
     unsigned next_cache=0;socklen_t senderlen=0;size_t known_count=0,next=0;
     long last=monotonic_seconds();int rc=0;
-    for(;;) {
+    while(!nlic_v2_stopping()) {
         struct pollfd fd[4]={{client,POLLIN,0},{relay,POLLIN,0},
                              {outgoing4,POLLIN,0},{outgoing6,POLLIN,0}};
         int nfd=2;
