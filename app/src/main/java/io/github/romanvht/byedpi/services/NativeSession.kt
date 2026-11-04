@@ -223,8 +223,8 @@ internal class NativeSession(
         startJob = scope.launch {
             // Only fixed phase identifiers appear in logs and UI: neither
             // outbound JSON nor VPN credentials may leave the native process.
-            var corePhase = "PREPARE"; if (coreMode) CoreFailureTrace.mark(service, corePhase)
             val coreMode = config.args.firstOrNull() == "--nlic-libbox"
+            var corePhase = "PREPARE"
             if (coreMode) CoreFailureTrace.mark(service, corePhase)
             try {
                 withTimeout(50_000) {
