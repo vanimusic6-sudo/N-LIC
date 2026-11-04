@@ -56,10 +56,7 @@ class SubscriptionLabActivity : BaseActivity() {
 
     private enum class ConnectionMode { LOCAL, SUBSCRIPTION }
 
-    private fun connectionMode(): ConnectionMode =
-        if (prefs.getString("nlic_connection_mode", "subscription") == "local") {
-            ConnectionMode.LOCAL
-        } else ConnectionMode.SUBSCRIPTION
+    private fun connectionMode(): ConnectionMode = ConnectionMode.SUBSCRIPTION
 
     private fun chooseMode(next: ConnectionMode) {
         if (busy || connectionMode() == next) return
@@ -113,6 +110,14 @@ class SubscriptionLabActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_nlic_control)
+        // LIC-Fork replaces ByeDPI on the V2 cockpit. Reset only legacy
+        // preferences, not imported subscriptions or user-selected server.
+        prefs.edit().putString("nlic_connection_mode", "subscription")
+            .putBoolean("nlic_core_bay", false).apply()
+        (findViewById<View>(R.id.nlic_mode_bypass).parent as View)
+            .visibility = View.GONE
+        findViewById<View>(R.id.nlic_bay_switch).visibility = View.GONE
+        findViewById<View>(R.id.nlic_bypass_panel).visibility = View.GONE
         setupToolbar()
         supportActionBar?.setDisplayHomeAsUpEnabled(false)
         supportActionBar?.title = "N-LIC"
@@ -472,7 +477,7 @@ class SubscriptionLabActivity : BaseActivity() {
     private fun canConnect(catalog: SubscriptionCatalog): Boolean {
         if (connectionMode() == ConnectionMode.LOCAL) return true
         if (BuildConfig.NLIC_XRAY_INCLUDED) {
-            val bay = prefs.getBoolean("nlic_core_bay", false)
+            val bay = false // LIC-Fork never activates the legacy ByeDPI relay
             val relayPort = if (bay) XrayConfigCompiler.BAY_PORT else null
             val auth = LocalSocksAuth("nlic", "a".repeat(48))
             val supported: (SubscriptionNode) -> Boolean = { node ->
@@ -544,7 +549,7 @@ class SubscriptionLabActivity : BaseActivity() {
         val all = catalog.allNodes
         val selected = all.firstOrNull { it.id == catalog.selectedNodeId }
         val auto = prefs.getBoolean("nlic_core_auto", false)
-        val bay = prefs.getBoolean("nlic_core_bay", false)
+        val bay = false // LIC-Fork never activates the legacy ByeDPI relay
         val title = findViewById<TextView>(R.id.nlic_status_label)
         val details = findViewById<TextView>(R.id.nlic_status_message)
         val stage = findViewById<TextView>(R.id.nlic_stage_label)

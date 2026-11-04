@@ -102,48 +102,17 @@ internal object NlicV2Settings {
             activity.startActivity(Intent(activity, SettingsActivity::class.java))
         }
 
-        section("Обход DPI")
-        action("Ядро локального обхода",
-            "Стабильный ByeDPI или экспериментальное N-LIC V2") {
-            requireDisconnected {
-                val prefs = activity.getPreferences()
-                val experimental = prefs.getBoolean("nlic_v2_native_opt_in", false)
-                AlertDialog.Builder(activity)
-                    .setTitle("Ядро локального обхода")
-                    .setSingleChoiceItems(
-                        arrayOf("ByeDPI · стабильное", "N-LIC V2 · экспериментальное"),
-                        if (experimental) 1 else 0
-                    ) { popup, selected ->
-                        popup.dismiss()
-                        if (selected == 0) {
-                            prefs.edit().putBoolean("nlic_v2_native_opt_in", false).commit()
-                        } else {
-                            AlertDialog.Builder(activity)
-                                .setTitle("Экспериментальное ядро")
-                                .setMessage("Только для локального обхода. N-LIC V2 не заменяет Xray, не скрывает IP-адрес и ещё не прошло полный аудит утечек.")
-                                .setPositiveButton("Включить") { _, _ ->
-                                    prefs.edit().putBoolean("nlic_v2_native_opt_in", true).commit()
-                                }
-                                .setNegativeButton(android.R.string.cancel, null).show()
-                        }
-                    }
-                    .setNegativeButton(android.R.string.cancel, null).show()
-            }
-        }
-        action("Параметры ByeDPI", "Визуальный редактор локального обхода") {
-            requireDisconnected {
-                activity.startActivity(Intent(activity, SettingsActivity::class.java)
-                    .putExtra("open_fragment", "ui"))
-            }
-        }
-        action("Проверить стратегии", "Подобрать обход по результатам реальных тестов") {
-            requireDisconnected { activity.startActivity(Intent(activity, TestActivity::class.java)) }
-        }
-        action("Домены и исключения", "Списки адресов для локального обхода") {
-            requireDisconnected {
-                activity.startActivity(Intent(activity, TestSettingsActivity::class.java)
-                    .putExtra("open_fragment", "domain_lists"))
-            }
+        section("LIC-Fork")
+        action("Автоматический выбор транспорта",
+            "До 3 прямых протоколов, затем до 2 проверенных цепочек") {
+            AlertDialog.Builder(activity)
+                .setTitle("Как работает LIC-Fork")
+                .setMessage("N-LIC проверяет настоящее HTTPS-подключение через Xray, а не только TCP-порт. " +
+                    "При неудаче прямых подключений может попробовать цепочку из двух ваших " +
+                    "TLS/REALITY-серверов. Протоколы не смешиваются на уровне шифрования. " +
+                    "Все тесты локальны; автоматическое переключение работающего VPN выключено. " +
+                    "Подбор и цепочки пока экспериментальные.")
+                .setPositiveButton(android.R.string.ok, null).show()
         }
 
         section("Сеть")
@@ -167,12 +136,7 @@ internal object NlicV2Settings {
         section("Диагностика и данные")
         action("Состояние соединения", "Без серверов, токенов и содержимого трафика") {
             val prefs = activity.getPreferences()
-            val mode = prefs.getString("nlic_connection_mode", "subscription")
-            val engine = when {
-                mode != "local" -> "Xray-core"
-                prefs.getBoolean("nlic_v2_native_opt_in", false) -> "N-LIC V2"
-                else -> "ByeDPI"
-            }
+            val engine = "Xray + LIC-Fork"
             val failure = ServiceManager.lastCoreFailureCode
                 ?.takeIf { it.matches(Regex("[A-Z0-9_]{1,64}")) } ?: "—"
             val report = "N-LIC ${BuildConfig.VERSION_NAME}\nAndroid API ${Build.VERSION.SDK_INT}" +
