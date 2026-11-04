@@ -7,6 +7,8 @@ import android.security.keystore.KeyProperties
 import android.util.AtomicFile
 import com.google.gson.Gson
 import java.io.File
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -33,12 +35,11 @@ internal object SubscriptionVault {
     @Synchronized fun read(context: Context): SubscriptionCatalog {
         require(available()) { "Subscriptions require Android 6.0 or newer" }
         val file = File(context.filesDir, FILE)
-        if (!file.exists()) return SubscriptionCatalog()
-        val bytes = AtomicFile(file).openRead().use { stream ->
-            val data = stream.readBytes()
-            require(data.size in 29..MAX_FILE_BYTES) { "Corrupt subscription vault" }
-            data
-        }
+        // AtomicFile may have a recoverable .bak after a process crash.
+        // Never read an unbounded stream into heap before checking its size.
+        if (!file.exists() && !File(file.absolutePath + ".bak").exists())
+            return SubscriptionCatalog()
+        val bytes = AtomicFile(file).openRead().use(::readBoundedCiphertext)
         try {
             val iv = bytes.copyOfRange(0, 12)
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -104,9 +105,9 @@ internal object SubscriptionVault {
     }
 
     @Synchronized fun clear(context: Context) {
-        // Deleting both ciphertext and Keystore key makes previous local
-        // subscription secrets unavailable even if file blocks survive.
-        File(context.filesDir, FILE).delete()
+        // AtomicFile.delete removes both main file and its backup. Deleting
+        // only the main file could leave stale encrypted subscription URLs.
+        AtomicFile(File(context.filesDir, FILE)).delete()
         if (available()) {
             val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
             if (store.containsAlias(KEY_ALIAS)) store.deleteEntry(KEY_ALIAS)
@@ -117,6 +118,24 @@ internal object SubscriptionVault {
         val data = read(context)
         require(data.allNodes.any { it.id == nodeId }) { "Unknown node" }
         write(context, data.copy(selectedNodeId = nodeId))
+    }
+
+    internal fun readBoundedCiphertext(input: InputStream): ByteArray {
+        val buffer = ByteArray(8192)
+        val output = ByteArrayOutputStream()
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            require(output.size() + count <= MAX_FILE_BYTES) {
+                "Subscription vault is too large"
+            }
+            output.write(buffer, 0, count)
+        }
+        val bytes = output.toByteArray()
+        require(bytes.size in 29..MAX_FILE_BYTES) {
+            "Corrupt subscription vault"
+        }
+        return bytes
     }
 
     private fun key(): SecretKey {
