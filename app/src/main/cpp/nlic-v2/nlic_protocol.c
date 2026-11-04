@@ -28,19 +28,21 @@ nlic_flow_type nlic_detect(const uint8_t *p, size_t n, int udp) {
         return NLIC_FLOW_HTTP;
     return NLIC_FLOW_OTHER;
 }
-size_t nlic_tls_sni_midpoint(const uint8_t *p,size_t n) {
-    if(nlic_detect(p,n,0)!=NLIC_FLOW_TLS || n<9)return 0;
+int nlic_tls_sni_range(const uint8_t *p,size_t n,
+                       size_t *start,size_t *end) {
+    if(!p||!start||!end||nlic_detect(p,n,0)!=NLIC_FLOW_TLS||n<9)return 0;
     size_t rlen=u16(p+3);
-    if(rlen+5>n || rlen<42)return 0;
-    size_t e=5+rlen,hs=(size_t)p[6]<<16 | (size_t)p[7]<<8 | p[8];
-    if(hs+4>rlen || hs<38)return 0;
+    if(rlen+5>n||rlen<42)return 0;
+    size_t e=5+rlen;
+    size_t hs=((size_t)p[6]<<16)|((size_t)p[7]<<8)|p[8];
+    if(hs+4>rlen||hs<38)return 0;
     size_t i=9+2+32;
     if(i>=e)return 0;
     size_t sid=p[i++];
     if(i+sid+2>e)return 0;
     i+=sid;
     size_t suites=u16(p+i);i+=2;
-    if(i+suites+1>e || suites%2)return 0;
+    if(i+suites+1>e||suites%2)return 0;
     i+=suites;
     size_t compress=p[i++];
     if(i+compress+2>e)return 0;
@@ -51,16 +53,17 @@ size_t nlic_tls_sni_midpoint(const uint8_t *p,size_t n) {
     while(i+4<=ext_end) {
         const size_t kind=u16(p+i),len=u16(p+i+2);i+=4;
         if(i+len>ext_end)return 0;
-        if(kind==0 && len>=5) {
+        if(kind==0&&len>=5) {
             size_t j=i+2,list=u16(p+i);
-            if(list>len-2 || j+list>i+len)return 0;
+            if(list>len-2||j+list>i+len)return 0;
             const size_t list_end=j+list;
             while(j+3<=list_end) {
                 const size_t typ=p[j],hostlen=u16(p+j+1);j+=3;
                 if(j+hostlen>list_end)return 0;
-                if(typ==0 && hostlen>3 && j+hostlen<=n) {
-                    size_t mid=j+hostlen/2;
-                    return mid>5 && mid<5+rlen ? mid-5 : 0;
+                if(typ==0&&hostlen>=6&&j>5&&j+hostlen<e) {
+                    *start=j-5;
+                    *end=j+hostlen-5;
+                    return *start>1&&*end<rlen;
                 }
                 j+=hostlen;
             }
@@ -68,6 +71,35 @@ size_t nlic_tls_sni_midpoint(const uint8_t *p,size_t n) {
         i+=len;
     }
     return 0;
+}
+size_t nlic_tls_sni_midpoint(const uint8_t *p,size_t n) {
+    size_t start=0,end=0;
+    return nlic_tls_sni_range(p,n,&start,&end)?
+        start+(end-start)/2:0;
+}
+size_t nlic_tls_split_sni_record(const uint8_t *in,size_t in_len,
+                                 uint8_t *out,size_t cap) {
+    size_t start=0,end=0;
+    if(!in||!out||in_len<10||in_len>cap||in_len>cap-10||
+       !nlic_tls_sni_range(in,in_len,&start,&end))return 0;
+    const size_t len=u16(in+3),mid=start+(end-start)/2;
+    if(start<2||mid<=start||mid>=len)return 0;
+    const size_t lengths[]={start,mid-start,len-mid};
+    size_t offset=0;
+    size_t output=0;
+    for(size_t i=0;i<3;i++) {
+        const size_t part=lengths[i];
+        if(part==0||part>16384)return 0;
+        memcpy(out+output,in,3);
+        out[output+3]=(uint8_t)(part>>8);
+        out[output+4]=(uint8_t)part;
+        memcpy(out+output+5,in+5+offset,part);
+        output+=5+part;
+        offset+=part;
+    }
+    // Preserve any bytes following the first record unchanged.
+    memcpy(out+output,in+5+len,in_len-5-len);
+    return in_len+10;
 }
 size_t nlic_tls_split_record(const uint8_t *in,size_t in_len,
                             uint8_t *out,size_t cap,size_t pos) {
