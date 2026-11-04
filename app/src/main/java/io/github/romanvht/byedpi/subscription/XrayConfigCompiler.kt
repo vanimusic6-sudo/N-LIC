@@ -14,16 +14,30 @@ import com.google.gson.JsonParser
 internal object XrayConfigCompiler {
     const val SOCKS_PORT = 11089
     const val PROXY_TAG = "nlic-xray"
+    const val BAY_TAG = "nlic-bay"
+    const val BAY_PORT = 11088
 
     sealed class Result {
         data class Compiled(val json: String, val protocol: String) : Result()
         data class Unsupported(val reason: String) : Result()
     }
 
-    fun compile(node: SubscriptionNode, auth: LocalSocksAuth): Result {
+    fun compile(
+        node: SubscriptionNode,
+        auth: LocalSocksAuth,
+        bayPort: Int? = null,
+    ): Result {
         if (auth.username != "nlic" || auth.password.length !in 24..128 ||
             !auth.password.all { it in "0123456789abcdef" }) {
             return Result.Unsupported("Invalid private SOCKS credentials")
+        }
+        if (bayPort != null) {
+            if (bayPort !in 1..65535 || bayPort == SOCKS_PORT) {
+                return Result.Unsupported("Invalid local ByeDPI relay port")
+            }
+            if (!LICBay.plan(node).supported) {
+                return Result.Unsupported("LIC-Bay cannot relay this protocol")
+            }
         }
         return try {
             val outbound = if (node.protocol == "WIREGUARD") {
@@ -38,6 +52,22 @@ internal object XrayConfigCompiler {
             } ?: return Result.Unsupported("Unsupported Xray transport")
 
             outbound.addProperty("tag", PROXY_TAG)
+            if (bayPort != null) {
+                // DialerProxy intercepts Xray's actual socket creation for
+                // both TCP and UDP. No opportunistic direct fallback.
+                // For WireGuard the Go bind uses DialSystem(SocketSettings);
+                // the Xray SOCKS outbound performs UDP ASSOCIATE.
+                outbound.getAsJsonObject("streamSettings")?.let {
+                    it.add("sockopt", JsonObject().apply {
+                        addProperty("dialerProxy", BAY_TAG)
+                    })
+                } ?: outbound.add("streamSettings", JsonObject().apply {
+                    addProperty("network", "raw")
+                    add("sockopt", JsonObject().apply {
+                        addProperty("dialerProxy", BAY_TAG)
+                    })
+                })
+            }
             val root = JsonObject().apply {
                 add("log", JsonObject().apply { addProperty("loglevel", "warning") })
                 // AndroidLibXrayLite obtains stats.Manager at startup; supply
@@ -62,7 +92,20 @@ internal object XrayConfigCompiler {
                         })
                     })
                 })
-                add("outbounds", JsonArray().apply { add(outbound) })
+                add("outbounds", JsonArray().apply {
+                    // First outbound is always encrypted VPN; never the relay.
+                    add(outbound)
+                    if (bayPort != null) add(JsonObject().apply {
+                        addProperty("protocol", "socks")
+                        addProperty("tag", BAY_TAG)
+                        add("settings", JsonObject().apply {
+                            add("servers", JsonArray().apply { add(JsonObject().apply {
+                                addProperty("address", "127.0.0.1")
+                                addProperty("port", bayPort)
+                            }) })
+                        })
+                    })
+                })
             }
             Result.Compiled(root.toString(), node.protocol)
         } catch (_: Exception) {
