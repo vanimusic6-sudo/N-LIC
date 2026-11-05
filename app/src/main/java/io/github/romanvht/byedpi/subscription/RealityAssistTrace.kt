@@ -21,6 +21,7 @@ internal object RealityAssistTrace {
     enum class Event {
         SKIPPED_DISABLED,
         SKIPPED_AUTO,
+        SKIPPED_BAY,
         SKIPPED_UNSUPPORTED,
         STARTING_ORIGINAL,
         STARTING_HELPER,
