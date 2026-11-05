@@ -44,6 +44,8 @@ import io.github.romanvht.byedpi.subscription.LocalSocksAuth
 import io.github.romanvht.byedpi.subscription.RealityAssistTrace
 import io.github.romanvht.byedpi.subscription.RealityAssistPolicy
 import io.github.romanvht.byedpi.subscription.RealityAssistMemory
+import io.github.romanvht.byedpi.subscription.RealityWorkbench
+import io.github.romanvht.byedpi.subscription.RealityTcpTricks
 import io.github.romanvht.byedpi.subscription.SubscriptionCatalog
 import io.github.romanvht.byedpi.subscription.SubscriptionFetcher
 import io.github.romanvht.byedpi.subscription.SubscriptionGroup
@@ -72,6 +74,8 @@ class SubscriptionLabActivity : BaseActivity() {
     private var comparisonRunning = false
     private var comparisonResult: String? = null
     private var comparisonDetails: String? = null
+    private var matrixEntries: List<RealityWorkbench.Entry>? = null
+    private var comparisonNodeId: String? = null
     private var comparisonConnection: ServiceConnection? = null
     private val comparisonReceiver by lazy {
         Messenger(Handler(Looper.getMainLooper()) { message ->
@@ -85,6 +89,25 @@ class SubscriptionLabActivity : BaseActivity() {
                     RealityCompareService.FINISHED -> {
                         val compact = message.data
                             ?.getString(RealityCompareService.COMPACT)
+                        val matrixRaw = message.data
+                            ?.getString(RealityCompareService.MATRIX_DATA)
+                        matrixEntries = matrixRaw?.let { raw ->
+                            val plan = readCatalog().let { catalog ->
+                                catalog.allNodes.firstOrNull {
+                                    it.id == comparisonNodeId &&
+                                        it.id == catalog.selectedNodeId
+                                }
+                            }?.let {
+                                XrayConfigCompiler.compile(
+                                    it, LocalSocksAuth("nlic", "a".repeat(48))
+                                ) as? XrayConfigCompiler.Result.Compiled
+                            }
+                            val fp = plan?.let {
+                                RealityAssistPolicy.baselineFingerprint(it.json)
+                            }
+                            fp?.let { RealityWorkbench.decode(raw,
+                                RealityWorkbench.profiles(it)) }
+                        }
                         endRealityComparison(content, compact, showDialog = true)
                     }
                     RealityCompareService.ERROR -> endRealityComparison(content)
@@ -205,19 +228,17 @@ class SubscriptionLabActivity : BaseActivity() {
                 endRealityComparison(getString(R.string.nlic_reality_compare_cancelled))
             } else if (!busy && connectionMode() == ConnectionMode.SUBSCRIPTION) {
                 AlertDialog.Builder(this)
-                    .setTitle(R.string.nlic_reality_compare_choose)
+                    .setTitle("LIC-Assist · варианты REALITY")
                     .setItems(arrayOf(
-                        getString(R.string.nlic_reality_compare_quick),
-                        getString(R.string.nlic_reality_compare_extended),
-                        getString(R.string.nlic_reality_compare_stream)
-                    )) { _, choice ->
-                        startRealityComparison(
-                            when (choice) {
-                                1 -> 18
-                                2 -> 3 // 3×512 KiB through selected REALITY
-                                else -> 6
-                            }
-                        )
+                        "Проверить все варианты · по 2 подключения",
+                        "Выбрать вариант вручную",
+                        "Сбросить выбор · вернуться к подписке"
+                    )) { _, which ->
+                        when (which) {
+                            0 -> startRealityComparison(RealityCompareService.MATRIX)
+                            1 -> chooseWorkbenchProfile()
+                            2 -> resetWorkbenchProfile()
+                        }
                     }
                     .setNegativeButton(android.R.string.cancel, null)
                     .show()
@@ -715,6 +736,8 @@ class SubscriptionLabActivity : BaseActivity() {
                                 // as evidence for a newly chosen server.
                                 comparisonResult = null
                                 comparisonDetails = null
+                                matrixEntries = null
+                                comparisonNodeId = null
                                 render()
                             }.onFailure { toast(R.string.nlic_subscriptions_error) }
                         }
@@ -1061,6 +1084,8 @@ class SubscriptionLabActivity : BaseActivity() {
 
         comparisonRunning = true
         busy = true
+        comparisonNodeId = selected!!.id
+        matrixEntries = null
         comparisonResult = getString(R.string.nlic_reality_compare_in_progress)
         comparisonDetails = null
         render()
@@ -1097,6 +1122,91 @@ class SubscriptionLabActivity : BaseActivity() {
         } catch (_: Exception) {
             endRealityComparison(getString(R.string.nlic_reality_compare_failed))
         }
+    }
+
+    private fun currentWorkbenchProfiles(): List<RealityWorkbench.Profile>? {
+        if (appStatus.first == AppStatus.Running || busy) return null
+        val catalog = readCatalog()
+        val node = catalog.allNodes.firstOrNull { it.id == catalog.selectedNodeId }
+            ?: return null
+        val plan = XrayConfigCompiler.compile(
+            node, LocalSocksAuth("nlic", "a".repeat(48))
+        ) as? XrayConfigCompiler.Result.Compiled ?: return null
+        val fp = RealityAssistPolicy.baselineFingerprint(plan.json) ?: return null
+        return RealityWorkbench.profiles(fp)
+    }
+
+    private fun applyWorkbenchProfile(profile: RealityWorkbench.Profile) {
+        if (appStatus.first == AppStatus.Running || busy ||
+            prefs.getBoolean("nlic_core_bay", false) ||
+            prefs.getBoolean("nlic_core_auto", false)) return
+        prefs.edit()
+            .putString("nlic_reality_tcp_utls", RealityAssistPolicy.SMART)
+            .putString("nlic_reality_fp_manual", profile.fingerprint
+                ?: RealityAssistPolicy.PROFILE)
+            .putString("nlic_reality_tcp_trick_manual", profile.trick)
+            .commit()
+        RealityAssistTrace.clear(applicationContext)
+        matrixEntries = null
+        comparisonResult = "Выбрано: ${profile.label} · будет проверено при подключении."
+        comparisonDetails = null
+        render()
+    }
+
+    private fun chooseWorkbenchProfile(verifiedOnly: Boolean = false) {
+        val profiles = currentWorkbenchProfiles() ?: return
+        val choices = if (verifiedOnly) {
+            val safe = matrixEntries?.filter { it.good } ?: emptyList()
+            if (safe.isEmpty()) {
+                showComparisonDialog("Нет устойчивых результатов 2/2. Проверь все варианты.")
+                return
+            }
+            safe.map { it.profile }
+        } else profiles
+        val entries = matrixEntries
+        val captions = choices.map { p ->
+            val found = entries?.firstOrNull { it.profile.id == p.id }
+            val status = found?.let {
+                "${it.status} · ${it.passed}/${it.tested} · " +
+                    (it.medianMs?.let { ms -> "${ms} мс" } ?: "—")
+            } ?: "Не проверено"
+            "${p.label}\n$status"
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Выбрать способ REALITY")
+            .setItems(captions.toTypedArray()) { _, index ->
+                val profile = choices[index]
+                AlertDialog.Builder(this)
+                    .setTitle(profile.label)
+                    .setMessage("Применить этот вариант только к выбранному серверу? " +
+                        "REALITY и HTTPS будут повторно проверены при подключении. " +
+                        "Если вариант не работает, будет использован безопасный резерв.")
+                    .setPositiveButton("Применить") { _, _ ->
+                        applyWorkbenchProfile(profile)
+                    }
+                    .setNegativeButton(android.R.string.cancel, null).show()
+            }
+            .setNegativeButton(android.R.string.cancel, null).show()
+    }
+
+    private fun resetWorkbenchProfile() {
+        if (appStatus.first == AppStatus.Running || busy) return
+        prefs.edit()
+            .remove("nlic_reality_fp_manual")
+            .putString("nlic_reality_tcp_trick_manual", "auto")
+            .commit()
+        val catalog = readCatalog()
+        catalog.allNodes.firstOrNull { it.id == catalog.selectedNodeId }?.let {
+            RealityAssistMemory.invalidate(applicationContext, it.id,
+                RealityAssistMemory.networkClass(applicationContext),
+                prefs.getBoolean("nlic_core_bay", false))
+        }
+        RealityAssistTrace.clear(applicationContext)
+        matrixEntries = null
+        comparisonNodeId = null
+        comparisonDetails = null
+        comparisonResult = "Выбор сброшен · сначала подключение из подписки."
+        render()
     }
 
     private fun showComparisonDialog(details: String) {
@@ -1146,7 +1256,25 @@ class SubscriptionLabActivity : BaseActivity() {
         comparisonConnection = null
         busy = false
         render()
-        if (showDialog) showComparisonDialog(outcome)
+        if (showDialog) {
+            val verified = matrixEntries?.filter { it.good }
+            if (!verified.isNullOrEmpty()) {
+                val recommended = verified.minByOrNull {
+                    it.medianMs ?: Long.MAX_VALUE
+                }
+                AlertDialog.Builder(this)
+                    .setTitle("Проверка всех способов")
+                    .setMessage(outcome)
+                    .setPositiveButton("Применить лучший") { _, _ ->
+                        recommended?.profile?.let { applyWorkbenchProfile(it) }
+                    }
+                    .setNeutralButton("Выбрать вручную") { _, _ ->
+                        chooseWorkbenchProfile(verifiedOnly = true)
+                    }
+                    .setNegativeButton("Закрыть", null)
+                    .show()
+            } else showComparisonDialog(outcome)
+        }
     }
 
     private fun runOperation(block: suspend () -> Unit) {
