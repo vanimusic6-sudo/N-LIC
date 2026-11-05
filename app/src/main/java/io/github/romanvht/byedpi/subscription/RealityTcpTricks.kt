@@ -135,6 +135,14 @@ internal object RealityTcpTricks {
     }
 
     /**
+     * Only a confirmed encrypted egress failure is a reason to reconfigure
+     * Xray and retry. Native startup, configuration, local SOCKS and user
+     * cancellations must not create a hot restart loop.
+     */
+    fun retryEgressOnly(adaptive: Boolean, hasMore: Boolean, outboundProbeFailed: Boolean) =
+        adaptive && hasMore && outboundProbeFailed
+
+    /**
      * Materially alter outgoing REALITY TCP packetization/handshake only
      * with fixed well-bounded Xray options. Reject collisions with imported
      * stream/finalmask/sockopt settings rather than overwrite user options.
@@ -148,8 +156,9 @@ internal object RealityTcpTricks {
             stream.get("security")?.asString != "reality") return false
 
         if (trick in firstFlight) {
-            // finalmask is applied after REALITY encryption. All splits
-            // are explicit TLS-record slices, not raw random-byte injection.
+            // FinalMask applies after REALITY transport processing. TLS
+            // record segmentation and TCP-stream write slicing preserve
+            // byte order; neither injects invalid or forged packets.
             if (stream.has("finalmask")) return false
             val settings = JsonObject().apply {
                 // TLS-record fragmentation and raw first-write slicing
