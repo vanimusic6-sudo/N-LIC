@@ -90,9 +90,9 @@ class RealityTcpTricksTest {
                 XrayConfigCompiler.Result.Unsupported)
     }
 
-    @Test fun chooseStableDefaultUnlessReallyBetterOrDefaultFails() {
+    @Test fun fastestVerifiedTrickWinsWithoutHiddenThreshold() {
         fun m(t: String, n: Long?) = RealityTcpTricks.Measurement(t, n)
-        assertEquals(RealityTcpTricks.STOCK, RealityTcpTricks.chooseBest(listOf(
+        assertEquals(RealityTcpTricks.SPLIT_SOFT, RealityTcpTricks.chooseBest(listOf(
             m("stock", 800), m("split-soft", 760), m("mss1200", 775)
         )))
         assertEquals(RealityTcpTricks.SPLIT_SOFT, RealityTcpTricks.chooseBest(listOf(
@@ -111,8 +111,9 @@ class RealityTcpTricksTest {
         assertEquals(RealityTcpTricks.Trial("firefox", "split-soft"), a.first())
         assertTrue(a.contains(RealityTcpTricks.Trial("firefox", "stock")))
         assertTrue(a.contains(RealityTcpTricks.Trial(null, "stock")))
-        assertTrue(a.size <= 9)
+        assertTrue(a.size <= 5)
         assertEquals(a.distinctBy { (it.fingerprint ?: "chrome") to it.trick }, a)
+        assertFalse(a.contains(RealityTcpTricks.Trial(null, "split-soft")))
         assertEquals(listOf(RealityTcpTricks.Trial("chrome", "stock")),
             RealityTcpTricks.attempts("chrome", "split-early",
                 listOf("chrome"), "chrome", true))
