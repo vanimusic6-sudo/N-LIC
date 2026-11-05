@@ -6,9 +6,9 @@ import org.junit.Test
 class RealityWorkbenchTest {
     @Test fun allBrowserAndTransportVariantsAreVisibleOnce() {
         val rows = RealityWorkbench.profiles("chrome")
-        assertEquals(14, rows.size) // profile + Firefox/Safari + eleven transport methods
+        assertEquals(16, rows.size) // profile + Firefox/Safari + thirteen transport methods
         assertEquals(rows.map { it.id }.distinct(), rows.map { it.id })
-        assertEquals(28, RealityWorkbench.schedule(rows).size)
+        assertEquals(32, RealityWorkbench.schedule(rows).size)
         assertEquals(rows, RealityWorkbench.schedule(rows).take(rows.size))
         assertEquals(rows.asReversed(), RealityWorkbench.schedule(rows).takeLast(rows.size))
     }
