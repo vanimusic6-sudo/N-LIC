@@ -27,6 +27,7 @@ internal object XrayConfigCompiler {
         auth: LocalSocksAuth,
         bayPort: Int? = null,
         realityClientFingerprint: String? = null,
+        realityTcpTrick: String = RealityTcpTricks.STOCK,
     ): Result {
         if (auth.username != "nlic" || auth.password.length !in 24..128 ||
             !auth.password.all { it in "0123456789abcdef" }) {
@@ -68,6 +69,13 @@ internal object XrayConfigCompiler {
                         ?: return Result.Unsupported("Missing REALITY authentication")
                     reality.addProperty("fingerprint", realityClientFingerprint)
                 }
+            }
+            // Packetization and TCP socket techniques are different from
+            // uTLS ClientHello impersonation. No remote cooperation required,
+            // but fail closed if a profile is incompatible with this node or
+            // would modify a user-provided setting.
+            if (!RealityTcpTricks.apply(outbound, realityTcpTrick, bayPort != null)) {
+                return Result.Unsupported("Unsupported REALITY TCP transport strategy")
             }
             outbound.addProperty("tag", PROXY_TAG)
             if (bayPort != null) {
