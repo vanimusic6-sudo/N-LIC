@@ -437,4 +437,5 @@
     <string name="nlic_reality_compare_quick">Быстро · 6 HTTPS-подключений</string>
     <string name="nlic_reality_compare_extended">Подробно · 18 подключений (проверка стабильности)</string>
     <string name="nlic_reality_compare_cancel">Остановить сравнение</string>
+    <string name="nlic_reality_compare_stream">Поток · 3 × 512 КиБ (стабильность передачи)</string>
 </resources>
