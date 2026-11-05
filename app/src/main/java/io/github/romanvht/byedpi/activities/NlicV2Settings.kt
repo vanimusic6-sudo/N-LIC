@@ -146,6 +146,39 @@ internal object NlicV2Settings {
             }
         }
 
+        if (BuildConfig.NLIC_XRAY_INCLUDED) {
+            section("VPN + LIC · VLESS TCP + REALITY")
+            val prefs = activity.getPreferences()
+            val current = prefs.getString("nlic_reality_tcp_utls", "profile") ?: "profile"
+            val currentName = when (current) {
+                "firefox" -> "Firefox"
+                "chrome" -> "Chrome"
+                else -> "Из конфигурации"
+            }
+            action("Отпечаток TLS · $currentName",
+                "Эксперимент uTLS ClientHello. Только VLESS + REALITY + TCP (RAW); не полный Firefox.") {
+                requireDisconnected {
+                    val choices = arrayOf(
+                        "Как в подписке · без изменений",
+                        "Firefox · экспериментальный ClientHello",
+                        "Chrome · экспериментальный ClientHello"
+                    )
+                    val values = arrayOf("profile", "firefox", "chrome")
+                    AlertDialog.Builder(activity)
+                        .setTitle("LIC-Assist · REALITY TCP")
+                        .setMessage("Использует тот же сервер, ключ, SNI и VLESS. Изменяется только TLS ClientHello через Xray uTLS. Это не гарантирует обход блокировки.")
+                        .setSingleChoiceItems(choices,
+                            values.indexOf(current).coerceAtLeast(0)) { popup, which ->
+                            prefs.edit().putString("nlic_reality_tcp_utls",
+                                values[which]).commit()
+                            popup.dismiss()
+                        }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+                }
+            }
+        }
+
         section("Сеть")
         action("DNS, IPv6 и приложения", "Маршрутизация, исключения и расширенные параметры") {
             requireDisconnected {
@@ -175,10 +208,15 @@ internal object NlicV2Settings {
             }
             val failure = ServiceManager.lastCoreFailureCode
                 ?.takeIf { it.matches(Regex("[A-Z0-9_]{1,64}")) } ?: "—"
+            val uTlsAssist = when (prefs.getString("nlic_reality_tcp_utls", "profile")) {
+                "firefox" -> "Firefox (если совместимо)"
+                "chrome" -> "Chrome (если совместимо)"
+                else -> "по конфигурации"
+            }
             val report = "N-LIC ${BuildConfig.VERSION_NAME}\nAndroid API ${Build.VERSION.SDK_INT}" +
                 "\nРежим: ${if (mode == "local") "Обход DPI" else "VPN-сервер"}" +
                 "\nЯдро: $engine\nVPN запущен: ${if (running) "да" else "нет"}" +
-                "\nПоследний код ошибки: $failure"
+                "\nREALITY TCP uTLS: $uTlsAssist\nПоследний код ошибки: $failure"
             AlertDialog.Builder(activity).setTitle("Диагностика")
                 .setMessage(report)
                 .setPositiveButton(android.R.string.ok, null).show()

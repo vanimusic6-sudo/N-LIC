@@ -259,10 +259,20 @@ internal class NativeSession(
                         }.joinToString("") { "%02x".format(it.toInt() and 255) }
                         val auth = LocalSocksAuth("nlic", secret)
                         localAuth = auth
+                        // Opt-in fingerprint experiment for the current node only.
+                        val realityFingerprint = when (
+                            service.getPreferences().getString(
+                                "nlic_reality_tcp_utls", "profile"
+                            )
+                        ) {
+                            "chrome" -> "chrome"
+                            "firefox" -> "firefox"
+                            else -> null
+                        }
                         val validate: (io.github.romanvht.byedpi.subscription.SubscriptionNode) ->
                             Boolean = { candidate ->
                                 XrayConfigCompiler.compile(
-                                    candidate, auth, if (bayEnabled) bayPort else null
+                                    candidate, auth, if (bayEnabled) bayPort else null, realityFingerprint
                                 ) is XrayConfigCompiler.Result.Compiled
                             }
                         corePhase = "CONFIG_COMPILE"; CoreFailureTrace.mark(service, corePhase)
@@ -319,7 +329,7 @@ internal class NativeSession(
                             for (candidate in eligible) {
                                 corePhase = "AUTO_PROBE"; CoreFailureTrace.mark(service, corePhase)
                                 val compiled = XrayConfigCompiler.compile(
-                                    candidate, auth, if (bayEnabled) bayPort else null
+                                    candidate, auth, if (bayEnabled) bayPort else null, realityFingerprint
                                 ) as? XrayConfigCompiler.Result.Compiled ?: continue
                                 val trial = XrayRuntime(service)
                                 xrayEngine = trial
@@ -363,7 +373,7 @@ internal class NativeSession(
                         } else eligible.first()
 
                         val plan = XrayConfigCompiler.compile(
-                            selected, auth, if (bayEnabled) bayPort else null
+                            selected, auth, if (bayEnabled) bayPort else null, realityFingerprint
                         ) as? XrayConfigCompiler.Result.Compiled
                             ?: throw CoreStartException("PROTOCOL_UNSUPPORTED")
                         corePhase = "XRAY_START"; CoreFailureTrace.mark(service, corePhase)

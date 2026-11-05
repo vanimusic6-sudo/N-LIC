@@ -32,6 +32,61 @@ class XrayConfigCompilerTest {
         assertFalse(out.has("server_port"))
     }
 
+    @Test fun firefoxFingerprintOverrideKeepsRealityServerAndCredentials() {
+        val raw = "vless://$uuid@edge.example:443?encryption=none&security=reality" +
+            "&sni=www.example.com&fp=chrome&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+            "&sid=11&flow=xtls-rprx-vision&type=tcp#Reality"
+        val baseline = root(raw).getAsJsonArray("outbounds")[0].asJsonObject
+        val result = XrayConfigCompiler.compile(
+            node(raw), auth, realityClientFingerprint = "firefox"
+        ) as XrayConfigCompiler.Result.Compiled
+        val changed = JsonParser.parseString(result.json).asJsonObject
+            .getAsJsonArray("outbounds")[0].asJsonObject
+        val originalStream = baseline.getAsJsonObject("streamSettings")
+        val newStream = changed.getAsJsonObject("streamSettings")
+        assertEquals("chrome", originalStream.getAsJsonObject("realitySettings")
+            .get("fingerprint").asString)
+        assertEquals("firefox", newStream.getAsJsonObject("realitySettings")
+            .get("fingerprint").asString)
+        assertEquals(originalStream.get("network"), newStream.get("network"))
+        assertEquals(originalStream.get("security"), newStream.get("security"))
+        assertEquals(originalStream.getAsJsonObject("realitySettings")
+            .get("password"), newStream.getAsJsonObject("realitySettings").get("password"))
+        assertEquals(originalStream.getAsJsonObject("realitySettings")
+            .get("shortId"), newStream.getAsJsonObject("realitySettings").get("shortId"))
+        assertEquals(originalStream.getAsJsonObject("realitySettings")
+            .get("serverName"), newStream.getAsJsonObject("realitySettings").get("serverName"))
+        assertEquals(baseline.get("settings"), changed.get("settings"))
+    }
+
+    @Test fun utlsAssistDoesNotChangeOrdinaryTlsVless() {
+        val tlsNode = node("vless://$uuid@edge.example:443?encryption=none" +
+            "&security=tls&sni=www.example.com&type=tcp")
+        val normal = XrayConfigCompiler.compile(tlsNode, auth)
+            as XrayConfigCompiler.Result.Compiled
+        val assisted = XrayConfigCompiler.compile(tlsNode, auth,
+            realityClientFingerprint = "firefox") as XrayConfigCompiler.Result.Compiled
+        assertEquals(JsonParser.parseString(normal.json), JsonParser.parseString(assisted.json))
+    }
+
+    @Test fun realityRejectsInvalidFingerprintAndUnsupportedWebsocket() {
+        val realityNode = node("vless://$uuid@edge.example:443?encryption=none" +
+            "&security=reality&sni=www.example.com&pbk=" +
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&sid=11&type=tcp")
+        assertTrue(XrayConfigCompiler.compile(realityNode, auth,
+            realityClientFingerprint = "randomized") is XrayConfigCompiler.Result.Unsupported)
+        val ws = node("vless://$uuid@edge.example:443?encryption=none" +
+            "&security=reality&sni=www.example.com&pbk=" +
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&sid=11&type=ws")
+        assertTrue(XrayConfigCompiler.compile(ws, auth)
+            is XrayConfigCompiler.Result.Unsupported)
+        val badSid = node("vless://$uuid@edge.example:443?encryption=none" +
+            "&security=reality&sni=www.example.com&pbk=" +
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&sid=abc&type=tcp")
+        assertTrue(XrayConfigCompiler.compile(badSid, auth)
+            is XrayConfigCompiler.Result.Unsupported)
+    }
+
     @Test fun wireguardUsesXrayUserSpaceOutbound() {
         val key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
         val nodes = VPNFileImport.parse("wg.conf", """
