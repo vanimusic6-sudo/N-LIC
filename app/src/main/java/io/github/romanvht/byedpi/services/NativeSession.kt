@@ -621,18 +621,22 @@ internal class NativeSession(
                         check(tunnelThread?.isAlive == true) {
                             "Xray HEV tunnel exited during startup"
                         }
-                        // Confirmed encrypted HTTPS + live Android TUN/HEV.
-                        // Only now is a new preferred fingerprint persisted.
-                        // Existing good cache remains fresh until its 12h TTL,
-                        // so reconnects cannot cause constant rescanning.
-                        if (adaptive && forcedTcpTrick == null) {
-                            val chosen = verifiedFingerprint ?: RealityAssistPolicy.PROFILE
-                            if (cached == null || cached.fingerprint != chosen ||
+                        // The full manual lab is the ONLY source of a
+                        // ranked "best" fingerprint + transport. A short
+                        // startup HTTPS check alone must not silently replace
+                        // a user's deliberate, fully stream-tested choice.
+                        //
+                        // When the saved variant fails and another candidate
+                        // restores a live VPN, invalidate the old preference
+                        // rather than pretending a new untested winner was
+                        // selected. The main screen will offer a fresh audit.
+                        if (adaptive && cached != null) {
+                            val actuallyUsed = verifiedFingerprint
+                                ?: RealityAssistPolicy.PROFILE
+                            if (cached.fingerprint != actuallyUsed ||
                                 cached.tcpTrick != verifiedTcpTrick) {
-                                RealityAssistMemory.save(
-                                    service, selected.id, networkClass, bayEnabled,
-                                    chosen, verifiedHttpsMs ?: 1000L,
-                                    verifiedTcpTrick
+                                RealityAssistMemory.invalidate(
+                                    service, selected.id, networkClass, bayEnabled
                                 )
                             }
                         }
