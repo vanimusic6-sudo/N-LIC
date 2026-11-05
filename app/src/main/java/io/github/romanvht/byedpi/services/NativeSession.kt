@@ -386,10 +386,13 @@ internal class NativeSession(
                         val baselineFingerprint = RealityAssistPolicy
                             .baselineFingerprint(baselinePlan.json)
                         val eligibleReality = baselineFingerprint != null
-                        val adaptive = eligibleReality && !autoEnabled &&
+                        // Physical TCP is owned by ByeDPI when LIC-Bay is ON;
+                        // the Duet/FinalMask layer cannot reach that socket.
+                        val adaptive = eligibleReality && !autoEnabled && !bayEnabled &&
                             assistMode == RealityAssistPolicy.SMART
                         val traceEligible = eligibleReality &&
-                            (!autoEnabled || assistMode != RealityAssistPolicy.SMART)
+                            (!autoEnabled || assistMode != RealityAssistPolicy.SMART) &&
+                            !(bayEnabled && assistMode == RealityAssistPolicy.SMART)
 
                         // Persistent data contain only a salted node identifier,
                         // a coarse network class and a safe uTLS label.
@@ -432,7 +435,9 @@ internal class NativeSession(
                         }
                         val chosenTcpTrick = forcedTcpTrick
                             ?: cached?.tcpTrick ?: RealityTcpTricks.DEFAULT_HELPER
-                        val fingerprintAttempts = RealityAssistPolicy.candidates(
+                        val fingerprintAttempts = if (bayEnabled &&
+                            assistMode == RealityAssistPolicy.SMART) listOf<String?>(null)
+                        else RealityAssistPolicy.candidates(
                             assistMode, baselinePlan, autoEnabled, preferred
                         )
                         val attempts = if (adaptive && baselineFingerprint != null) {
@@ -449,6 +454,8 @@ internal class NativeSession(
                                 RealityAssistTrace.Event.SKIPPED_DISABLED
                             autoEnabled && assistMode == RealityAssistPolicy.SMART ->
                                 RealityAssistTrace.Event.SKIPPED_AUTO
+                            bayEnabled && assistMode == RealityAssistPolicy.SMART ->
+                                RealityAssistTrace.Event.SKIPPED_BAY
                             !eligibleReality ->
                                 RealityAssistTrace.Event.SKIPPED_UNSUPPORTED
                             adaptive -> RealityAssistTrace.Event.STARTING_HELPER
