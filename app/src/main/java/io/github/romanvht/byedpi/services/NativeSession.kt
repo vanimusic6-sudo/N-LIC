@@ -473,14 +473,21 @@ internal class NativeSession(
                         // TUN/HEV startup complete. SOCKS readiness alone is
                         // not successful end-to-end VPN connectivity.
                         var verifiedAssist: RealityAssistTrace.Event? = null
+                        var verifiedFingerprint: String? = null
+                        var verifiedHttpsMs: Long? = null
                         var xrayReady = false
                         for ((attemptIndex, fp) in fingerprintAttempts.withIndex()) {
                             if (traceEligible && assistMode == RealityAssistPolicy.SMART &&
                                 attemptIndex > 0) {
-                                RealityAssistTrace.mark(service,
-                                    if (fp == RealityAssistPolicy.FIREFOX)
+                                RealityAssistTrace.mark(service, when (fp) {
+                                    RealityAssistPolicy.FIREFOX ->
                                         RealityAssistTrace.Event.RETRYING_FIREFOX
-                                    else RealityAssistTrace.Event.RETRYING_CHROME)
+                                    RealityAssistPolicy.CHROME ->
+                                        RealityAssistTrace.Event.RETRYING_CHROME
+                                    RealityAssistPolicy.SAFARI ->
+                                        RealityAssistTrace.Event.RETRYING_SAFARI
+                                    else -> RealityAssistTrace.Event.STARTING_ORIGINAL
+                                })
                             }
                             val plan = XrayConfigCompiler.compile(
                                 selected, auth, if (bayEnabled) bayPort else null,
@@ -497,6 +504,7 @@ internal class NativeSession(
                             xrayEngine = xray
                             var remoteCheckStarted = false
                             var passed = false
+                            var verificationStarted = 0L
                             try {
                                 corePhase = "XRAY_START"; CoreFailureTrace.mark(service, corePhase)
                                 withContext(Dispatchers.IO) { xray.start(plan.json) }
@@ -506,19 +514,26 @@ internal class NativeSession(
                                 }
                                 if (traceEligible) {
                                     RealityAssistTrace.mark(service, when {
-                                        assistMode == RealityAssistPolicy.SMART &&
-                                            attemptIndex == 0 ->
-                                                RealityAssistTrace.Event.CHECKING_ORIGINAL
-                                        assistMode == RealityAssistPolicy.SMART &&
-                                            fp == RealityAssistPolicy.FIREFOX ->
-                                                RealityAssistTrace.Event.CHECKING_FIREFOX
                                         assistMode == RealityAssistPolicy.SMART ->
-                                            RealityAssistTrace.Event.CHECKING_CHROME
+                                            when (fp) {
+                                                RealityAssistPolicy.CHROME ->
+                                                    RealityAssistTrace.Event.CHECKING_CHROME
+                                                RealityAssistPolicy.FIREFOX ->
+                                                    RealityAssistTrace.Event.CHECKING_FIREFOX
+                                                RealityAssistPolicy.SAFARI ->
+                                                    RealityAssistTrace.Event.CHECKING_SAFARI
+                                                else ->
+                                                    RealityAssistTrace.Event.CHECKING_ORIGINAL
+                                            }
                                         assistMode == RealityAssistPolicy.FIREFOX ->
                                             RealityAssistTrace.Event.CHECKING_MANUAL_FIREFOX
+                                        assistMode == RealityAssistPolicy.SAFARI ->
+                                            RealityAssistTrace.Event.CHECKING_MANUAL_SAFARI
                                         else -> RealityAssistTrace.Event.CHECKING_MANUAL_CHROME
                                     })
                                 }
+                                verificationStarted =
+                                    android.os.SystemClock.elapsedRealtime()
                                 corePhase = "XRAY_HTTPS"; CoreFailureTrace.mark(service, corePhase)
                                 val nativeHttpsOk = withContext(Dispatchers.IO) {
                                     xray.verifyHttpsViaCore()
@@ -526,24 +541,33 @@ internal class NativeSession(
                                 if (!nativeHttpsOk) {
                                     remoteCheckStarted = true
                                     corePhase = "REMOTE_TEST"; CoreFailureTrace.mark(service, corePhase)
-                                    withTimeout(28_000) {
+                                    withTimeout(if (adaptive) 10_000L else 28_000L) {
                                         awaitRemoteReadiness(config.host, config.port, auth)
                                     }
                                 }
                                 passed = true
                                 xrayReady = true
+                                verifiedFingerprint = fp
+                                verifiedHttpsMs = (
+                                    android.os.SystemClock.elapsedRealtime() -
+                                        verificationStarted
+                                ).coerceIn(1L, 30_000L)
                                 if (traceEligible) {
                                     verifiedAssist = when {
-                                        assistMode == RealityAssistPolicy.SMART &&
-                                            attemptIndex == 0 ->
-                                                RealityAssistTrace.Event.PASSED_ORIGINAL
-                                        assistMode == RealityAssistPolicy.SMART &&
-                                            fp == RealityAssistPolicy.FIREFOX ->
-                                                RealityAssistTrace.Event.PASSED_FALLBACK_FIREFOX
                                         assistMode == RealityAssistPolicy.SMART ->
-                                            RealityAssistTrace.Event.PASSED_FALLBACK_CHROME
+                                            when (fp) {
+                                                RealityAssistPolicy.CHROME ->
+                                                    RealityAssistTrace.Event.PASSED_ADAPTIVE_CHROME
+                                                RealityAssistPolicy.FIREFOX ->
+                                                    RealityAssistTrace.Event.PASSED_ADAPTIVE_FIREFOX
+                                                RealityAssistPolicy.SAFARI ->
+                                                    RealityAssistTrace.Event.PASSED_ADAPTIVE_SAFARI
+                                                else -> RealityAssistTrace.Event.PASSED_ORIGINAL
+                                            }
                                         assistMode == RealityAssistPolicy.FIREFOX ->
                                             RealityAssistTrace.Event.PASSED_MANUAL_FIREFOX
+                                        assistMode == RealityAssistPolicy.SAFARI ->
+                                            RealityAssistTrace.Event.PASSED_MANUAL_SAFARI
                                         else -> RealityAssistTrace.Event.PASSED_MANUAL_CHROME
                                     }
                                 }
@@ -610,6 +634,22 @@ internal class NativeSession(
                         delay(150)
                         check(tunnelThread?.isAlive == true) {
                             "Xray HEV tunnel exited during startup"
+                        }
+                        // Confirmed encrypted HTTPS + live Android TUN/HEV.
+                        // Only now is a new preferred fingerprint persisted.
+                        // Existing good cache remains fresh until its 12h TTL,
+                        // so reconnects cannot cause constant rescanning.
+                        if (adaptive) {
+                            val chosen = verifiedFingerprint ?: RealityAssistPolicy.PROFILE
+                            if (cached == null || cached.fingerprint != chosen) {
+                                val calibrationMs = measurements.firstOrNull {
+                                    it.fingerprint == verifiedFingerprint
+                                }?.httpsMs
+                                RealityAssistMemory.save(
+                                    service, selected.id, networkClass, bayEnabled,
+                                    chosen, calibrationMs ?: verifiedHttpsMs ?: 1000L
+                                )
+                            }
                         }
                         verifiedAssist?.let { RealityAssistTrace.mark(service, it) }
                     } else if (config.args.firstOrNull() == "--nlic-libbox") {
