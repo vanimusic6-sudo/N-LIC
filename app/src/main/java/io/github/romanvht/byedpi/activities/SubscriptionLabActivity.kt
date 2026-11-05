@@ -108,6 +108,23 @@ class SubscriptionLabActivity : BaseActivity() {
                             fp?.let { RealityWorkbench.decode(raw,
                                 RealityWorkbench.profiles(it)) }
                         }
+                        // Smart actually remembers the 2/2 verified
+                        // fastest profile after an explicit full test.
+                        // Manual override always takes priority until reset.
+                        val nodeId = comparisonNodeId
+                        val best = matrixEntries?.filter { it.good }
+                            ?.minByOrNull { it.medianMs ?: Long.MAX_VALUE }
+                        if (best != null && nodeId != null &&
+                            prefs.getString("nlic_reality_tcp_utls", "profile") ==
+                                RealityAssistPolicy.SMART &&
+                            prefs.getString("nlic_reality_manual_node", "") != nodeId) {
+                            RealityAssistMemory.save(
+                                applicationContext, nodeId,
+                                RealityAssistMemory.networkClass(applicationContext),
+                                false, best.profile.fingerprint ?: RealityAssistPolicy.PROFILE,
+                                best.medianMs ?: 1000L, best.profile.trick
+                            )
+                        }
                         endRealityComparison(content, compact, showDialog = true)
                     }
                     RealityCompareService.ERROR -> endRealityComparison(content)
