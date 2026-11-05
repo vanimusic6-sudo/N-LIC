@@ -427,4 +427,8 @@
     <string name="nlic_reality_compare_failed">Karşılaştırma çalıştırılamadı. Yeniden deneyin.</string>
     <string name="nlic_reality_compare_in_progress">REALITY karşılaştırılıyor…</string>
     <string name="nlic_reality_compare_title">Karşılaştırma sonuçları</string>
+    <string name="nlic_reality_compare_choose">REALITY karşılaştırma modu</string>
+    <string name="nlic_reality_compare_quick">Hızlı · 6 HTTPS bağlantısı</string>
+    <string name="nlic_reality_compare_extended">Ayrıntılı · 18 bağlantı (kararlılık denetimi)</string>
+    <string name="nlic_reality_compare_cancel">Karşılaştırmayı durdur</string>
 </resources>

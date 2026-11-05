@@ -21,6 +21,8 @@ import android.text.InputType
 import android.view.View
 import android.view.WindowManager
 import android.widget.EditText
+import android.widget.ScrollView
+import android.util.TypedValue
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -68,6 +70,7 @@ class SubscriptionLabActivity : BaseActivity() {
     private var latestMessage: String? = null
     private var comparisonRunning = false
     private var comparisonResult: String? = null
+    private var comparisonDetails: String? = null
     private var comparisonConnection: ServiceConnection? = null
     private val comparisonReceiver by lazy {
         Messenger(Handler(Looper.getMainLooper()) { message ->
@@ -79,7 +82,9 @@ class SubscriptionLabActivity : BaseActivity() {
                         showComparisonResult()
                     }
                     RealityCompareService.FINISHED -> {
-                        endRealityComparison(content, showDialog = true)
+                        val compact = message.data
+                            ?.getString(RealityCompareService.COMPACT)
+                        endRealityComparison(content, compact, showDialog = true)
                     }
                     RealityCompareService.ERROR -> endRealityComparison(content)
                 }
@@ -195,7 +200,22 @@ class SubscriptionLabActivity : BaseActivity() {
             chooseMode(ConnectionMode.SUBSCRIPTION)
         }
         findViewById<MaterialButton>(R.id.nlic_reality_compare_button).setOnClickListener {
-            startRealityComparison()
+            if (comparisonRunning) {
+                endRealityComparison(getString(R.string.nlic_reality_compare_cancelled))
+            } else if (!busy && connectionMode() == ConnectionMode.SUBSCRIPTION) {
+                AlertDialog.Builder(this)
+                    .setTitle(R.string.nlic_reality_compare_choose)
+                    .setItems(arrayOf(
+                        getString(R.string.nlic_reality_compare_quick),
+                        getString(R.string.nlic_reality_compare_extended)
+                    )) { _, choice ->
+                        startRealityComparison(
+                            if (choice == 1) 18 else 6
+                        )
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            }
         }
         findViewById<MaterialButton>(R.id.nlic_connect).setOnClickListener {
             if (appStatus.first == AppStatus.Running && appStatus.second == Mode.VPN)
@@ -688,6 +708,7 @@ class SubscriptionLabActivity : BaseActivity() {
                                 // A previous A/B report must never be shown
                                 // as evidence for a newly chosen server.
                                 comparisonResult = null
+                                comparisonDetails = null
                                 render()
                             }.onFailure { toast(R.string.nlic_subscriptions_error) }
                         }
@@ -759,8 +780,11 @@ class SubscriptionLabActivity : BaseActivity() {
         // Only the manually selected REALITY TCP/RAW server is measured;
         // no active VPN, automatic node selection or ByeDPI relay is allowed.
         findViewById<MaterialButton>(R.id.nlic_reality_compare_button).apply {
-            isEnabled = !busy && appStatus.first != AppStatus.Running &&
-                !auto && !bay && realityCompatible
+            isEnabled = comparisonRunning ||
+                (!busy && appStatus.first != AppStatus.Running &&
+                    !auto && !bay && realityCompatible)
+            setText(if (comparisonRunning) R.string.nlic_reality_compare_cancel
+                else R.string.nlic_reality_compare_button)
         }
         showComparisonResult()
 
@@ -904,10 +928,14 @@ class SubscriptionLabActivity : BaseActivity() {
         val text = comparisonResult
         resultView.visibility = if (connectionMode() == ConnectionMode.SUBSCRIPTION &&
             !text.isNullOrBlank()) View.VISIBLE else View.GONE
-        resultView.text = text.orEmpty()
+        resultView.text = if (comparisonDetails != null)
+            "${text.orEmpty()}  ·  Подробнее" else text.orEmpty()
+        resultView.setOnClickListener(if (comparisonDetails != null) {
+            View.OnClickListener { comparisonDetails?.let { showComparisonDialog(it) } }
+        } else null)
     }
 
-    private fun startRealityComparison() {
+    private fun startRealityComparison(trials: Int) {
         if (busy || connectionMode() != ConnectionMode.SUBSCRIPTION) return
         // The button is disabled while the VPN is connected, but enforce the
         // preconditions again for stale clicks and concurrent status changes.
@@ -938,6 +966,7 @@ class SubscriptionLabActivity : BaseActivity() {
         comparisonRunning = true
         busy = true
         comparisonResult = getString(R.string.nlic_reality_compare_in_progress)
+        comparisonDetails = null
         render()
         val connection = object : ServiceConnection {
             override fun onServiceConnected(name: ComponentName, binder: IBinder) {
@@ -946,6 +975,9 @@ class SubscriptionLabActivity : BaseActivity() {
                     Messenger(binder).send(
                         Message.obtain(null, RealityCompareService.START).apply {
                             replyTo = comparisonReceiver
+                            data = Bundle().apply {
+                                putInt(RealityCompareService.TRIALS, trials)
+                            }
                         }
                     )
                 } catch (_: RemoteException) {
@@ -971,8 +1003,46 @@ class SubscriptionLabActivity : BaseActivity() {
         }
     }
 
-    private fun endRealityComparison(outcome: String, showDialog: Boolean = false) {
-        comparisonResult = outcome
+    private fun showComparisonDialog(details: String) {
+        if (isFinishing || isDestroyed) return
+        // Unlike a giant default message dialog, a constrained scroll view
+        // keeps results readable at large Android font scales.
+        val density = resources.displayMetrics.density
+        val vertical = (15f * density).toInt()
+        val horizontal = (24f * density).toInt()
+        val body = TextView(this).apply {
+            text = details
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(androidx.core.content.ContextCompat.getColor(
+                this@SubscriptionLabActivity, R.color.nlic_text
+            ))
+            setPadding(horizontal, vertical, horizontal, vertical)
+            setLineSpacing((3f * density), 1.0f)
+        }
+        val viewport = object : ScrollView(this) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                val height = (resources.displayMetrics.heightPixels * 0.60f).toInt()
+                super.onMeasure(widthMeasureSpec,
+                    View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.AT_MOST))
+            }
+        }.apply {
+            addView(body)
+            isFillViewport = false
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.nlic_reality_compare_title)
+            .setView(viewport)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
+
+    private fun endRealityComparison(
+        outcome: String,
+        compact: String? = null,
+        showDialog: Boolean = false,
+    ) {
+        comparisonDetails = if (showDialog) outcome else null
+        comparisonResult = compact ?: outcome
         comparisonRunning = false
         comparisonConnection?.let {
             runCatching { unbindService(it) }
@@ -980,13 +1050,7 @@ class SubscriptionLabActivity : BaseActivity() {
         comparisonConnection = null
         busy = false
         render()
-        if (showDialog && !isFinishing && !isDestroyed) {
-            AlertDialog.Builder(this)
-                .setTitle(R.string.nlic_reality_compare_title)
-                .setMessage(outcome)
-                .setPositiveButton(android.R.string.ok, null)
-                .show()
-        }
+        if (showDialog) showComparisonDialog(outcome)
     }
 
     private fun runOperation(block: suspend () -> Unit) {

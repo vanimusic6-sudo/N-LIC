@@ -163,4 +163,8 @@
     <string name="nlic_reality_compare_failed">Could not run the comparison. Please try again.</string>
     <string name="nlic_reality_compare_in_progress">Comparing REALITY…</string>
     <string name="nlic_reality_compare_title">Comparison results</string>
+    <string name="nlic_reality_compare_choose">REALITY comparison mode</string>
+    <string name="nlic_reality_compare_quick">Quick · 6 HTTPS connections</string>
+    <string name="nlic_reality_compare_extended">Extended · 18 connections (stability check)</string>
+    <string name="nlic_reality_compare_cancel">Stop comparison</string>
 </resources>

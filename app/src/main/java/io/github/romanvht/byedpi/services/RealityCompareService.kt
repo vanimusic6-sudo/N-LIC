@@ -15,6 +15,7 @@ import android.os.SystemClock
 import io.github.romanvht.byedpi.subscription.LocalSocksAuth
 import io.github.romanvht.byedpi.subscription.RealityAssistPolicy
 import io.github.romanvht.byedpi.subscription.RealityComparison
+import io.github.romanvht.byedpi.subscription.RealityTransportProbe
 import io.github.romanvht.byedpi.subscription.SubscriptionNode
 import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.subscription.TunnelHealthProbe
@@ -51,6 +52,8 @@ internal class RealityCompareService : Service() {
         const val FINISHED = 3
         const val ERROR = 4
         const val TEXT = "text"
+        const val COMPACT = "compact"
+        const val TRIALS = "trials"
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -60,7 +63,10 @@ internal class RealityCompareService : Service() {
             if (message.what == START && activeJob?.isActive != true) {
                 val client = message.replyTo
                 if (client != null) {
-                    activeJob = scope.launch { compare(client) }
+                    val trials = message.data?.getInt(
+                        TRIALS, RealityComparison.QUICK_TRIALS
+                    ) ?: RealityComparison.QUICK_TRIALS
+                    activeJob = scope.launch { compare(client, trials) }
                 }
             }
             true
@@ -81,10 +87,15 @@ internal class RealityCompareService : Service() {
         super.onDestroy()
     }
 
-    private fun reply(client: Messenger, what: Int, value: String) {
+    private fun reply(
+        client: Messenger, what: Int, value: String, compact: String? = null
+    ) {
         try {
             client.send(Message.obtain(null, what).apply {
-                data = Bundle().apply { putString(TEXT, value) }
+                data = Bundle().apply {
+                    putString(TEXT, value)
+                    if (compact != null) putString(COMPACT, compact)
+                }
             })
         } catch (_: RemoteException) {
             activeJob?.cancel()
@@ -99,8 +110,13 @@ internal class RealityCompareService : Service() {
         return !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
     }
 
-    private suspend fun compare(client: Messenger) {
+    private suspend fun compare(client: Messenger, trials: Int) {
         try {
+            val schedule = RealityComparison.schedule(trials)
+            if (schedule == null) {
+                reply(client, ERROR, "Недопустимый режим сравнения.")
+                return
+            }
             if (!noOtherVpn()) {
                 reply(client, ERROR,
                     "Отключи работающий VPN. Сравнение не должно проходить внутри другого VPN.")
@@ -139,8 +155,20 @@ internal class RealityCompareService : Service() {
                 return
             }
 
+            // A single raw TCP check is independent of the encrypted
+            // REALITY handshake. Do not turn TCP success into a VPN verdict.
+            val sameServer = RealityTransportProbe.endpoint(baseline.json)
+            val tcpResult = withContext(Dispatchers.IO) {
+                sameServer?.let { RealityTransportProbe.checkTcp(it) }
+            }
+            if (tcpResult != null) {
+                reply(client, PROGRESS, if (tcpResult.connected)
+                    "TCP до VPN-сервера доступен. Начинаем HTTPS-проверки…"
+                else
+                    "TCP до VPN-сервера не подтвердился. HTTPS-проверки всё равно выполняются…")
+            }
             val samples = mutableListOf<RealityComparison.Sample>()
-            for ((index, fingerprint) in RealityComparison.sequence.withIndex()) {
+            for ((index, fingerprint) in schedule.withIndex()) {
                 coroutineContext.ensureActive()
                 if (!noOtherVpn()) {
                     reply(client, ERROR,
@@ -153,7 +181,7 @@ internal class RealityCompareService : Service() {
                     else -> "Исходный профиль"
                 }
                 reply(client, PROGRESS,
-                    "Проверка ${index + 1}/${RealityComparison.sequence.size} · $title\n" +
+                    "Проверка ${index + 1}/${schedule.size} · $title\n" +
                         "Проверяется реальный HTTPS через тот же REALITY-сервер…")
                 val sample = withContext(Dispatchers.IO) {
                     verify(node, auth, fingerprint)
@@ -164,12 +192,13 @@ internal class RealityCompareService : Service() {
                 // availability can also be responsible.
                 val result = if (sample.success)
                     "HTTPS прошёл · ${sample.latencyMs} мс"
-                else "HTTPS не подтвердился"
+                else "HTTPS не подтвердился · этап ${sample.failureStage ?: "UNKNOWN"}"
                 reply(client, PROGRESS,
-                    "Проверка ${index + 1}/${RealityComparison.sequence.size} · $title: $result")
-                if (index < RealityComparison.sequence.lastIndex) delay(350)
+                    "Проверка ${index + 1}/${schedule.size} · $title: $result")
+                if (index < schedule.lastIndex) delay(350)
             }
-            reply(client, FINISHED, RealityComparison.summarize(samples))
+            val summary = RealityComparison.report(samples, trials, tcpResult)
+            reply(client, FINISHED, summary.details, summary.compact)
         } catch (cancelled: CancellationException) {
             // Client left the screen; do not continue network testing.
             throw cancelled
@@ -191,13 +220,16 @@ internal class RealityCompareService : Service() {
         val compiled = XrayConfigCompiler.compile(
             node, auth, realityClientFingerprint = alternate
         ) as? XrayConfigCompiler.Result.Compiled
-            ?: return RealityComparison.Sample(fingerprint, false, null)
+            ?: return RealityComparison.Sample(fingerprint, false, null,
+                failureStage = "CONFIG")
         val runtime = XrayRuntime(applicationContext, recordCoreStage = false)
+        var stage = "XRAY_START"
         try {
             // Stop and close each core before starting the next variation.
             // A successful local SOCKS negotiation is not enough: a real
             // HTTPS request, with trusted certificate verification, is required.
             runtime.start(compiled.json)
+            stage = "LOCAL_SOCKS"
             val deadline = SystemClock.elapsedRealtime() + 4_000L
             var ready = false
             while (SystemClock.elapsedRealtime() < deadline) {
@@ -208,20 +240,43 @@ internal class RealityCompareService : Service() {
                 }
                 Thread.sleep(120)
             }
-            if (!ready) return RealityComparison.Sample(fingerprint, false, null)
+            if (!ready) return RealityComparison.Sample(
+                fingerprint, false, null, failureStage = "LOCAL_SOCKS"
+            )
+            stage = "HTTPS_TEST"
 
-            val began = SystemClock.elapsedRealtime()
-            val primary = TunnelHealthProbe.probe(
+            // Never time a mere open TCP socket as VPN authentication.
+            // Capture separate target HTTPS probe phases. The SOCKS CONNECT
+            // phase *can include* REALITY dials but is not a standalone
+            // measurement of the REALITY handshake.
+            val first = TunnelHealthProbe.probeDetailed(
                 "127.0.0.1", XrayConfigCompiler.SOCKS_PORT, auth, "example.com"
             )
-            val ok = if (primary == TunnelHealthProbe.EgressResult.OK) true
-            else TunnelHealthProbe.probe(
-                "127.0.0.1", XrayConfigCompiler.SOCKS_PORT, auth, "cp.cloudflare.com"
-            ) == TunnelHealthProbe.EgressResult.OK
-            val elapsed = (SystemClock.elapsedRealtime() - began).coerceAtLeast(1)
-            return RealityComparison.Sample(fingerprint, ok, if (ok) elapsed else null)
+            val second = if (first.result == TunnelHealthProbe.EgressResult.OK)
+                null else TunnelHealthProbe.probeDetailed(
+                    "127.0.0.1", XrayConfigCompiler.SOCKS_PORT, auth, "cp.cloudflare.com"
+                )
+            val winner = when {
+                first.result == TunnelHealthProbe.EgressResult.OK -> first
+                second?.result == TunnelHealthProbe.EgressResult.OK -> second
+                else -> second ?: first
+            }
+            val success = winner.result == TunnelHealthProbe.EgressResult.OK
+            val total = first.totalMs + (second?.totalMs ?: 0L)
+            return RealityComparison.Sample(
+                profile = fingerprint,
+                success = success,
+                latencyMs = if (success) total else null,
+                socksConnectMs = winner.socksConnectMs,
+                targetTlsMs = winner.targetTlsMs,
+                httpResponseMs = winner.httpResponseMs,
+                failureStage = if (success) null else winner.result.name,
+                secondEndpoint = second != null,
+            )
         } catch (_: Exception) {
-            return RealityComparison.Sample(fingerprint, false, null)
+            return RealityComparison.Sample(
+                fingerprint, false, null, failureStage = stage
+            )
         } finally {
             runtime.close()
         }
