@@ -151,22 +151,24 @@ internal object NlicV2Settings {
             val prefs = activity.getPreferences()
             val current = prefs.getString("nlic_reality_tcp_utls", "profile") ?: "profile"
             val currentName = when (current) {
+                "smart" -> "Умный режим"
                 "firefox" -> "Firefox"
                 "chrome" -> "Chrome"
                 else -> "Из конфигурации"
             }
-            action("Отпечаток TLS · $currentName",
-                "Эксперимент uTLS ClientHello. Только VLESS + REALITY + TCP (RAW); не полный Firefox.") {
+            action("LIC-Assist · $currentName",
+                "Умный режим: при неудаче проверяет тот же REALITY-сервер с альтернативным браузерным uTLS.") {
                 requireDisconnected {
                     val choices = arrayOf(
                         "Как в подписке · без изменений",
-                        "Firefox · экспериментальный ClientHello",
-                        "Chrome · экспериментальный ClientHello"
+                        "Умный режим · проверка REALITY и резервный uTLS",
+                        "Firefox · только этот отпечаток",
+                        "Chrome · только этот отпечаток"
                     )
-                    val values = arrayOf("profile", "firefox", "chrome")
+                    val values = arrayOf("profile", "smart", "firefox", "chrome")
                     AlertDialog.Builder(activity)
                         .setTitle("LIC-Assist · REALITY TCP")
-                        .setMessage("Использует тот же сервер, ключ, SNI и VLESS. Изменяется только TLS ClientHello через Xray uTLS. Это не гарантирует обход блокировки.")
+                        .setMessage("Используется тот же сервер и VLESS + REALITY. Умный режим сначала пробует исходный отпечаток, а при недоступности защищённого HTTPS — альтернативный. Он может увеличить время подключения. Никакого переключения VPN-сервера, изменения ключей или отключения проверки сертификатов.")
                         .setSingleChoiceItems(choices,
                             values.indexOf(current).coerceAtLeast(0)) { popup, which ->
                             prefs.edit().putString("nlic_reality_tcp_utls",
@@ -209,6 +211,7 @@ internal object NlicV2Settings {
             val failure = ServiceManager.lastCoreFailureCode
                 ?.takeIf { it.matches(Regex("[A-Z0-9_]{1,64}")) } ?: "—"
             val uTlsAssist = when (prefs.getString("nlic_reality_tcp_utls", "profile")) {
+                "smart" -> "Умный режим (1 резервная попытка)"
                 "firefox" -> "Firefox (если совместимо)"
                 "chrome" -> "Chrome (если совместимо)"
                 else -> "по конфигурации"
