@@ -125,9 +125,10 @@ internal class RealityCompareService : Service() {
         try {
             val allTest = trials == RealityAssistLab.MODE_ALL
             val streamTest = trials == RealityStreamComparison.TRIALS
-            val schedule = if (streamTest)
-                RealityStreamComparison.sequence else RealityComparison.schedule(trials)
-            if (!allTest && schedule == null) {
+            val schedule = (if (streamTest)
+                RealityStreamComparison.sequence else RealityComparison.schedule(trials))
+                ?: emptyList()
+            if (!allTest && schedule.isEmpty()) {
                 reply(client, ERROR, "Недопустимый режим сравнения.")
                 return
             }
