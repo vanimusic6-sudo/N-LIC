@@ -48,30 +48,26 @@ internal object RealityTcpTricks {
     fun available(bay: Boolean): List<String> =
         if (bay) listOf(STOCK) else variants
 
-    /**
-     * Favors a working imported transport until another one beats
-     * authenticated HTTPS by >=90ms AND >=15%. If normal TCP cannot
-     * authenticate, take a real verified working candidate.
+    /** Prefer the lowest measured HTTPS time among actually working
+     * profiles, with baseline winning only an exact tie. The full lab uses
+     * two HTTPS requests plus a complete 512KiB transfer before it
+     * makes a recommendation. This helper never fabricates a success.
      */
     fun chooseBest(samples: List<Measurement>): String {
-        val valid = samples.filter {
+        val verified = samples.filter {
             it.trick in variants && it.httpsMs != null && it.httpsMs in 1L..30_000L
         }.distinctBy { it.trick }
-        val baseline = valid.firstOrNull { it.trick == STOCK }
-        val fastest = valid.minByOrNull { it.httpsMs!! } ?: return STOCK
-        if (baseline == null) return fastest.trick
-        val old = baseline.httpsMs!!
-        val new = fastest.httpsMs!!
-        return if (fastest.trick != STOCK &&
-            old - new >= 90L && (old - new) * 100 >= old * 15)
-            fastest.trick else STOCK
+        return verified.minWithOrNull(
+            compareBy<Measurement> { it.httpsMs ?: Long.MAX_VALUE }
+                .thenBy { if (it.trick == STOCK) 0 else 1 }
+        )?.trick ?: STOCK
     }
 
     /**
-     * Cache first, then the chosen browser's unchanged TCP, then fallback
-     * to the imported browser and verified alternative uTLS. Finally try a
-     * few known compatible packetization profiles on the imported browser
-     * if and only if all ordinary candidates fail. Always same node.
+     * At connection time try only the user-selected working variant first,
+     * then stock TCP on the same browser and same-node browser fallbacks.
+     * Never silently try a pile of UNTESTED TCP tricks or slow down startup
+     * through a hidden calibration.
      */
     fun attempts(
         preferredFp: String?,
@@ -80,17 +76,12 @@ internal object RealityTcpTricks {
         baselineFp: String,
         bay: Boolean,
     ): List<Trial> {
-        val chosen = preferredTrick.takeIf { it in available(bay) } ?: STOCK
-        val first = Trial(preferredFp, chosen)
-        val rows = listOf(first, Trial(preferredFp, STOCK)) +
-            browsers.map { Trial(it, STOCK) } +
-            if (bay) emptyList() else listOf(
-                Trial(null, SPLIT_SOFT),
-                Trial(null, SPLIT_ZERO),
-                Trial(null, MSS_1200)
-            )
-        return rows.distinctBy { (it.fingerprint ?: baselineFp) to it.trick }
-            .take(9)
+        val safe = preferredTrick.takeIf { it in available(bay) } ?: STOCK
+        val first = Trial(preferredFp, safe)
+        return (listOf(first, Trial(preferredFp, STOCK)) +
+            browsers.map { Trial(it, STOCK) })
+            .distinctBy { (it.fingerprint ?: baselineFp) to it.trick }
+            .take(5)
     }
 
     /**
