@@ -43,6 +43,7 @@ import io.github.romanvht.byedpi.subscription.XrayConfigCompiler
 import io.github.romanvht.byedpi.subscription.LocalSocksAuth
 import io.github.romanvht.byedpi.subscription.RealityAssistTrace
 import io.github.romanvht.byedpi.subscription.RealityAssistPolicy
+import io.github.romanvht.byedpi.subscription.RealityAssistMemory
 import io.github.romanvht.byedpi.subscription.SubscriptionCatalog
 import io.github.romanvht.byedpi.subscription.SubscriptionFetcher
 import io.github.romanvht.byedpi.subscription.SubscriptionGroup
@@ -764,6 +765,23 @@ class SubscriptionLabActivity : BaseActivity() {
                 R.string.nlic_reality_smart_manual_chrome
             else -> R.string.nlic_reality_smart_off
         })
+        if (!runningVpn && assistMode == RealityAssistPolicy.SMART &&
+            realityCompatible && !auto && selected != null) {
+            val winner = RealityAssistMemory.load(
+                applicationContext, selected.id,
+                RealityAssistMemory.networkClass(applicationContext), bay
+            )
+            if (winner != null) {
+                val name = when (winner.fingerprint) {
+                    RealityAssistPolicy.CHROME -> "Chrome"
+                    RealityAssistPolicy.FIREFOX -> "Firefox"
+                    RealityAssistPolicy.SAFARI -> "Safari"
+                    else -> "из подписки"
+                }
+                assistHint.text = "Подобрано для этой сети: $name · HTTPS проверен. " +
+                    "На следующем подключении этот вариант будет первым."
+            }
+        }
         assistSwitch.setOnCheckedChangeListener { _, enabled ->
             if (busy || runningVpn || auto || !realityCompatible) {
                 render()
@@ -873,23 +891,43 @@ class SubscriptionLabActivity : BaseActivity() {
             RealityAssistTrace.Event.SKIPPED_UNSUPPORTED ->
                 "LIC-Assist не применялся: выбранный сервер не VLESS + REALITY + TCP (RAW)."
             RealityAssistTrace.Event.STARTING_ORIGINAL ->
-                "LIC-Assist: запускается исходное REALITY-подключение…"
+                "LIC-Assist: запускается проверенный вариант REALITY…"
+            RealityAssistTrace.Event.CALIBRATING_ORIGINAL ->
+                "LIC-Assist: сравниваем исходный REALITY по защищённому HTTPS…"
+            RealityAssistTrace.Event.CALIBRATING_CHROME ->
+                "LIC-Assist: сравниваем Chrome на том же сервере…"
+            RealityAssistTrace.Event.CALIBRATING_FIREFOX ->
+                "LIC-Assist: сравниваем Firefox на том же сервере…"
+            RealityAssistTrace.Event.CALIBRATING_SAFARI ->
+                "LIC-Assist: сравниваем Safari на том же сервере…"
             RealityAssistTrace.Event.CHECKING_ORIGINAL ->
                 "LIC-Assist: проверяется HTTPS с исходным отпечатком…"
             RealityAssistTrace.Event.RETRYING_FIREFOX ->
                 "Исходный отпечаток не прошёл HTTPS. Пробуем тот же сервер с Firefox…"
             RealityAssistTrace.Event.RETRYING_CHROME ->
-                "Исходный отпечаток не прошёл HTTPS. Пробуем тот же сервер с Chrome…"
+                "Предыдущий отпечаток не прошёл HTTPS. Пробуем Chrome…"
+            RealityAssistTrace.Event.RETRYING_SAFARI ->
+                "Предыдущий отпечаток не прошёл HTTPS. Пробуем Safari…"
             RealityAssistTrace.Event.CHECKING_FIREFOX ->
                 "Резервный Firefox: проверяем настоящий HTTPS через VPN…"
             RealityAssistTrace.Event.CHECKING_CHROME ->
-                "Резервный Chrome: проверяем настоящий HTTPS через VPN…"
+                "Chrome: проверяем настоящий HTTPS через REALITY…"
+            RealityAssistTrace.Event.CHECKING_SAFARI ->
+                "Safari: проверяем настоящий HTTPS через REALITY…"
             RealityAssistTrace.Event.CHECKING_MANUAL_FIREFOX ->
                 "Выбран Firefox: проверяем HTTPS через VPN…"
             RealityAssistTrace.Event.CHECKING_MANUAL_CHROME ->
                 "Выбран Chrome: проверяем HTTPS через VPN…"
+            RealityAssistTrace.Event.CHECKING_MANUAL_SAFARI ->
+                "Выбран Safari: проверяем HTTPS через VPN…"
             RealityAssistTrace.Event.PASSED_ORIGINAL ->
-                "LIC-Assist: исходный REALITY прошёл HTTPS. Резерв не потребовался."
+                "LIC-Assist: исходный REALITY прошёл HTTPS. Он остался лучшим подтверждённым вариантом."
+            RealityAssistTrace.Event.PASSED_ADAPTIVE_CHROME ->
+                "LIC-Assist: выбран Chrome · HTTPS работает на этом сервере."
+            RealityAssistTrace.Event.PASSED_ADAPTIVE_FIREFOX ->
+                "LIC-Assist: выбран Firefox · HTTPS работает на этом сервере."
+            RealityAssistTrace.Event.PASSED_ADAPTIVE_SAFARI ->
+                "LIC-Assist: выбран Safari · HTTPS работает на этом сервере."
             RealityAssistTrace.Event.PASSED_FALLBACK_FIREFOX ->
                 "LIC-Assist: резервный Firefox прошёл HTTPS. Исходный отпечаток не прошёл проверку."
             RealityAssistTrace.Event.PASSED_FALLBACK_CHROME ->
@@ -898,6 +936,8 @@ class SubscriptionLabActivity : BaseActivity() {
                 "LIC-Assist: выбранный Firefox прошёл HTTPS. Это не доказывает обход DPI."
             RealityAssistTrace.Event.PASSED_MANUAL_CHROME ->
                 "LIC-Assist: выбранный Chrome прошёл HTTPS. Это не доказывает обход DPI."
+            RealityAssistTrace.Event.PASSED_MANUAL_SAFARI ->
+                "LIC-Assist: выбранный Safari прошёл HTTPS. Это не доказывает обход DPI."
             RealityAssistTrace.Event.FAILED ->
                 "LIC-Assist: проверенный HTTPS установить не удалось. См. код ошибки."
             null -> when {
@@ -914,13 +954,20 @@ class SubscriptionLabActivity : BaseActivity() {
             appStatus.second == Mode.VPN
         val inProgress = snapshot?.event in setOf(
             RealityAssistTrace.Event.STARTING_ORIGINAL,
+            RealityAssistTrace.Event.CALIBRATING_ORIGINAL,
+            RealityAssistTrace.Event.CALIBRATING_CHROME,
+            RealityAssistTrace.Event.CALIBRATING_FIREFOX,
+            RealityAssistTrace.Event.CALIBRATING_SAFARI,
             RealityAssistTrace.Event.CHECKING_ORIGINAL,
             RealityAssistTrace.Event.RETRYING_FIREFOX,
             RealityAssistTrace.Event.RETRYING_CHROME,
+            RealityAssistTrace.Event.RETRYING_SAFARI,
             RealityAssistTrace.Event.CHECKING_FIREFOX,
             RealityAssistTrace.Event.CHECKING_CHROME,
+            RealityAssistTrace.Event.CHECKING_SAFARI,
             RealityAssistTrace.Event.CHECKING_MANUAL_FIREFOX,
-            RealityAssistTrace.Event.CHECKING_MANUAL_CHROME
+            RealityAssistTrace.Event.CHECKING_MANUAL_CHROME,
+            RealityAssistTrace.Event.CHECKING_MANUAL_SAFARI
         )
         line.text = if (snapshot != null && !running && !busy && !inProgress)
             "Последняя попытка · $message" else message
