@@ -29,6 +29,7 @@ required = {
     "nlic_adaptive_switch", "nlic_manage_profiles",
     "nlic_server_picker_button", "nlic_stage_label",
     "nlic_reality_smart_switch", "nlic_reality_smart_hint", "nlic_reality_assist_status",
+    "nlic_reality_compare_button", "nlic_reality_compare_result",
 }
 assert required <= ids.keys(), f"missing V2 control: {required - ids.keys()}"
 assert ids["nlic_settings_button"].get(android + "contentDescription"), (
@@ -52,6 +53,9 @@ assert 'RealityAssistTrace.clear(applicationContext)' in activity
 assert "onRealityModeChanged = { render() }" in activity
 assert ids["nlic_reality_smart_switch"].get(android + "visibility") != "gone"
 assert ids["nlic_reality_smart_hint"].get(android + "visibility") != "gone"
+assert ids["nlic_reality_compare_button"].get(android + "visibility") != "gone"
+assert "R.id.nlic_reality_compare_button" in activity
+assert "RealityCompareService.START" in activity
 for caption in (
     "Ядро локального обхода", "Проверить стратегии",
     "Домены и исключения", "DNS, IPv6 и приложения",
@@ -65,4 +69,8 @@ assert apps is not None and apps.get(android + "usesCleartextTraffic") == "false
 activities = {a.get(android + "name"): a for a in apps.findall("activity")}
 for name in (".activities.SubscriptionLabActivity", ".activities.SettingsActivity"):
     assert activities[name].get(android + "exported") == "false", name
+services = {s.get(android + "name"): s for s in apps.findall("service")}
+tester = services[".services.RealityCompareService"]
+assert tester.get(android + "exported") == "false"
+assert tester.get(android + "process") == ":realitycompare"
 print("N-LIC V2 UI contract and exported-activity checks: OK")
