@@ -433,4 +433,5 @@
     <string name="nlic_reality_compare_cancel">Салыстыруды тоқтату</string>
     <string name="nlic_reality_compare_stream">Ағын · 3 × 512 КиБ (берілім тұрақтылығы)</string>
     <string name="nlic_reality_smart_manual_safari">Safari қолмен таңдалған. Ең жақсы тексерілген нұсқаны автоматты таңдау үшін қосқышты қосыңыз.</string>
+    <string name="nlic_reality_smart_disable_bay">LIC-helper (Duet) үшін LIC-Bay қызметін өшіріңіз: сыртқы прокси TCP қосылымын басқарады.</string>
 </resources>

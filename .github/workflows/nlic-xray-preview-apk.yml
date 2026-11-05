@@ -2,7 +2,7 @@ name: N-LIC V2 Release APK (DEV signed)
 
 on:
   push:
-    branches: [feature/nlic-xray-core-20261104, feature/nlic-dual-mode-resilience-20261104 , feature/nlic-v2-ui-core, feature/lic-assist-reality-tcp-20261105, feature/lic-reality-smart-assist-20261105, fix/lic-reality-visible-status-20261105, fix/lic-assist-main-switch-20261105, feature/lic-assist-reality-ab-test-20261105, feature/lic-reality-diagnostics-v2-20261105, feature/lic-reality-stream-pcap-audit-20261105, feature/lic-reality-adaptive-selection-20261105, feature/lic-reality-transport-tricks-20261105, fix/lic-assist-unified-workbench-20261105]
+    branches: [feature/nlic-xray-core-20261104, feature/nlic-dual-mode-resilience-20261104 , feature/nlic-v2-ui-core, feature/lic-assist-reality-tcp-20261105, feature/lic-reality-smart-assist-20261105, fix/lic-reality-visible-status-20261105, fix/lic-assist-main-switch-20261105, feature/lic-assist-reality-ab-test-20261105, feature/lic-reality-diagnostics-v2-20261105, feature/lic-reality-stream-pcap-audit-20261105, feature/lic-reality-adaptive-selection-20261105, feature/lic-reality-transport-tricks-20261105, fix/lic-assist-unified-workbench-20261105, feature/lic-helper-dual-firstflight-20261106]
     paths:
       - app/**
       - tools/reality_clienthello_audit.py

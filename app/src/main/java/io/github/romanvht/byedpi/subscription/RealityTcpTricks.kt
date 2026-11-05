@@ -13,6 +13,12 @@ import com.google.gson.JsonObject
  */
 internal object RealityTcpTricks {
     const val STOCK = "stock"
+    // LIC-Duet: two TLS records in one authenticated REALITY connection.
+    // This is NOT Zapret2's fake-versus-real TCP sequence desynchronization.
+    const val DUET = "lic-duet"
+    const val DUET_GATE = "lic-duet-gate"
+    const val DUET_MSS = "lic-duet-mss"
+    const val TRIO = "lic-trio"
     const val SPLIT_SOFT = "split-soft"
     const val SPLIT_EARLY = "split-early"
     const val SPLIT_ZERO = "split-zero"
@@ -23,13 +29,25 @@ internal object RealityTcpTricks {
 
     // The first set changes packetization; the last two change TCP
     // connection/idle behavior. They are not all DPI bypasses.
-    val variants = listOf(STOCK, SPLIT_SOFT, SPLIT_EARLY, SPLIT_ZERO,
+    val variants = listOf(STOCK, DUET, DUET_GATE, DUET_MSS, TRIO,
+        SPLIT_SOFT, SPLIT_EARLY, SPLIT_ZERO,
         MSS_1200, MSS_900, TFO_OFF, IDLE_KEEPALIVE)
+
+    // An ON switch must materially change the first outbound, even without
+    // an earlier measurement or a manually chosen profile.
+    const val DEFAULT_HELPER = DUET
+
+    private val firstFlight = setOf(DUET, DUET_GATE, DUET_MSS, TRIO,
+        SPLIT_SOFT, SPLIT_EARLY, SPLIT_ZERO)
 
     data class Measurement(val trick: String, val httpsMs: Long?)
     data class Trial(val fingerprint: String?, val trick: String)
 
     fun label(trick: String): String = when (trick) {
+        DUET -> "LIC-Duet · два TLS-фрагмента"
+        DUET_GATE -> "LIC-Duet Gate · раннее разделение"
+        DUET_MSS -> "LIC-Duet Frame · TLS + MSS"
+        TRIO -> "LIC-Trio · три TLS-фрагмента"
         SPLIT_SOFT -> "разделение ClientHello"
         SPLIT_EARLY -> "раннее разделение ClientHello"
         SPLIT_ZERO -> "TLS-записи без паузы"
@@ -68,10 +86,14 @@ internal object RealityTcpTricks {
     }
 
     /**
-     * Cache first, then the chosen browser's unchanged TCP, then fallback
-     * to the imported browser and verified alternative uTLS. Finally try a
-     * few known compatible packetization profiles on the imported browser
-     * if and only if all ordinary candidates fail. Always same node.
+     * Helper-first, never calibration-first. The first attempt ALWAYS has
+     * a real first-flight modification (unless a separate ByeDPI relay owns
+     * the physical socket). Stock REALITY is *only* a final fallback after
+     * helper variants fail; it is never offered as a 'helper success'.
+     *
+     * We do not blindly combine profiles; only curated and bounded Xray
+     * configurations are generated here. A prior successful helper comes
+     * first. A stored stock result cannot silently disable the switch.
      */
     fun attempts(
         preferredFp: String?,
@@ -79,17 +101,28 @@ internal object RealityTcpTricks {
         browsers: List<String?>,
         baselineFp: String,
         bay: Boolean,
+        pinnedFingerprint: Boolean = false,
     ): List<Trial> {
-        val chosen = preferredTrick.takeIf { it in available(bay) } ?: STOCK
-        val first = Trial(preferredFp, chosen)
-        val rows = listOf(first, Trial(preferredFp, STOCK)) +
-            browsers.map { Trial(it, STOCK) } +
-            if (bay) emptyList() else listOf(
-                Trial(null, SPLIT_SOFT),
-                Trial(null, SPLIT_ZERO),
-                Trial(null, MSS_1200)
-            )
-        return rows.distinctBy { (it.fingerprint ?: baselineFp) to it.trick }
+        val candidateFp = if (pinnedFingerprint) {
+            preferredFp?.takeIf { it in RealityAssistPolicy.browserCandidates }
+        } else preferredFp?.takeIf {
+            it in RealityAssistPolicy.browserCandidates && it != baselineFp
+        } ?: if (baselineFp == RealityAssistPolicy.CHROME) null
+            else RealityAssistPolicy.CHROME
+        if (bay) return listOf(Trial(preferredFp, STOCK))
+        val chosen = preferredTrick.takeIf { it in firstFlight } ?: DEFAULT_HELPER
+        val helper = listOf(
+            Trial(candidateFp, chosen),
+            Trial(candidateFp, DUET_GATE),
+            Trial(candidateFp, DUET_MSS),
+            Trial(candidateFp, TRIO),
+            Trial(candidateFp, SPLIT_SOFT),
+            Trial(null, DUET),
+        )
+        val lastResort = (listOf(candidateFp, null) + browsers)
+            .map { Trial(it, STOCK) }
+        return (helper + lastResort)
+            .distinctBy { (it.fingerprint ?: baselineFp) to it.trick }
             .take(9)
     }
 
@@ -106,7 +139,7 @@ internal object RealityTcpTricks {
         if (stream.get("network")?.asString != "raw" ||
             stream.get("security")?.asString != "reality") return false
 
-        if (trick.startsWith("split-")) {
+        if (trick in firstFlight) {
             // finalmask is applied after REALITY encryption. All splits
             // are explicit TLS-record slices, not raw random-byte injection.
             if (stream.has("finalmask")) return false
@@ -128,8 +161,28 @@ internal object RealityTcpTricks {
                         add("delays", strings("0"))
                         addProperty("maxSplit", "4")
                     }
+                    DUET, DUET_MSS -> {
+                        add("lengths", strings("160-220"))
+                        add("delays", strings("3-5"))
+                        addProperty("maxSplit", "1")
+                    }
+                    DUET_GATE -> {
+                        add("lengths", strings("48-80"))
+                        add("delays", strings("7-11"))
+                        addProperty("maxSplit", "1")
+                    }
+                    TRIO -> {
+                        add("lengths", strings("80-112", "160-192"))
+                        add("delays", strings("2-4", "3-5"))
+                        addProperty("maxSplit", "2")
+                    }
                 }
             }
+            // Build the two-layer profile atomically: never partially alter
+            // imported socket options if an existing value conflicts.
+            val originalSocket = stream.getAsJsonObject("sockopt")
+            if (trick == DUET_MSS && originalSocket?.has("tcpMaxSeg") == true)
+                return false
             stream.add("finalmask", JsonObject().apply {
                 add("tcp", JsonArray().apply {
                     add(JsonObject().apply {
@@ -138,6 +191,12 @@ internal object RealityTcpTricks {
                     })
                 })
             })
+            if (trick == DUET_MSS) {
+                val socket = originalSocket ?: JsonObject().also {
+                    stream.add("sockopt", it)
+                }
+                socket.addProperty("tcpMaxSeg", 1200)
+            }
             return true
         }
 

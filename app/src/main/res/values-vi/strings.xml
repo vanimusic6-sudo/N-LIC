@@ -434,4 +434,5 @@
     <string name="nlic_reality_compare_cancel">Dừng so sánh</string>
     <string name="nlic_reality_compare_stream">Luồng · 3 × 512 KiB (độ ổn định truyền)</string>
     <string name="nlic_reality_smart_manual_safari">Đã chọn Safari thủ công. Bật công tắc để tự động chọn cấu hình hoạt động tốt nhất.</string>
+    <string name="nlic_reality_smart_disable_bay">Để dùng LIC-helper (Duet), hãy tắt LIC-Bay: proxy bên ngoài điều khiển kết nối TCP.</string>
 </resources>

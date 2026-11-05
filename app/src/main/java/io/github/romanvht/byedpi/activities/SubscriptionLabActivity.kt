@@ -793,11 +793,13 @@ class SubscriptionLabActivity : BaseActivity() {
         val assistHint = findViewById<TextView>(R.id.nlic_reality_smart_hint)
         assistSwitch.setOnCheckedChangeListener(null)
         assistSwitch.isChecked = assistMode == RealityAssistPolicy.SMART
-        assistSwitch.isEnabled = !busy && !runningVpn && !auto && realityCompatible
+        assistSwitch.isEnabled = !busy && !runningVpn && !auto && !bay &&
+            realityCompatible
         assistHint.setText(when {
             runningVpn -> R.string.nlic_reality_smart_disconnect
             !realityCompatible -> R.string.nlic_reality_smart_need_server
             auto -> R.string.nlic_reality_smart_disable_auto
+            bay -> R.string.nlic_reality_smart_disable_bay
             assistMode == RealityAssistPolicy.SMART -> R.string.nlic_reality_smart_on
             assistMode == RealityAssistPolicy.FIREFOX ->
                 R.string.nlic_reality_smart_manual_firefox
@@ -856,13 +858,13 @@ class SubscriptionLabActivity : BaseActivity() {
                 }
                 val technique = io.github.romanvht.byedpi.subscription
                     .RealityTcpTricks.label(winner.tcpTrick)
-                assistHint.text = "Проверено ранее: $name · $technique. " +
-                    "Этот вариант попробуем первым."
+                assistHint.text = "Последняя рабочая комбинация: $name · $technique. " +
+                    "LIC-helper применяется сразу, без проверки необходимости."
             }
             }
         }
         assistSwitch.setOnCheckedChangeListener { _, enabled ->
-            if (busy || runningVpn || auto || !realityCompatible) {
+            if (busy || runningVpn || auto || bay || !realityCompatible) {
                 render()
                 return@setOnCheckedChangeListener
             }
@@ -966,11 +968,23 @@ class SubscriptionLabActivity : BaseActivity() {
             RealityAssistTrace.Event.SKIPPED_DISABLED ->
                 "LIC-Assist не участвовал: использован исходный профиль."
             RealityAssistTrace.Event.SKIPPED_AUTO ->
-                "LIC-Assist не участвовал: включён автоматический выбор серверов."
+                "LIC-helper не участвовал: включён автоматический выбор серверов."
+            RealityAssistTrace.Event.SKIPPED_BAY ->
+                "LIC-helper не участвовал: LIC-Bay владеет TCP-сокетом сервера. Выключи LIC-Bay для Duet."
             RealityAssistTrace.Event.SKIPPED_UNSUPPORTED ->
                 "LIC-Assist не применялся: выбранный сервер не VLESS + REALITY + TCP (RAW)."
             RealityAssistTrace.Event.STARTING_ORIGINAL ->
-                "LIC-Assist: запускается проверенный вариант REALITY…"
+                "LIC-Assist: запускается исходный REALITY…"
+            RealityAssistTrace.Event.STARTING_HELPER ->
+                "LIC-helper: включён, сразу запускается защитный профиль…"
+            RealityAssistTrace.Event.CHECKING_HELPER ->
+                "LIC-helper: защищённый REALITY проверяет доступность HTTPS…"
+            RealityAssistTrace.Event.FALLBACK_STOCK ->
+                "LIC-helper: защитные варианты не прошли. Проверяем обычный REALITY…"
+            RealityAssistTrace.Event.PASSED_HELPER ->
+                "LIC-helper: защищённый REALITY подключён, HTTPS работает."
+            RealityAssistTrace.Event.PASSED_STOCK_FALLBACK ->
+                "LIC-helper: защитные профили не сработали; подключено через обычный REALITY."
             RealityAssistTrace.Event.CALIBRATING_ORIGINAL ->
                 "LIC-Assist: сравниваем исходный REALITY по защищённому HTTPS…"
             RealityAssistTrace.Event.CALIBRATING_CHROME ->
@@ -1005,7 +1019,7 @@ class SubscriptionLabActivity : BaseActivity() {
             RealityAssistTrace.Event.CHECKING_MANUAL_SAFARI ->
                 "Выбран Safari: проверяем HTTPS через VPN…"
             RealityAssistTrace.Event.PASSED_ORIGINAL ->
-                "LIC-Assist: исходный REALITY прошёл HTTPS. Он остался лучшим подтверждённым вариантом."
+                "LIC-Assist: исходный REALITY прошёл HTTPS."
             RealityAssistTrace.Event.PASSED_ADAPTIVE_CHROME ->
                 "LIC-Assist: выбран Chrome · HTTPS работает на этом сервере."
             RealityAssistTrace.Event.PASSED_ADAPTIVE_FIREFOX ->
@@ -1038,6 +1052,9 @@ class SubscriptionLabActivity : BaseActivity() {
             appStatus.second == Mode.VPN
         val inProgress = snapshot?.event in setOf(
             RealityAssistTrace.Event.STARTING_ORIGINAL,
+            RealityAssistTrace.Event.STARTING_HELPER,
+            RealityAssistTrace.Event.CHECKING_HELPER,
+            RealityAssistTrace.Event.FALLBACK_STOCK,
             RealityAssistTrace.Event.CALIBRATING_ORIGINAL,
             RealityAssistTrace.Event.CALIBRATING_CHROME,
             RealityAssistTrace.Event.CALIBRATING_FIREFOX,
