@@ -131,6 +131,17 @@ class RealityTcpTricksTest {
         assertTrue(a.size <= 9)
     }
 
+    @Test fun manualImportedFingerprintDoesNotSilentlyBecomeChrome() {
+        val attempts = RealityTcpTricks.attempts(
+            null, RealityTcpTricks.DUET,
+            listOf(null, "firefox", "chrome"), "firefox", false,
+            pinnedFingerprint = true
+        )
+        assertEquals(RealityTcpTricks.Trial(null, RealityTcpTricks.DUET),
+            attempts.first())
+        assertTrue(attempts.any { it.trick == RealityTcpTricks.STOCK })
+    }
+
     @Test fun boundedSameNodeRecoveryNeverSwitchesProtocolOrInsertsUnknownTricks() {
         val a = RealityTcpTricks.attempts("firefox", "split-soft",
             listOf("firefox", null, "chrome", "safari"), "chrome", false)
