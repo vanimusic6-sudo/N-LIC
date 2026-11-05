@@ -158,7 +158,7 @@ class ByeDpiVpnService : VpnService() {
                 for (packageName in configuration.apps) {
                     try {
                         builder.addDisallowedApplication(packageName)
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         // Avoid printing package names or exception text to
                         // logcat. A rejected blacklist entry stays routed
                         // through VPN, rather than leaking to the carrier.
@@ -178,8 +178,11 @@ class ByeDpiVpnService : VpnService() {
                     try {
                         builder.addAllowedApplication(packageName)
                         allowed++
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Не удалось добавить приложение $packageName в белый список", e)
+                    } catch (_: Exception) {
+                        // No package identifiers or system exception text in
+                        // diagnostic logs; a failed allow-list rule must not
+                        // be reported as successfully routed.
+                        Log.w(TAG, "Ignored invalid VPN inclusion")
                     }
                 }
                 check(allowed > 0) { "Select at least one installed app for VPN whitelist" }
