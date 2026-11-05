@@ -61,9 +61,9 @@ internal object RealityComparison {
 
         val best = maxOf(firefox, chrome)
         val verdict = when {
-            !complete -> "Проверка не завершена. Итог сравнивать нельзя."
+            !complete -> "Тест прерван. Итог нельзя сравнивать."
             original == each ->
-                "Исходный REALITY доступен. Улучшение обхода не установлено."
+                "Исходный REALITY доступен. Доказанного улучшения обхода нет."
             original == 0 && best == 0 ->
                 "Все HTTPS-проверки неуспешны. Причина может быть не в DPI."
             best > original -> {
