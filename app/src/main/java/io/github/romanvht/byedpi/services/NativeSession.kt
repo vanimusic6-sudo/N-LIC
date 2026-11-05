@@ -415,9 +415,9 @@ internal class NativeSession(
                                     it != RealityTcpTricks.STOCK
                             }
                         } else null
-                        // No hidden 11-profile scan on every cold start.
-                        // Untested Smart = imported REALITY first, then
-                        // same-server fallbacks only if authenticated HTTPS fails.
+                        // No hidden calibration scan: enabled helper starts
+                        // with an actual first-flight strategy immediately.
+                        // Same-server fallbacks are only for HTTPS egress failure.
                         // An explicit Lab result (or user's manual profile) can
                         // be used immediately and is always verified again.
                         val forcedFingerprint = if (adaptive &&
@@ -593,10 +593,13 @@ internal class NativeSession(
                                     throw cancelled
                                 }
                             } catch (e: Exception) {
-                                // Do not interpret a broken Xray core, invalid
-                                // credentials or failed SOCKS authentication as
-                                // DPI. Only retry after the outbound check.
-                                if ((!remoteCheckStarted && !adaptive) ||
+                                // Local startup, SOCKS binding, bad config,
+                                // credential or native errors must TERMINATE:
+                                // retrying these as DPI failures spins Go
+                                // cores repeatedly, heats the phone and hides
+                                // the real failure. Only actual encrypted
+                                // egress failures justify switching profile.
+                                if (!remoteCheckStarted || !adaptive ||
                                     attemptIndex == attempts.lastIndex) throw e
                             } finally {
                                 if (!passed) {
