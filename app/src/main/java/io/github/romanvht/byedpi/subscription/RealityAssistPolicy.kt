@@ -41,7 +41,7 @@ internal object RealityAssistPolicy {
         baselineFingerprint: String,
         samples: List<Measurement>,
     ): String? {
-        val valid = samples.filter { it.httpsMs != null && it.httpsMs in 1..30_000 }
+        val valid = samples.filter { it.httpsMs != null && it.httpsMs in 1L..30_000L }
             .distinctBy { it.fingerprint ?: baselineFingerprint }
         val best = valid.minByOrNull { it.httpsMs!! } ?: return null
         val baseline = valid.firstOrNull {
