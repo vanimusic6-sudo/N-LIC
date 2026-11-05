@@ -28,6 +28,7 @@ required = {
     "nlic_bypass_panel", "nlic_auto_switch", "nlic_bay_switch",
     "nlic_adaptive_switch", "nlic_manage_profiles",
     "nlic_server_picker_button", "nlic_stage_label",
+    "nlic_reality_smart_switch", "nlic_reality_smart_hint", "nlic_reality_assist_status",
 }
 assert required <= ids.keys(), f"missing V2 control: {required - ids.keys()}"
 assert ids["nlic_settings_button"].get(android + "contentDescription"), (
@@ -45,6 +46,12 @@ assert "R.id.nlic_settings_button" in activity
 assert ").setOnClickListener { showCompactSettings() }" in activity
 assert "setOnMenuItemClickListener" not in activity
 assert "NlicV2Settings.show(" in activity
+assert "R.id.nlic_reality_smart_switch" in activity
+assert "RealityAssistPolicy.SMART" in activity
+assert 'RealityAssistTrace.clear(applicationContext)' in activity
+assert "onRealityModeChanged = { render() }" in activity
+assert ids["nlic_reality_smart_switch"].get(android + "visibility") != "gone"
+assert ids["nlic_reality_smart_hint"].get(android + "visibility") != "gone"
 for caption in (
     "Ядро локального обхода", "Проверить стратегии",
     "Домены и исключения", "DNS, IPv6 и приложения",
