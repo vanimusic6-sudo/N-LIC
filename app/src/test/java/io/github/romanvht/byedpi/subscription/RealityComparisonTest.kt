@@ -46,6 +46,36 @@ class RealityComparisonTest {
         assertFalse(result.contains("среднее"))
     }
 
+    @Test fun extendedScheduleBalancesProfilesAndReversesTimeOrder() {
+        val schedule = RealityComparison.schedule(18)!!
+        assertEquals(18, schedule.size)
+        for (fingerprint in listOf("profile", "firefox", "chrome")) {
+            assertEquals(6, schedule.count { it == fingerprint })
+        }
+        assertEquals(null, RealityComparison.schedule(17))
+        val samples = schedule.map { profile ->
+            RealityComparison.Sample(profile, true, 500L,
+                socksConnectMs = 120L, targetTlsMs = 240L, httpResponseMs = 140L)
+        }
+        val report = RealityComparison.report(samples, 18)
+        assertTrue(report.compact.contains("оригинал 6/6"))
+        assertTrue(report.details.contains("SOCKS CONNECT: 120 мс"))
+        assertTrue(report.details.contains("TLS проверочного сайта: 240 мс"))
+        assertTrue(report.details.contains("Доказанного улучшения обхода нет"))
+    }
+
+    @Test fun tcpPortReachabilityAndHttpsResultsRemainSeparate() {
+        val samples = RealityComparison.sequence.map { profile ->
+            RealityComparison.Sample(profile, false, null, failureStage = "TLS_TIMEOUT")
+        }
+        val result = RealityComparison.report(samples, 6,
+            RealityTransportProbe.TcpResult(true, 80L))
+        assertTrue(result.details.contains("TCP до VPN-сервера: доступен · 80 мс"))
+        assertTrue(result.details.contains("Причина может быть не в DPI"))
+        assertTrue(result.details.contains("TLS_TIMEOUT: 6"))
+        assertFalse(result.details.contains("блокировка доказана"))
+    }
+
     @Test fun incompleteSequenceMustNotProduceARecommendation() {
         val samples = listOf(
             RealityComparison.Sample("profile", false, null),
