@@ -30,7 +30,9 @@ class RealityTcpTricksTest {
             RealityTcpTricks.DUET,
             RealityTcpTricks.DUET_GATE,
             RealityTcpTricks.DUET_MSS,
-            RealityTcpTricks.TRIO
+            RealityTcpTricks.TRIO,
+            RealityTcpTricks.FIRST_WRITE,
+            RealityTcpTricks.FIRST_BURST
         )) {
             val candidate = outbound(trick)
             val originalStream = baseline.getAsJsonObject("streamSettings")
@@ -38,17 +40,24 @@ class RealityTcpTricksTest {
             val mask = stream.getAsJsonObject("finalmask")
                 .getAsJsonArray("tcp")[0].asJsonObject
             assertEquals("fragment", mask.get("type").asString)
-            assertEquals("tlshello", mask.getAsJsonObject("settings")
+            val expectedPackets = when (trick) {
+                RealityTcpTricks.FIRST_WRITE -> "1"
+                RealityTcpTricks.FIRST_BURST -> "1-2"
+                else -> "tlshello"
+            }
+            assertEquals(expectedPackets, mask.getAsJsonObject("settings")
                 .get("packets").asString)
             assertTrue(mask.getAsJsonObject("settings")
                 .getAsJsonArray("lengths").size() >= 1)
             if (trick in listOf(
                 RealityTcpTricks.DUET, RealityTcpTricks.DUET_GATE,
                 RealityTcpTricks.DUET_MSS
-            )) assertEquals("1", mask.getAsJsonObject("settings")
+                RealityTcpTricks.FIRST_WRITE,
+                RealityTcpTricks.FIRST_BURST
+            )) assertEquals("2", mask.getAsJsonObject("settings")
                 .get("maxSplit").asString)
             if (trick == RealityTcpTricks.TRIO)
-                assertEquals("2", mask.getAsJsonObject("settings")
+                assertEquals("3", mask.getAsJsonObject("settings")
                     .get("maxSplit").asString)
             assertEquals(originalStream.get("realitySettings"),
                 stream.get("realitySettings"))
@@ -128,7 +137,18 @@ class RealityTcpTricksTest {
         assertTrue(a.takeWhile { it.trick != RealityTcpTricks.STOCK }.isNotEmpty())
         val lastHelper = a.indexOfLast { it.trick != RealityTcpTricks.STOCK }
         assertTrue(a.drop(lastHelper + 1).all { it.trick == RealityTcpTricks.STOCK })
-        assertTrue(a.size <= 9)
+        assertTrue(a.size <= 7)
+    }
+
+    @Test fun failureRecoveryIsBoundedAndNewStreamModesAreReal() {
+        val attempts = RealityTcpTricks.attempts(null, RealityTcpTricks.DUET,
+            listOf(null, "chrome", "firefox"), "chrome", false)
+        assertTrue(attempts.any { it.trick == RealityTcpTricks.FIRST_WRITE })
+        assertTrue(attempts.count { it.trick != RealityTcpTricks.STOCK } <= 5)
+        assertTrue(attempts.count { it.trick == RealityTcpTricks.STOCK } <= 2)
+        assertTrue(attempts.any { it.trick == RealityTcpTricks.STOCK })
+        assertTrue(attempts.indexOfFirst { it.trick == RealityTcpTricks.STOCK } >
+            attempts.indexOfLast { it.trick != RealityTcpTricks.STOCK })
     }
 
     @Test fun manualImportedFingerprintDoesNotSilentlyBecomeChrome() {
@@ -150,7 +170,7 @@ class RealityTcpTricksTest {
         assertTrue(a.contains(RealityTcpTricks.Trial(null, "stock")))
         assertTrue(a.indexOfFirst { it.trick == RealityTcpTricks.STOCK } >
             a.indexOfLast { it.trick != RealityTcpTricks.STOCK })
-        assertTrue(a.size <= 9)
+        assertTrue(a.size <= 7)
         assertEquals(a.distinctBy { (it.fingerprint ?: "chrome") to it.trick }, a)
         assertEquals(listOf(RealityTcpTricks.Trial("chrome", "stock")),
             RealityTcpTricks.attempts("chrome", "split-early",
