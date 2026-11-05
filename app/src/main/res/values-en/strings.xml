@@ -166,4 +166,5 @@
     <string name="nlic_reality_compare_choose">REALITY comparison mode</string>
     <string name="nlic_reality_compare_quick">Quick · 6 HTTPS connections</string>
     <string name="nlic_reality_compare_extended">Extended · 18 connections (stability check)</string>
+    <string name="nlic_reality_compare_cancel">Stop comparison</string>
 </resources>
