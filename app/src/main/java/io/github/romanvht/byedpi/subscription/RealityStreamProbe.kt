@@ -97,7 +97,10 @@ internal object RealityStreamProbe {
         return Headers(status, length, chunked)
     }
 
-    private fun exact(input: InputStream, expected: Int, expiry: Long): Int {
+    private fun exact(
+        input: InputStream, expected: Int, expiry: Long,
+        onBytes: (Int) -> Unit,
+    ): Int {
         val buffer = ByteArray(16 * 1024)
         var received = 0
         while (received < expected) {
@@ -107,16 +110,20 @@ internal object RealityStreamProbe {
             if (n < 0) throw EOFException("Short transfer")
             if (n == 0) continue
             received += n
+            onBytes(n)
         }
         return received
     }
 
     /** Read only a bounded 512-KiB HTTP response. Never stores its body. */
-    internal fun drain(input: InputStream, header: Headers, expiry: Long): Int {
+    internal fun drain(
+        input: InputStream, header: Headers, expiry: Long,
+        onBytes: (Int) -> Unit = {},
+    ): Int {
         if (header.status != 200) throw IllegalStateException("HTTP status not 200")
         if (header.length != null && header.length != BYTES)
             throw IllegalStateException("Unexpected Content-Length")
-        if (!header.chunked) return exact(input, BYTES, expiry)
+        if (!header.chunked) return exact(input, BYTES, expiry, onBytes)
         var received = 0
         while (received < BYTES) {
             val chunkHex = line(input, 128).substringBefore(';')
@@ -124,7 +131,7 @@ internal object RealityStreamProbe {
                 ?: throw IllegalStateException("Invalid chunk")
             if (size <= 0 || size > BYTES - received)
                 throw IllegalStateException("Invalid chunk size")
-            received += exact(input, size, expiry)
+            received += exact(input, size, expiry, onBytes)
             if (input.read() != '\r'.code || input.read() != '\n'.code)
                 throw IllegalStateException("Invalid chunk framing")
         }
@@ -171,7 +178,7 @@ internal object RealityStreamProbe {
                     val metadata = headers(tls.inputStream)
                     stage = "HTTPS_BODY"
                     val transferStarted = System.nanoTime()
-                    received = drain(tls.inputStream, metadata, expiry)
+                    drain(tls.inputStream, metadata, expiry) { received += it }
                     bodyMs = ((System.nanoTime() - transferStarted) / 1_000_000L)
                         .coerceAtLeast(1L)
                 }
