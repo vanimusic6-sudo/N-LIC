@@ -200,7 +200,9 @@ class SubscriptionLabActivity : BaseActivity() {
             chooseMode(ConnectionMode.SUBSCRIPTION)
         }
         findViewById<MaterialButton>(R.id.nlic_reality_compare_button).setOnClickListener {
-            if (!busy && connectionMode() == ConnectionMode.SUBSCRIPTION) {
+            if (comparisonRunning) {
+                endRealityComparison(getString(R.string.nlic_reality_compare_cancelled))
+            } else if (!busy && connectionMode() == ConnectionMode.SUBSCRIPTION) {
                 AlertDialog.Builder(this)
                     .setTitle(R.string.nlic_reality_compare_choose)
                     .setItems(arrayOf(
@@ -778,9 +780,10 @@ class SubscriptionLabActivity : BaseActivity() {
         // Only the manually selected REALITY TCP/RAW server is measured;
         // no active VPN, automatic node selection or ByeDPI relay is allowed.
         findViewById<MaterialButton>(R.id.nlic_reality_compare_button).apply {
-            isEnabled = !busy && appStatus.first != AppStatus.Running &&
-                !auto && !bay && realityCompatible
-            setText(if (comparisonRunning) R.string.nlic_reality_compare_in_progress
+            isEnabled = comparisonRunning ||
+                (!busy && appStatus.first != AppStatus.Running &&
+                    !auto && !bay && realityCompatible)
+            setText(if (comparisonRunning) R.string.nlic_reality_compare_cancel
                 else R.string.nlic_reality_compare_button)
         }
         showComparisonResult()
