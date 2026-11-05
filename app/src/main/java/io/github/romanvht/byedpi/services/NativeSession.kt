@@ -26,6 +26,7 @@ import io.github.romanvht.byedpi.subscription.LibboxRuntime
 import io.github.romanvht.byedpi.subscription.XrayRuntime
 import io.github.romanvht.byedpi.subscription.XrayConfigCompiler
 import io.github.romanvht.byedpi.subscription.RealityAssistPolicy
+import io.github.romanvht.byedpi.subscription.RealityAssistMemory
 import io.github.romanvht.byedpi.subscription.RealityAssistTrace
 import io.github.romanvht.byedpi.subscription.XrayBayArgs
 import io.github.romanvht.byedpi.subscription.CoreStartException
@@ -249,7 +250,7 @@ internal class NativeSession(
                     (config.args.getOrNull(2) == "--nlic-auto" ||
                         service.getPreferences().getString(
                             "nlic_reality_tcp_utls", "profile") == RealityAssistPolicy.SMART))
-                    100_000L else 50_000L) {
+                    145_000L else 50_000L) {
                     if (xrayMode) {
                         check(createTunnel != null) { "Xray VPN requires Android TUN" }
                         RealityAssistTrace.clear(service)
