@@ -112,8 +112,8 @@ internal object TunnelHealthProbe {
                     tls.startHandshake()
                     targetTlsMs = (elapsed() - localTcpMs!! - socksMs!!).coerceAtLeast(1L)
                     stage = EgressResult.HTTP
-                    tls.outputStream.write(("GET $path HTTP/1.1\\r\\n" +
-                        "Host: $target\\r\\nConnection: close\\r\\n\\r\\n")
+                    tls.outputStream.write(("GET $path HTTP/1.1\r\n" +
+                        "Host: $target\r\nConnection: close\r\n\r\n")
                         .toByteArray(Charsets.US_ASCII))
                     tls.outputStream.flush()
                     val line = StringBuilder()
@@ -143,7 +143,7 @@ internal object TunnelHealthProbe {
      */
     internal fun acceptsHttpsResponse(statusLine: String): Boolean {
         val normalized = statusLine.trimEnd('\r')
-        val match = Regex("^HTTP/1\\.[01] ([0-9]{3})(?: [^\\r\\n]*)?$")
+        val match = Regex("^HTTP/1\\.[01] ([0-9]{3})(?: [^\r\n]*)?$")
             .matchEntire(normalized) ?: return false
         return match.groupValues[1].toInt() in 200..399
     }
