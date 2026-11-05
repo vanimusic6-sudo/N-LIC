@@ -2,6 +2,16 @@ package io.github.romanvht.byedpi.activities
 
 import android.app.Activity
 import android.content.res.ColorStateList
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
+import android.os.Handler
+import android.os.IBinder
+import android.os.Looper
+import android.os.Message
+import android.os.Messenger
+import android.os.RemoteException
 import androidx.core.content.ContextCompat
 import android.net.VpnService
 import android.os.Bundle
@@ -23,6 +33,7 @@ import io.github.romanvht.byedpi.R
 import io.github.romanvht.byedpi.data.AppStatus
 import io.github.romanvht.byedpi.data.Mode
 import io.github.romanvht.byedpi.services.ServiceManager
+import io.github.romanvht.byedpi.services.RealityCompareService
 import io.github.romanvht.byedpi.services.appStatus
 import io.github.romanvht.byedpi.subscription.LICAuto
 import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
@@ -55,6 +66,27 @@ class SubscriptionLabActivity : BaseActivity() {
     private var busy = false
     private var locallyVerified = false
     private var latestMessage: String? = null
+    private var comparisonRunning = false
+    private var comparisonResult: String? = null
+    private var comparisonConnection: ServiceConnection? = null
+    private val comparisonReceiver by lazy {
+        Messenger(Handler(Looper.getMainLooper()) { message ->
+            if (comparisonRunning) {
+                val content = message.data?.getString(RealityCompareService.TEXT).orEmpty()
+                when (message.what) {
+                    RealityCompareService.PROGRESS -> {
+                        comparisonResult = content
+                        showComparisonResult()
+                    }
+                    RealityCompareService.FINISHED -> {
+                        endRealityComparison(content, showDialog = true)
+                    }
+                    RealityCompareService.ERROR -> endRealityComparison(content)
+                }
+            }
+            true
+        })
+    }
 
     // Only repaint the single status line. Rebuilding the entire server
     // selector every second during handshake would add unnecessary CPU work.
@@ -162,6 +194,9 @@ class SubscriptionLabActivity : BaseActivity() {
         findViewById<MaterialButton>(R.id.nlic_mode_subscription).setOnClickListener {
             chooseMode(ConnectionMode.SUBSCRIPTION)
         }
+        findViewById<MaterialButton>(R.id.nlic_reality_compare_button).setOnClickListener {
+            startRealityComparison()
+        }
         findViewById<MaterialButton>(R.id.nlic_connect).setOnClickListener {
             if (appStatus.first == AppStatus.Running && appStatus.second == Mode.VPN)
                 disconnectCore()
@@ -189,6 +224,15 @@ class SubscriptionLabActivity : BaseActivity() {
         realityStatusVisible = false
         window.decorView.removeCallbacks(realityStatusTicker)
         super.onPause()
+    }
+
+    override fun onStop() {
+        // Explicit foreground-only test. Unbinding cancels the isolated
+        // service, so it cannot keep probing in the background.
+        if (comparisonRunning) {
+            endRealityComparison(getString(R.string.nlic_reality_compare_cancelled))
+        }
+        super.onStop()
     }
 
     override fun onSupportNavigateUp(): Boolean {
@@ -573,12 +617,14 @@ class SubscriptionLabActivity : BaseActivity() {
         val stage = findViewById<TextView>(R.id.nlic_stage_label)
         val runningVpn = appStatus.first == AppStatus.Running && appStatus.second == Mode.VPN
         title.setText(when {
+            comparisonRunning -> R.string.nlic_reality_compare_in_progress
             busy -> R.string.nlic_core_connecting
             runningVpn -> R.string.nlic_control_running
             else -> R.string.nlic_control_disconnected
         })
         val failure = if (local) null else ServiceManager.lastCoreFailureCode
         details.text = when {
+            comparisonRunning -> getString(R.string.nlic_reality_compare_description)
             busy -> getString(R.string.nlic_control_working)
             failure != null && !runningVpn -> failureAdvice(failure)
             latestMessage != null -> latestMessage
@@ -705,6 +751,15 @@ class SubscriptionLabActivity : BaseActivity() {
             locallyVerified = false
             render()
         }
+
+        // Comparison is user-initiated and independent of the Smart switch.
+        // Only the manually selected REALITY TCP/RAW server is measured;
+        // no active VPN, automatic node selection or ByeDPI relay is allowed.
+        findViewById<MaterialButton>(R.id.nlic_reality_compare_button).apply {
+            isEnabled = !busy && appStatus.first != AppStatus.Running &&
+                !auto && !bay && realityCompatible
+        }
+        showComparisonResult()
 
         val autoSwitch = findViewById<SwitchMaterial>(R.id.nlic_auto_switch)
         autoSwitch.setOnCheckedChangeListener(null)
@@ -838,6 +893,97 @@ class SubscriptionLabActivity : BaseActivity() {
         line.text = if (snapshot != null && !running && !busy && !inProgress)
             "Последняя попытка · $message" else message
         line.visibility = View.VISIBLE
+    }
+
+    /** Show a real same-node HTTPS A/B result, not a fabricated DPI score. */
+    private fun showComparisonResult() {
+        val resultView = findViewById<TextView>(R.id.nlic_reality_compare_result)
+        val text = comparisonResult
+        resultView.visibility = if (connectionMode() == ConnectionMode.SUBSCRIPTION &&
+            !text.isNullOrBlank()) View.VISIBLE else View.GONE
+        resultView.text = text.orEmpty()
+    }
+
+    private fun startRealityComparison() {
+        if (busy || connectionMode() != ConnectionMode.SUBSCRIPTION) return
+        // The button is disabled while the VPN is connected, but enforce the
+        // preconditions again for stale clicks and concurrent status changes.
+        if (appStatus.first == AppStatus.Running) {
+            comparisonResult = getString(R.string.nlic_reality_compare_requires_disconnected)
+            showComparisonResult()
+            return
+        }
+        if (prefs.getBoolean("nlic_core_auto", false) ||
+            prefs.getBoolean("nlic_core_bay", false)) {
+            comparisonResult = getString(R.string.nlic_reality_compare_require_manual)
+            showComparisonResult()
+            return
+        }
+        val selected = readCatalog().let { catalog ->
+            catalog.allNodes.firstOrNull { it.id == catalog.selectedNodeId }
+        }
+        val auth = LocalSocksAuth("nlic", "a".repeat(48))
+        val baseline = selected?.let {
+            XrayConfigCompiler.compile(it, auth) as? XrayConfigCompiler.Result.Compiled
+        }
+        if (baseline == null || RealityAssistPolicy.baselineFingerprint(baseline.json) == null) {
+            comparisonResult = getString(R.string.nlic_reality_compare_unsupported)
+            showComparisonResult()
+            return
+        }
+
+        comparisonRunning = true
+        busy = true
+        comparisonResult = getString(R.string.nlic_reality_compare_in_progress)
+        render()
+        val connection = object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+                if (!comparisonRunning) return
+                try {
+                    Messenger(binder).send(
+                        Message.obtain(null, RealityCompareService.START).apply {
+                            replyTo = comparisonReceiver
+                        }
+                    )
+                } catch (_: RemoteException) {
+                    endRealityComparison(getString(R.string.nlic_reality_compare_failed))
+                }
+            }
+            override fun onServiceDisconnected(name: ComponentName) {
+                if (comparisonRunning) {
+                    endRealityComparison(getString(R.string.nlic_reality_compare_failed))
+                }
+            }
+        }
+        comparisonConnection = connection
+        try {
+            if (!bindService(
+                    Intent(this, RealityCompareService::class.java),
+                    connection, Context.BIND_AUTO_CREATE
+                )) {
+                endRealityComparison(getString(R.string.nlic_reality_compare_failed))
+            }
+        } catch (_: Exception) {
+            endRealityComparison(getString(R.string.nlic_reality_compare_failed))
+        }
+    }
+
+    private fun endRealityComparison(outcome: String, showDialog: Boolean = false) {
+        comparisonResult = outcome
+        comparisonRunning = false
+        comparisonConnection?.let {
+            runCatching { unbindService(it) }
+        }
+        comparisonConnection = null
+        busy = false
+        render()
+        if (showDialog && !isFinishing && !isDestroyed) {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.nlic_reality_compare_title)
+                .setMessage(outcome)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
     }
 
     private fun runOperation(block: suspend () -> Unit) {
