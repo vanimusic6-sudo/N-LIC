@@ -17,7 +17,7 @@ internal object RealityStreamComparison {
         val ok = samples.count { it.value.successful }
         val compact = if (complete)
             "Поток HTTPS · $ok/3 проверок по 512 КБ"
-        else "Поток HTTPS · тест прерван (\${samples.size}/3)"
+        else "Поток HTTPS · тест прерван (${samples.size}/3)"
 
         fun label(fingerprint: String): String = when (fingerprint) {
             "firefox" -> "Firefox"
