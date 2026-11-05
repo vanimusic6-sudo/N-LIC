@@ -773,7 +773,18 @@ class SubscriptionLabActivity : BaseActivity() {
                 applicationContext, selected.id,
                 RealityAssistMemory.networkClass(applicationContext), bay
             )
-            if (winner != null) {
+            val manualTrick = prefs.getString(
+                "nlic_reality_tcp_trick_manual", "auto"
+            )
+            if (manualTrick in io.github.romanvht.byedpi.subscription
+                    .RealityTcpTricks.variants &&
+                manualTrick != io.github.romanvht.byedpi.subscription
+                    .RealityTcpTricks.STOCK && !bay) {
+                assistHint.text = "TCP выбран вручную: " +
+                    io.github.romanvht.byedpi.subscription.RealityTcpTricks.label(
+                        manualTrick!!
+                    ) + ". При неудаче будет проверен безопасный резерв."
+            } else if (winner != null) {
                 val name = when (winner.fingerprint) {
                     RealityAssistPolicy.CHROME -> "Chrome"
                     RealityAssistPolicy.FIREFOX -> "Firefox"
