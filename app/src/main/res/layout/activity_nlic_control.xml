@@ -75,6 +75,19 @@
     <TextView android:id="@+id/nlic_server_hint" android:layout_width="match_parent"
      android:layout_height="wrap_content" android:layout_marginTop="8dp"
      android:textColor="@color/nlic_muted" android:textSize="12sp" android:maxLines="2"/>
+    <!-- A single, explicit opt-in switch for Smart REALITY. Status and
+         compatibility hint stay visible on the same VPN home screen. -->
+    <com.google.android.material.switchmaterial.SwitchMaterial
+     android:id="@+id/nlic_reality_smart_switch"
+     android:layout_width="match_parent" android:layout_height="wrap_content"
+     android:layout_marginTop="18dp" android:minHeight="48dp"
+     android:text="@string/nlic_reality_smart_switch"
+     android:textColor="@color/nlic_text"/>
+    <TextView android:id="@+id/nlic_reality_smart_hint"
+     android:layout_width="match_parent" android:layout_height="wrap_content"
+     android:layout_marginTop="2dp" android:paddingEnd="16dp"
+     android:textSize="12sp" android:textColor="@color/nlic_muted"
+     android:text="@string/nlic_reality_smart_off"/>
     <com.google.android.material.switchmaterial.SwitchMaterial android:id="@+id/nlic_auto_switch"
      android:layout_width="match_parent" android:layout_height="wrap_content"
      android:layout_marginTop="18dp" android:minHeight="48dp"
