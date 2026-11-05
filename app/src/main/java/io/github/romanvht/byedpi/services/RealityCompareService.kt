@@ -197,7 +197,7 @@ internal class RealityCompareService : Service() {
                         verifyStream(node, auth, fingerprint)
                     }
                     streamSamples += RealityStreamComparison.Sample(fingerprint, sample)
-                    val outcome = if (sample.success)
+                    val outcome = if (sample.successful)
                         "Передано 512 КиБ через TLS"
                     else "Передача прервана · ${sample.failure ?: "UNKNOWN"}"
                     reply(client, PROGRESS,
