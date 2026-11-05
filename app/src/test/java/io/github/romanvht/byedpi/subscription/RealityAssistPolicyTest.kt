@@ -46,12 +46,12 @@ class RealityAssistPolicyTest {
             RealityAssistPolicy.candidates("smart", realityChrome, false, "profile"))
     }
 
-    @Test fun fastestValidatedVariantWinsOnlyWhenAdvantageIsMaterial() {
+    @Test fun fasterValidatedVariantWinsEvenIfDifferenceIsSmall() {
         fun m(fp: String?, latency: Long?) = RealityAssistPolicy.Measurement(fp, latency)
         assertEquals("chrome", RealityAssistPolicy.chooseBest(
             "firefox", listOf(m(null, 900), m("chrome", 680), m("safari", 700))
         ))
-        assertEquals(null, RealityAssistPolicy.chooseBest(
+        assertEquals("chrome", RealityAssistPolicy.chooseBest(
             "firefox", listOf(m(null, 900), m("chrome", 855), m("safari", 870))
         ))
         assertEquals("safari", RealityAssistPolicy.chooseBest(
