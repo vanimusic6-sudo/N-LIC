@@ -474,8 +474,10 @@ internal class NativeSession(
                             )
                             for (trick in RealityTcpTricks.available(bayEnabled)) {
                                 if (trick == RealityTcpTricks.STOCK) continue
-                                RealityAssistTrace.mark(service,
-                                    RealityAssistTrace.Event.CALIBRATING_TRANSPORT)
+                                RealityAssistTrace.mark(
+                                    service, RealityAssistTrace.Event.CALIBRATING_TRANSPORT,
+                                    preferred, trick
+                                )
                                 val plan = XrayConfigCompiler.compile(
                                     selected, auth, if (bayEnabled) bayPort else null,
                                     preferred, trick
@@ -609,7 +611,7 @@ internal class NativeSession(
                                         assistMode == RealityAssistPolicy.SAFARI ->
                                             RealityAssistTrace.Event.CHECKING_MANUAL_SAFARI
                                         else -> RealityAssistTrace.Event.CHECKING_MANUAL_CHROME
-                                    })
+                                    }, fp, trick)
                                 }
                                 verificationStarted =
                                     android.os.SystemClock.elapsedRealtime()
