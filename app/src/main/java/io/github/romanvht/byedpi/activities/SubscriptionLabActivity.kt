@@ -685,6 +685,9 @@ class SubscriptionLabActivity : BaseActivity() {
                                 }
                                 latestMessage = null
                                 locallyVerified = false
+                                // A previous A/B report must never be shown
+                                // as evidence for a newly chosen server.
+                                comparisonResult = null
                                 render()
                             }.onFailure { toast(R.string.nlic_subscriptions_error) }
                         }
