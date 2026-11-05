@@ -792,6 +792,28 @@ class SubscriptionLabActivity : BaseActivity() {
         })
         if (!runningVpn && assistMode == RealityAssistPolicy.SMART &&
             realityCompatible && !auto && selected != null) {
+            val selectedManually = prefs.getString(
+                "nlic_reality_manual_node", ""
+            ) == selected.id
+            val manualFp = if (selectedManually)
+                prefs.getString("nlic_reality_fp_manual", null) else null
+            val manualTcp = if (selectedManually)
+                prefs.getString("nlic_reality_tcp_trick_manual", null) else null
+            val manualProfile = manualFp?.takeIf {
+                it == RealityAssistPolicy.PROFILE ||
+                    it in RealityAssistPolicy.browserCandidates
+            }
+            if (manualProfile != null && manualTcp in RealityTcpTricks.variants) {
+                val displayFp = when (manualProfile) {
+                    RealityAssistPolicy.FIREFOX -> "Firefox"
+                    RealityAssistPolicy.CHROME -> "Chrome"
+                    RealityAssistPolicy.SAFARI -> "Safari"
+                    else -> "из подписки"
+                }
+                assistHint.text = "Выбрано вручную: $displayFp · " +
+                    RealityTcpTricks.label(manualTcp!!) +
+                    ". Проверится при подключении."
+            } else {
             val winner = RealityAssistMemory.load(
                 applicationContext, selected.id,
                 RealityAssistMemory.networkClass(applicationContext), bay
@@ -817,8 +839,9 @@ class SubscriptionLabActivity : BaseActivity() {
                 }
                 val technique = io.github.romanvht.byedpi.subscription
                     .RealityTcpTricks.label(winner.tcpTrick)
-                assistHint.text = "Подобрано для этой сети: $name · $technique. " +
-                    "HTTPS проверен · этот вариант будет первым при подключении."
+                assistHint.text = "Проверено ранее: $name · $technique. " +
+                    "Этот вариант попробуем первым."
+            }
             }
         }
         assistSwitch.setOnCheckedChangeListener { _, enabled ->
