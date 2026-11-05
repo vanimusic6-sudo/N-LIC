@@ -26,6 +26,7 @@ import io.github.romanvht.byedpi.subscription.LibboxRuntime
 import io.github.romanvht.byedpi.subscription.XrayRuntime
 import io.github.romanvht.byedpi.subscription.XrayConfigCompiler
 import io.github.romanvht.byedpi.subscription.RealityAssistPolicy
+import io.github.romanvht.byedpi.subscription.RealityAssistTrace
 import io.github.romanvht.byedpi.subscription.XrayBayArgs
 import io.github.romanvht.byedpi.subscription.CoreStartException
 import io.github.romanvht.byedpi.subscription.NativeTunConfig
@@ -251,6 +252,7 @@ internal class NativeSession(
                     100_000L else 50_000L) {
                     if (xrayMode) {
                         check(createTunnel != null) { "Xray VPN requires Android TUN" }
+                        RealityAssistTrace.clear(service)
                         val bayEnabled = config.args.getOrNull(1) == "--nlic-bay"
                         val autoEnabled = config.args.getOrNull(2) == "--nlic-auto"
                         val bayPort = XrayConfigCompiler.BAY_PORT
@@ -381,8 +383,35 @@ internal class NativeSession(
                         val fingerprintAttempts = RealityAssistPolicy.candidates(
                             assistMode, baselinePlan, autoEnabled
                         )
+                        val eligibleReality = RealityAssistPolicy
+                            .baselineFingerprint(baselinePlan.json) != null
+                        // LIC-Auto disables only Smart's alternate retry.
+                        // A manually selected Firefox/Chrome fingerprint is
+                        // still applied during Auto selection and must be
+                        // reported honestly after end-to-end HTTPS succeeds.
+                        val traceEligible = eligibleReality &&
+                            (!autoEnabled || assistMode != RealityAssistPolicy.SMART)
+                        RealityAssistTrace.mark(service, when {
+                            assistMode == RealityAssistPolicy.PROFILE ->
+                                RealityAssistTrace.Event.SKIPPED_DISABLED
+                            autoEnabled && assistMode == RealityAssistPolicy.SMART ->
+                                RealityAssistTrace.Event.SKIPPED_AUTO
+                            !eligibleReality -> RealityAssistTrace.Event.SKIPPED_UNSUPPORTED
+                            else -> RealityAssistTrace.Event.STARTING_ORIGINAL
+                        })
+                        // Mark as successful only after Xray HTTPS AND Android
+                        // TUN/HEV startup complete. SOCKS readiness alone is
+                        // not successful end-to-end VPN connectivity.
+                        var verifiedAssist: RealityAssistTrace.Event? = null
                         var xrayReady = false
                         for ((attemptIndex, fp) in fingerprintAttempts.withIndex()) {
+                            if (traceEligible && assistMode == RealityAssistPolicy.SMART &&
+                                attemptIndex > 0) {
+                                RealityAssistTrace.mark(service,
+                                    if (fp == RealityAssistPolicy.FIREFOX)
+                                        RealityAssistTrace.Event.RETRYING_FIREFOX
+                                    else RealityAssistTrace.Event.RETRYING_CHROME)
+                            }
                             val plan = XrayConfigCompiler.compile(
                                 selected, auth, if (bayEnabled) bayPort else null,
                                 if (assistMode == RealityAssistPolicy.SMART)
@@ -405,6 +434,21 @@ internal class NativeSession(
                                 withTimeout(START_TIMEOUT) {
                                     awaitProxy(config.host, config.port, auth)
                                 }
+                                if (traceEligible) {
+                                    RealityAssistTrace.mark(service, when {
+                                        assistMode == RealityAssistPolicy.SMART &&
+                                            attemptIndex == 0 ->
+                                                RealityAssistTrace.Event.CHECKING_ORIGINAL
+                                        assistMode == RealityAssistPolicy.SMART &&
+                                            fp == RealityAssistPolicy.FIREFOX ->
+                                                RealityAssistTrace.Event.CHECKING_FIREFOX
+                                        assistMode == RealityAssistPolicy.SMART ->
+                                            RealityAssistTrace.Event.CHECKING_CHROME
+                                        assistMode == RealityAssistPolicy.FIREFOX ->
+                                            RealityAssistTrace.Event.CHECKING_MANUAL_FIREFOX
+                                        else -> RealityAssistTrace.Event.CHECKING_MANUAL_CHROME
+                                    })
+                                }
                                 corePhase = "XRAY_HTTPS"; CoreFailureTrace.mark(service, corePhase)
                                 val nativeHttpsOk = withContext(Dispatchers.IO) {
                                     xray.verifyHttpsViaCore()
@@ -418,6 +462,21 @@ internal class NativeSession(
                                 }
                                 passed = true
                                 xrayReady = true
+                                if (traceEligible) {
+                                    verifiedAssist = when {
+                                        assistMode == RealityAssistPolicy.SMART &&
+                                            attemptIndex == 0 ->
+                                                RealityAssistTrace.Event.PASSED_ORIGINAL
+                                        assistMode == RealityAssistPolicy.SMART &&
+                                            fp == RealityAssistPolicy.FIREFOX ->
+                                                RealityAssistTrace.Event.PASSED_FALLBACK_FIREFOX
+                                        assistMode == RealityAssistPolicy.SMART ->
+                                            RealityAssistTrace.Event.PASSED_FALLBACK_CHROME
+                                        assistMode == RealityAssistPolicy.FIREFOX ->
+                                            RealityAssistTrace.Event.PASSED_MANUAL_FIREFOX
+                                        else -> RealityAssistTrace.Event.PASSED_MANUAL_CHROME
+                                    }
+                                }
                             } catch (cancelled: CancellationException) {
                                 // A remote-test timeout may indicate blocked
                                 // egress. A local/native startup timeout never
@@ -482,6 +541,7 @@ internal class NativeSession(
                         check(tunnelThread?.isAlive == true) {
                             "Xray HEV tunnel exited during startup"
                         }
+                        verifiedAssist?.let { RealityAssistTrace.mark(service, it) }
                     } else if (config.args.firstOrNull() == "--nlic-libbox") {
                         check(createTunnel != null) {
                             "LIC-Core requires VPN mode; proxy-only service is unsupported"
@@ -676,6 +736,19 @@ internal class NativeSession(
                     }
                 }
             } catch (e: CancellationException) {
+                if (xrayMode && state != EngineProtocol.STATE_STOPPING) {
+                    val pending = RealityAssistTrace.recent(service)?.event
+                    if (pending in setOf(
+                        RealityAssistTrace.Event.STARTING_ORIGINAL,
+                        RealityAssistTrace.Event.CHECKING_ORIGINAL,
+                        RealityAssistTrace.Event.RETRYING_FIREFOX,
+                        RealityAssistTrace.Event.RETRYING_CHROME,
+                        RealityAssistTrace.Event.CHECKING_FIREFOX,
+                        RealityAssistTrace.Event.CHECKING_CHROME,
+                        RealityAssistTrace.Event.CHECKING_MANUAL_FIREFOX,
+                        RealityAssistTrace.Event.CHECKING_MANUAL_CHROME
+                    )) RealityAssistTrace.mark(service, RealityAssistTrace.Event.FAILED)
+                }
                 if (state != EngineProtocol.STATE_STOPPING) {
                     if (coreMode && e is TimeoutCancellationException) {
                         fail("LIC-Core / ${corePhase}_TIMEOUT")
@@ -685,6 +758,19 @@ internal class NativeSession(
                 }
                 throw e
             } catch (e: Throwable) {
+                if (xrayMode && state != EngineProtocol.STATE_STOPPING) {
+                    val pending = RealityAssistTrace.recent(service)?.event
+                    if (pending in setOf(
+                        RealityAssistTrace.Event.STARTING_ORIGINAL,
+                        RealityAssistTrace.Event.CHECKING_ORIGINAL,
+                        RealityAssistTrace.Event.RETRYING_FIREFOX,
+                        RealityAssistTrace.Event.RETRYING_CHROME,
+                        RealityAssistTrace.Event.CHECKING_FIREFOX,
+                        RealityAssistTrace.Event.CHECKING_CHROME,
+                        RealityAssistTrace.Event.CHECKING_MANUAL_FIREFOX,
+                        RealityAssistTrace.Event.CHECKING_MANUAL_CHROME
+                    )) RealityAssistTrace.mark(service, RealityAssistTrace.Event.FAILED)
+                }
                 if (coreMode) {
                     // Some previous builds collapsed all start failures into
                     // ENGINE. Preserve the exact *safe phase*, but never the

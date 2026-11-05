@@ -47,6 +47,10 @@
    <TextView android:id="@+id/nlic_stage_label" android:layout_width="match_parent"
     android:layout_height="wrap_content" android:layout_marginTop="10dp"
     android:textColor="@color/nlic_muted" android:textSize="11sp" android:visibility="gone"/>
+   <TextView android:id="@+id/nlic_reality_assist_status" android:layout_width="match_parent"
+    android:layout_height="wrap_content" android:layout_marginTop="12dp"
+    android:textColor="@color/nlic_text" android:textSize="13sp"
+    android:lineSpacingExtra="2dp" android:visibility="gone"/>
    <View android:layout_width="match_parent" android:layout_height="1dp"
     android:layout_marginTop="34dp" android:layout_marginBottom="25dp"
     android:background="@color/nlic_border"/>

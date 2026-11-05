@@ -28,6 +28,7 @@ import io.github.romanvht.byedpi.subscription.LICAuto
 import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
 import io.github.romanvht.byedpi.subscription.XrayConfigCompiler
 import io.github.romanvht.byedpi.subscription.LocalSocksAuth
+import io.github.romanvht.byedpi.subscription.RealityAssistTrace
 import io.github.romanvht.byedpi.subscription.SubscriptionCatalog
 import io.github.romanvht.byedpi.subscription.SubscriptionFetcher
 import io.github.romanvht.byedpi.subscription.SubscriptionGroup
@@ -53,6 +54,17 @@ class SubscriptionLabActivity : BaseActivity() {
     private var busy = false
     private var locallyVerified = false
     private var latestMessage: String? = null
+
+    // Only repaint the single status line. Rebuilding the entire server
+    // selector every second during handshake would add unnecessary CPU work.
+    private var realityStatusVisible = false
+    private val realityStatusTicker = object : Runnable {
+        override fun run() {
+            if (!realityStatusVisible) return
+            updateRealityAssistStatus()
+            window.decorView.postDelayed(this, 800L)
+        }
+    }
 
     private enum class ConnectionMode { LOCAL, SUBSCRIPTION }
 
@@ -167,6 +179,15 @@ class SubscriptionLabActivity : BaseActivity() {
     override fun onResume() {
         super.onResume()
         render()
+        realityStatusVisible = true
+        window.decorView.removeCallbacks(realityStatusTicker)
+        window.decorView.post(realityStatusTicker)
+    }
+
+    override fun onPause() {
+        realityStatusVisible = false
+        window.decorView.removeCallbacks(realityStatusTicker)
+        super.onPause()
     }
 
     override fun onSupportNavigateUp(): Boolean {
@@ -690,6 +711,85 @@ class SubscriptionLabActivity : BaseActivity() {
                 else R.string.nlic_control_connect)
         }
         findViewById<MaterialButton>(R.id.nlic_manage_profiles).isEnabled = !busy
+        updateRealityAssistStatus()
+    }
+
+    /**
+     * State is reported by the actual :native Xray runtime, not inferred
+     * from the selected setting. This makes "smart enabled" distinct from
+     * "fallback really attempted", "original worked", and "HTTPS verified".
+     *
+     * No secrets, server labels, IP addresses or subscription URI in the UI.
+     */
+    private fun updateRealityAssistStatus() {
+        val line = findViewById<TextView>(R.id.nlic_reality_assist_status)
+        if (connectionMode() == ConnectionMode.LOCAL ||
+            !BuildConfig.NLIC_XRAY_INCLUDED) {
+            line.visibility = View.GONE
+            return
+        }
+        val snapshot = RealityAssistTrace.recent(applicationContext)
+        val configured = prefs.getString("nlic_reality_tcp_utls", "profile")
+        val message = when (snapshot?.event) {
+            RealityAssistTrace.Event.SKIPPED_DISABLED ->
+                "LIC-Assist не участвовал: использован исходный профиль."
+            RealityAssistTrace.Event.SKIPPED_AUTO ->
+                "LIC-Assist не участвовал: включён автоматический выбор серверов."
+            RealityAssistTrace.Event.SKIPPED_UNSUPPORTED ->
+                "LIC-Assist не применялся: выбранный сервер не VLESS + REALITY + TCP (RAW)."
+            RealityAssistTrace.Event.STARTING_ORIGINAL ->
+                "LIC-Assist: запускается исходное REALITY-подключение…"
+            RealityAssistTrace.Event.CHECKING_ORIGINAL ->
+                "LIC-Assist: проверяется HTTPS с исходным отпечатком…"
+            RealityAssistTrace.Event.RETRYING_FIREFOX ->
+                "Исходный отпечаток не прошёл HTTPS. Пробуем тот же сервер с Firefox…"
+            RealityAssistTrace.Event.RETRYING_CHROME ->
+                "Исходный отпечаток не прошёл HTTPS. Пробуем тот же сервер с Chrome…"
+            RealityAssistTrace.Event.CHECKING_FIREFOX ->
+                "Резервный Firefox: проверяем настоящий HTTPS через VPN…"
+            RealityAssistTrace.Event.CHECKING_CHROME ->
+                "Резервный Chrome: проверяем настоящий HTTPS через VPN…"
+            RealityAssistTrace.Event.CHECKING_MANUAL_FIREFOX ->
+                "Выбран Firefox: проверяем HTTPS через VPN…"
+            RealityAssistTrace.Event.CHECKING_MANUAL_CHROME ->
+                "Выбран Chrome: проверяем HTTPS через VPN…"
+            RealityAssistTrace.Event.PASSED_ORIGINAL ->
+                "LIC-Assist: исходный REALITY прошёл HTTPS. Резерв не потребовался."
+            RealityAssistTrace.Event.PASSED_FALLBACK_FIREFOX ->
+                "LIC-Assist: резервный Firefox прошёл HTTPS. Исходный отпечаток не прошёл проверку."
+            RealityAssistTrace.Event.PASSED_FALLBACK_CHROME ->
+                "LIC-Assist: резервный Chrome прошёл HTTPS. Исходный отпечаток не прошёл проверку."
+            RealityAssistTrace.Event.PASSED_MANUAL_FIREFOX ->
+                "LIC-Assist: выбранный Firefox прошёл HTTPS. Это не доказывает обход DPI."
+            RealityAssistTrace.Event.PASSED_MANUAL_CHROME ->
+                "LIC-Assist: выбранный Chrome прошёл HTTPS. Это не доказывает обход DPI."
+            RealityAssistTrace.Event.FAILED ->
+                "LIC-Assist: проверенный HTTPS установить не удалось. См. код ошибки."
+            null -> when {
+                configured == "smart" && prefs.getBoolean("nlic_core_auto", false) ->
+                    "Умный режим выбран, но при LIC-Auto резервный отпечаток не применяется."
+                configured == "smart" ->
+                    "Умный режим выбран. Его результат появится здесь после подключения."
+                configured == "firefox" -> "Firefox выбран. Подключение ещё не проверено."
+                configured == "chrome" -> "Chrome выбран. Подключение ещё не проверено."
+                else -> "LIC-Assist выключен: используется исходный профиль."
+            }
+        }
+        val running = appStatus.first == AppStatus.Running &&
+            appStatus.second == Mode.VPN
+        val inProgress = snapshot?.event in setOf(
+            RealityAssistTrace.Event.STARTING_ORIGINAL,
+            RealityAssistTrace.Event.CHECKING_ORIGINAL,
+            RealityAssistTrace.Event.RETRYING_FIREFOX,
+            RealityAssistTrace.Event.RETRYING_CHROME,
+            RealityAssistTrace.Event.CHECKING_FIREFOX,
+            RealityAssistTrace.Event.CHECKING_CHROME,
+            RealityAssistTrace.Event.CHECKING_MANUAL_FIREFOX,
+            RealityAssistTrace.Event.CHECKING_MANUAL_CHROME
+        )
+        line.text = if (snapshot != null && !running && !busy && !inProgress)
+            "Последняя попытка · $message" else message
+        line.visibility = View.VISIBLE
     }
 
     private fun runOperation(block: suspend () -> Unit) {
