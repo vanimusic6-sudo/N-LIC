@@ -26,7 +26,11 @@ class RealityTcpTricksTest {
         for (trick in listOf(
             RealityTcpTricks.SPLIT_SOFT,
             RealityTcpTricks.SPLIT_EARLY,
-            RealityTcpTricks.SPLIT_ZERO
+            RealityTcpTricks.SPLIT_ZERO,
+            RealityTcpTricks.DUET,
+            RealityTcpTricks.DUET_GATE,
+            RealityTcpTricks.DUET_MSS,
+            RealityTcpTricks.TRIO
         )) {
             val candidate = outbound(trick)
             val originalStream = baseline.getAsJsonObject("streamSettings")
@@ -38,6 +42,14 @@ class RealityTcpTricksTest {
                 .get("packets").asString)
             assertTrue(mask.getAsJsonObject("settings")
                 .getAsJsonArray("lengths").size() >= 1)
+            if (trick in listOf(
+                RealityTcpTricks.DUET, RealityTcpTricks.DUET_GATE,
+                RealityTcpTricks.DUET_MSS
+            )) assertEquals("1", mask.getAsJsonObject("settings")
+                .get("maxSplit").asString)
+            if (trick == RealityTcpTricks.TRIO)
+                assertEquals("2", mask.getAsJsonObject("settings")
+                    .get("maxSplit").asString)
             assertEquals(originalStream.get("realitySettings"),
                 stream.get("realitySettings"))
             assertEquals(baseline.get("settings"), candidate.get("settings"))
@@ -49,6 +61,10 @@ class RealityTcpTricksTest {
     @Test fun mssFastOpenAndKeepAliveTouchOnlyTransportSocketOptions() {
         val stock = outbound(RealityTcpTricks.STOCK)
         val origStream = stock.getAsJsonObject("streamSettings")
+        val duetMss = outbound(RealityTcpTricks.DUET_MSS)
+        assertEquals(1200, duetMss.getAsJsonObject("streamSettings")
+            .getAsJsonObject("sockopt").get("tcpMaxSeg").asInt)
+        assertTrue(duetMss.getAsJsonObject("streamSettings").has("finalmask"))
         val mss1200 = outbound(RealityTcpTricks.MSS_1200)
         assertEquals(1200, mss1200.getAsJsonObject("streamSettings")
             .getAsJsonObject("sockopt").get("tcpMaxSeg").asInt)
@@ -105,12 +121,24 @@ class RealityTcpTricksTest {
             RealityTcpTricks.chooseBest(listOf(m("stock", null))))
     }
 
+    @Test fun enabledHelperNeverStartsAsPlainRealityEvenWithOldStockCache() {
+        val a = RealityTcpTricks.attempts(null, RealityTcpTricks.STOCK,
+            listOf(null, "firefox", "safari"), "chrome", false)
+        assertEquals(RealityTcpTricks.Trial(null, RealityTcpTricks.DUET), a.first())
+        assertTrue(a.takeWhile { it.trick != RealityTcpTricks.STOCK }.isNotEmpty())
+        val lastHelper = a.indexOfLast { it.trick != RealityTcpTricks.STOCK }
+        assertTrue(a.drop(lastHelper + 1).all { it.trick == RealityTcpTricks.STOCK })
+        assertTrue(a.size <= 9)
+    }
+
     @Test fun boundedSameNodeRecoveryNeverSwitchesProtocolOrInsertsUnknownTricks() {
         val a = RealityTcpTricks.attempts("firefox", "split-soft",
             listOf("firefox", null, "chrome", "safari"), "chrome", false)
         assertEquals(RealityTcpTricks.Trial("firefox", "split-soft"), a.first())
         assertTrue(a.contains(RealityTcpTricks.Trial("firefox", "stock")))
         assertTrue(a.contains(RealityTcpTricks.Trial(null, "stock")))
+        assertTrue(a.indexOfFirst { it.trick == RealityTcpTricks.STOCK } >
+            a.indexOfLast { it.trick != RealityTcpTricks.STOCK })
         assertTrue(a.size <= 9)
         assertEquals(a.distinctBy { (it.fingerprint ?: "chrome") to it.trick }, a)
         assertEquals(listOf(RealityTcpTricks.Trial("chrome", "stock")),
