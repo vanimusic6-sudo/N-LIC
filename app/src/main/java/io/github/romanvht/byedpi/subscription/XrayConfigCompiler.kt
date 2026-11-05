@@ -33,7 +33,7 @@ internal object XrayConfigCompiler {
             return Result.Unsupported("Invalid private SOCKS credentials")
         }
         if (realityClientFingerprint != null &&
-            realityClientFingerprint !in setOf("chrome", "firefox")) {
+            realityClientFingerprint !in RealityAssistPolicy.browserCandidates) {
             return Result.Unsupported("Unsupported REALITY TLS client fingerprint")
         }
         if (bayPort != null) {
