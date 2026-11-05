@@ -49,7 +49,11 @@ internal object RealityComparison {
             else ((sorted[middle - 1].toDouble() + sorted[middle]) / 2).toLong()
     }
 
-    fun report(samples: List<Sample>, plannedTrials: Int = QUICK_TRIALS): Summary {
+    fun report(
+        samples: List<Sample>,
+        plannedTrials: Int = QUICK_TRIALS,
+        serverTcp: RealityTransportProbe.TcpResult? = null,
+    ): Summary {
         val expected = schedule(plannedTrials)
         val complete = expected != null && samples.map { it.profile } == expected
         val each = if (expected == null) 0 else plannedTrials / 3
@@ -110,6 +114,17 @@ internal object RealityComparison {
             append(row(FIREFOX, "Firefox")).append('\n')
             append(row(CHROME, "Chrome")).append("\n\n")
             append(verdict).append("\n\n")
+            serverTcp?.let { tcp ->
+                append("Контроль TCP до VPN-сервера: ")
+                if (tcp.connected) {
+                    append("доступен")
+                    tcp.elapsedMs?.let { append(" · ").append(it).append(" мс") }
+                } else {
+                    append("нет подтверждения · ")
+                    append(tcp.failureKind ?: "CONNECT")
+                }
+                append("\n")
+            }
             append("Этапы HTTPS · медианы успешных проверок\n")
             append(phase("SOCKS CONNECT", { it.socksConnectMs })).append('\n')
             append(phase("TLS проверочного сайта", { it.targetTlsMs })).append('\n')
@@ -118,7 +133,9 @@ internal object RealityComparison {
             if (samples.any { it.secondEndpoint })
                 append("\nРезервный тестовый сайт использован: ")
                     .append(samples.count { it.secondEndpoint }).append(" раз.")
-            append("\n\nSOCKS CONNECT не измеряет REALITY-рукопожатие отдельно.")
+            append("\n\nTCP до сервера проверяет доступность порта, но не REALITY.")
+            append("\nПри доменном адресе TCP-время также включает DNS.")
+            append("\nSOCKS CONNECT не измеряет REALITY-рукопожатие отдельно.")
             append("\nТест не меняет VPN и не доказывает причину фильтрации.")
         }
 
