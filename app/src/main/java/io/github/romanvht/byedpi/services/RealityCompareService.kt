@@ -220,13 +220,16 @@ internal class RealityCompareService : Service() {
         val compiled = XrayConfigCompiler.compile(
             node, auth, realityClientFingerprint = alternate
         ) as? XrayConfigCompiler.Result.Compiled
-            ?: return RealityComparison.Sample(fingerprint, false, null)
+            ?: return RealityComparison.Sample(fingerprint, false, null,
+                failureStage = "CONFIG")
         val runtime = XrayRuntime(applicationContext, recordCoreStage = false)
+        var stage = "XRAY_START"
         try {
             // Stop and close each core before starting the next variation.
             // A successful local SOCKS negotiation is not enough: a real
             // HTTPS request, with trusted certificate verification, is required.
             runtime.start(compiled.json)
+            stage = "LOCAL_SOCKS"
             val deadline = SystemClock.elapsedRealtime() + 4_000L
             var ready = false
             while (SystemClock.elapsedRealtime() < deadline) {
@@ -237,7 +240,10 @@ internal class RealityCompareService : Service() {
                 }
                 Thread.sleep(120)
             }
-            if (!ready) return RealityComparison.Sample(fingerprint, false, null)
+            if (!ready) return RealityComparison.Sample(
+                fingerprint, false, null, failureStage = "LOCAL_SOCKS"
+            )
+            stage = "HTTPS_TEST"
 
             // Never time a mere open TCP socket as VPN authentication.
             // Capture separate target HTTPS probe phases. The SOCKS CONNECT
@@ -268,7 +274,9 @@ internal class RealityCompareService : Service() {
                 secondEndpoint = second != null,
             )
         } catch (_: Exception) {
-            return RealityComparison.Sample(fingerprint, false, null)
+            return RealityComparison.Sample(
+                fingerprint, false, null, failureStage = stage
+            )
         } finally {
             runtime.close()
         }
