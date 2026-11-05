@@ -43,6 +43,7 @@ import io.github.romanvht.byedpi.subscription.XrayConfigCompiler
 import io.github.romanvht.byedpi.subscription.LocalSocksAuth
 import io.github.romanvht.byedpi.subscription.RealityAssistTrace
 import io.github.romanvht.byedpi.subscription.RealityAssistPolicy
+import io.github.romanvht.byedpi.subscription.RealityAssistLab
 import io.github.romanvht.byedpi.subscription.RealityAssistMemory
 import io.github.romanvht.byedpi.subscription.SubscriptionCatalog
 import io.github.romanvht.byedpi.subscription.SubscriptionFetcher
@@ -72,6 +73,7 @@ class SubscriptionLabActivity : BaseActivity() {
     private var comparisonRunning = false
     private var comparisonResult: String? = null
     private var comparisonDetails: String? = null
+    private var comparisonRows: List<RealityAssistLab.Row>? = null
     private var comparisonConnection: ServiceConnection? = null
     private val comparisonReceiver by lazy {
         Messenger(Handler(Looper.getMainLooper()) { message ->
@@ -85,7 +87,21 @@ class SubscriptionLabActivity : BaseActivity() {
                     RealityCompareService.FINISHED -> {
                         val compact = message.data
                             ?.getString(RealityCompareService.COMPACT)
+                        val rows = message.data?.getStringArrayList(
+                            RealityCompareService.ROWS
+                        )?.mapNotNull { RealityAssistLab.parse(it) }
+                        comparisonRows = rows?.takeIf { it.isNotEmpty() }
                         endRealityComparison(content, compact, showDialog = true)
+                        // The user already opted into Smart: select the
+                        // fastest fully verified strategy automatically
+                        // after the explicit full test, not during a random
+                        // background check. The dialog still lets them
+                        // override it with any other fully verified row.
+                        if (prefs.getString("nlic_reality_tcp_utls", "profile") ==
+                            RealityAssistPolicy.SMART) {
+                            rows?.let { RealityAssistLab.best(it) }
+                                ?.let { applyLabChoice(it, automatic = true) }
+                        }
                     }
                     RealityCompareService.ERROR -> endRealityComparison(content)
                 }
@@ -204,23 +220,7 @@ class SubscriptionLabActivity : BaseActivity() {
             if (comparisonRunning) {
                 endRealityComparison(getString(R.string.nlic_reality_compare_cancelled))
             } else if (!busy && connectionMode() == ConnectionMode.SUBSCRIPTION) {
-                AlertDialog.Builder(this)
-                    .setTitle(R.string.nlic_reality_compare_choose)
-                    .setItems(arrayOf(
-                        getString(R.string.nlic_reality_compare_quick),
-                        getString(R.string.nlic_reality_compare_extended),
-                        getString(R.string.nlic_reality_compare_stream)
-                    )) { _, choice ->
-                        startRealityComparison(
-                            when (choice) {
-                                1 -> 18
-                                2 -> 3 // 3×512 KiB through selected REALITY
-                                else -> 6
-                            }
-                        )
-                    }
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .show()
+                startRealityComparison(RealityAssistLab.MODE_ALL)
             }
         }
         findViewById<MaterialButton>(R.id.nlic_connect).setOnClickListener {
@@ -715,6 +715,7 @@ class SubscriptionLabActivity : BaseActivity() {
                                 // as evidence for a newly chosen server.
                                 comparisonResult = null
                                 comparisonDetails = null
+                                comparisonRows = null
                                 render()
                             }.onFailure { toast(R.string.nlic_subscriptions_error) }
                         }
@@ -1027,7 +1028,12 @@ class SubscriptionLabActivity : BaseActivity() {
         resultView.text = if (comparisonDetails != null)
             "${text.orEmpty()}  ·  Подробнее" else text.orEmpty()
         resultView.setOnClickListener(if (comparisonDetails != null) {
-            View.OnClickListener { comparisonDetails?.let { showComparisonDialog(it) } }
+            View.OnClickListener {
+                val rows = comparisonRows
+                val details = comparisonDetails
+                if (rows != null && details != null) showLabResults(rows, details)
+                else details?.let { showComparisonDialog(it) }
+            }
         } else null)
     }
 
@@ -1063,6 +1069,7 @@ class SubscriptionLabActivity : BaseActivity() {
         busy = true
         comparisonResult = getString(R.string.nlic_reality_compare_in_progress)
         comparisonDetails = null
+        comparisonRows = null
         render()
         val connection = object : ServiceConnection {
             override fun onServiceConnected(name: ComponentName, binder: IBinder) {
@@ -1097,6 +1104,84 @@ class SubscriptionLabActivity : BaseActivity() {
         } catch (_: Exception) {
             endRealityComparison(getString(R.string.nlic_reality_compare_failed))
         }
+    }
+
+    /**
+     * Single truthful results screen. All tested strategies are shown, not
+     * just the fastest, with unsuccessful tests clearly marked. A tested row
+     * is never silently applied: users can choose any fully verified one.
+     */
+    private fun showLabResults(
+        rows: List<RealityAssistLab.Row>,
+        details: String,
+    ) {
+        if (isFinishing || isDestroyed) return
+        val suggested = RealityAssistLab.best(rows)
+        var selectedIndex = rows.indexOf(suggested)
+        val labels = rows.map { it.human() }.toTypedArray()
+        val passed = rows.count { it.fullSuccess }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("LIC-Assist · работает $passed из ${rows.size}")
+            .setSingleChoiceItems(labels, selectedIndex) { selector, index ->
+                selectedIndex = index
+                (selector as? AlertDialog)
+                    ?.getButton(AlertDialog.BUTTON_POSITIVE)
+                    ?.isEnabled = rows[index].fullSuccess
+            }
+            .setPositiveButton("Использовать") { _, _ ->
+                val row = rows.getOrNull(selectedIndex)
+                if (row != null) applyLabChoice(row, automatic = false)
+            }
+            .setNeutralButton("Подробности") { _, _ -> showComparisonDialog(details) }
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled =
+                selectedIndex >= 0 && rows[selectedIndex].fullSuccess
+        }
+        dialog.show()
+    }
+
+    /**
+     * Only fully verified manual-lab rows are eligible. AtomicFile storage
+     * is shared with the isolated Android VPN process, and the result is
+     * deliberately scoped to the manually selected node and network class.
+     */
+    private fun applyLabChoice(
+        row: RealityAssistLab.Row,
+        automatic: Boolean,
+    ): Boolean {
+        val ms = row.medianMs
+        if (!row.fullSuccess || ms == null) {
+            if (!automatic) toastMessage("Этот способ не подтвердил HTTPS и поток.")
+            return false
+        }
+        val catalog = readCatalog()
+        val node = catalog.allNodes.firstOrNull { it.id == catalog.selectedNodeId }
+        if (node == null) {
+            if (!automatic) toastMessage("Сервер изменился. Повтори проверку.")
+            return false
+        }
+        val saved = RealityAssistMemory.save(applicationContext, node.id,
+            RealityAssistMemory.networkClass(applicationContext),
+            bay = false, fingerprint = row.fingerprint,
+            measuredMs = ms, tcpTrick = row.trick)
+        if (!saved) {
+            if (!automatic) toastMessage("Не удалось сохранить выбранный способ.")
+            return false
+        }
+        prefs.edit().putString("nlic_reality_tcp_utls", RealityAssistPolicy.SMART)
+            .remove("nlic_reality_tcp_trick_manual").commit()
+        RealityAssistTrace.clear(applicationContext)
+        comparisonResult = "Выбрано: ${row.title()} · HTTPS 2/2 · 512 КиБ ✓"
+        locallyVerified = false
+        render()
+        if (!automatic) toastMessage("Будет использован: ${row.title()}")
+        return true
+    }
+
+    private fun toastMessage(text: String) {
+        Toast.makeText(this, text, Toast.LENGTH_LONG).show()
     }
 
     private fun showComparisonDialog(details: String) {
@@ -1146,7 +1231,11 @@ class SubscriptionLabActivity : BaseActivity() {
         comparisonConnection = null
         busy = false
         render()
-        if (showDialog) showComparisonDialog(outcome)
+        if (showDialog) {
+            val rows = comparisonRows
+            if (rows != null) showLabResults(rows, outcome)
+            else showComparisonDialog(outcome)
+        }
     }
 
     private fun runOperation(block: suspend () -> Unit) {

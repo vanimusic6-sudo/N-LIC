@@ -56,6 +56,18 @@ assert ids["nlic_reality_smart_hint"].get(android + "visibility") != "gone"
 assert ids["nlic_reality_compare_button"].get(android + "visibility") != "gone"
 assert "R.id.nlic_reality_compare_button" in activity
 assert "RealityCompareService.START" in activity
+assert "RealityAssistLab.MODE_ALL" in activity, "Full-lab button must run every method"
+assert "RealityAssistLab.best" in activity, "Ranked fully verified result must be usable"
+assert "RealityAssistMemory.save(" in activity, "User-chosen verified method must persist"
+assert 'action("LIC-Assist ·' not in settings, "No duplicate advanced selector"
+assert 'action("Способ TCP ·' not in settings, "No second hidden TCP selector"
+assert 'action("Повторить подбор REALITY"' not in settings, "No confusing parallel retry menu"
+native = (root / "app/src/main/java/io/github/romanvht/byedpi/services/NativeSession.kt").read_text(encoding="utf-8")
+assert "RealityAssistMemory.load(" in native
+assert "for (trick in RealityTcpTricks.available(" not in native, "No hidden connect-time benchmarks"
+assert "RealityTcpTricks.attempts(" in native
+memory = (root / "app/src/main/java/io/github/romanvht/byedpi/subscription/RealityAssistMemory.kt").read_text(encoding="utf-8")
+assert "AtomicFile(" in memory, "The VPN runs in another Android process"
 for caption in (
     "Ядро локального обхода", "Проверить стратегии",
     "Домены и исключения", "DNS, IPv6 и приложения",
