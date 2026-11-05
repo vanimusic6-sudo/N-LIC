@@ -433,4 +433,5 @@
     <string name="nlic_reality_compare_cancel">Karşılaştırmayı durdur</string>
     <string name="nlic_reality_compare_stream">Akış · 3 × 512 KiB (aktarım kararlılığı)</string>
     <string name="nlic_reality_smart_manual_safari">Safari elle seçili. Doğrulanmış en iyi profili otomatik seçmek için anahtarı açın.</string>
+    <string name="nlic_reality_smart_disable_bay">LIC-helper (Duet) için LIC-Bay'i kapatın: harici proxy TCP bağlantısını yönetiyor.</string>
 </resources>
