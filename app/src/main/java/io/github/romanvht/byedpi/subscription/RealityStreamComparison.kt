@@ -14,7 +14,7 @@ internal object RealityStreamComparison {
 
     fun summarize(samples: List<Sample>): Summary {
         val complete = samples.map { it.fingerprint } == sequence
-        val ok = samples.count { it.value.success }
+        val ok = samples.count { it.value.successful }
         val compact = if (complete)
             "Поток HTTPS · $ok/3 проверок по 512 КБ"
         else "Поток HTTPS · тест прерван (\${samples.size}/3)"
@@ -30,7 +30,7 @@ internal object RealityStreamComparison {
             for (sample in samples) {
                 append(label(sample.fingerprint)).append(": ")
                 val result = sample.value
-                if (result.success) {
+                if (result.successful) {
                     append("512 КиБ доставлены")
                     result.mbps?.let {
                         append(" · ")
