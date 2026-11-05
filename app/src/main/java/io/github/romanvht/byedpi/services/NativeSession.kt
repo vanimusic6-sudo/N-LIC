@@ -399,7 +399,12 @@ internal class NativeSession(
                         val cached = if (adaptive) RealityAssistMemory.load(
                             service, selected.id, networkClass, bayEnabled
                         ) else null
-                        val forcedTcpTrick = if (adaptive && !bayEnabled) {
+                        val manualNodeMatches = selected.id ==
+                            service.getPreferences().getString(
+                                "nlic_reality_manual_node", ""
+                            )
+                        val forcedTcpTrick = if (adaptive && !bayEnabled &&
+                            manualNodeMatches) {
                             service.getPreferences().getString(
                                 "nlic_reality_tcp_trick_manual", "auto"
                             )?.takeIf {
@@ -412,7 +417,8 @@ internal class NativeSession(
                         // same-server fallbacks only if authenticated HTTPS fails.
                         // An explicit Lab result (or user's manual profile) can
                         // be used immediately and is always verified again.
-                        val forcedFingerprint = if (adaptive) {
+                        val forcedFingerprint = if (adaptive &&
+                            manualNodeMatches) {
                             service.getPreferences().getString(
                                 "nlic_reality_fp_manual", "auto"
                             )?.takeIf { it in RealityAssistPolicy.browserCandidates ||
