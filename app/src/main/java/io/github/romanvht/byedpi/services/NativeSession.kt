@@ -731,7 +731,11 @@ internal class NativeSession(
                                 )
                             }
                         }
-                        verifiedAssist?.let { RealityAssistTrace.mark(service, it) }
+                        verifiedAssist?.let {
+                            RealityAssistTrace.mark(
+                                service, it, verifiedFingerprint, verifiedTcpTrick
+                            )
+                        }
                     } else if (config.args.firstOrNull() == "--nlic-libbox") {
                         check(createTunnel != null) {
                             "LIC-Core requires VPN mode; proxy-only service is unsupported"
