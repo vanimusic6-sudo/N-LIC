@@ -26,10 +26,15 @@ internal object XrayConfigCompiler {
         node: SubscriptionNode,
         auth: LocalSocksAuth,
         bayPort: Int? = null,
+        realityClientFingerprint: String? = null,
     ): Result {
         if (auth.username != "nlic" || auth.password.length !in 24..128 ||
             !auth.password.all { it in "0123456789abcdef" }) {
             return Result.Unsupported("Invalid private SOCKS credentials")
+        }
+        if (realityClientFingerprint != null &&
+            realityClientFingerprint !in setOf("chrome", "firefox")) {
+            return Result.Unsupported("Unsupported REALITY TLS client fingerprint")
         }
         if (bayPort != null) {
             if (bayPort !in 1..65535 || bayPort == SOCKS_PORT) {
@@ -51,6 +56,19 @@ internal object XrayConfigCompiler {
                 convert(singOutbound)
             } ?: return Result.Unsupported("Unsupported Xray transport")
 
+            // LIC-Assist changes only Xray's uTLS ClientHello, never the
+            // VPN server, credentials, VLESS flow, SNI or REALITY auth.
+            // This does not emulate the entire Firefox browser.
+            if (realityClientFingerprint != null &&
+                outbound.get("protocol")?.asString == "vless") {
+                val streamSettings = outbound.getAsJsonObject("streamSettings")
+                if (streamSettings?.get("network")?.asString == "raw" &&
+                    streamSettings.get("security")?.asString == "reality") {
+                    val reality = streamSettings.getAsJsonObject("realitySettings")
+                        ?: return Result.Unsupported("Missing REALITY authentication")
+                    reality.addProperty("fingerprint", realityClientFingerprint)
+                }
+            }
             outbound.addProperty("tag", PROXY_TAG)
             if (bayPort != null) {
                 // DialerProxy intercepts Xray's actual socket creation for
@@ -197,6 +215,10 @@ internal object XrayConfigCompiler {
             val reality = tls.getAsJsonObject("reality")
             val security = if (reality?.get("enabled")?.asBoolean == true)
                 "reality" else "tls"
+            // Xray REALITY supports RAW, XHTTP and gRPC. XHTTP is not
+            // translated by this compiler yet; WS/HTTPUpgrade are invalid.
+            if (security == "reality" && targetNetwork !in setOf("raw", "grpc"))
+                return null
             stream.addProperty("security", security)
             val tlsSettings = JsonObject().apply {
                 addProperty("serverName", tls.get("server_name")?.asString ?: return null)
@@ -207,6 +229,9 @@ internal object XrayConfigCompiler {
                 }
             }
             if (security == "reality") {
+                val sid = reality?.get("short_id")?.asString.orEmpty()
+                if (sid.length > 16 || sid.length % 2 != 0 ||
+                    sid.any { it !in "0123456789abcdefABCDEF" }) return null
                 val realitySettings = JsonObject().apply {
                     addProperty("serverName",
                         tls.get("server_name")?.asString ?: return null)
