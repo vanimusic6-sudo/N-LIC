@@ -43,7 +43,10 @@ internal object RealityAssistLab {
         fun human(): String {
             val state = when {
                 fullSuccess -> "✓ Работает"
-                successes == 0 -> "✕ Не подключился"
+                error == "CONFIG" -> "— Не поддерживается ядром"
+                error == "XRAY_START" || error == "LOCAL_SOCKS" ->
+                    "✕ Не запустился"
+                successes == 0 -> "✕ HTTPS не прошёл"
                 !transferOk -> "⚠ HTTPS есть, поток не прошёл"
                 else -> "⚠ Нестабильно"
             }
@@ -63,7 +66,7 @@ internal object RealityAssistLab {
         if (p.size != 6) return null
         if (p[0] !in listOf(PROFILE) + RealityAssistPolicy.browserCandidates ||
             p[1] !in RealityTcpTricks.variants) return null
-        val a = p[2].toLongOrNull()?.takeIf { it in 0..30_000 } ?: return null
+        val a = p[2].toLongOrNull()?.takeIf { it in 0L..30_000L } ?: return null
         val b = p[3].toLongOrNull()?.takeIf { it in 0..30_000 } ?: return null
         if (p[4] !in listOf("0","1") ||
             !p[5].matches(Regex("[A-Z_]{0,28}"))) return null
@@ -117,7 +120,9 @@ internal object RealityAssistLab {
             } else {
                 append("Подтверждённых вариантов нет. Сохранять нечего.\n")
             }
-            append("Этот тест показывает доступность, но не доказывает обход DPI.")
+            append("Рабочий способ подтверждён HTTPS и небольшим потоком. ")
+                .append("Сам системный VPN после выбора ещё нужно подключить. ")
+                .append("Тест не доказывает причину блокировки DPI.")
         }
     }
 }
