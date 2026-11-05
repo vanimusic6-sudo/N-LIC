@@ -15,7 +15,11 @@ internal object RealityAssistMemory {
     private const val STORE = "nlic_reality_adaptive_v1"
     private const val TTL_MS = 12L * 60 * 60 * 1000
 
-    data class Winner(val fingerprint: String, val measuredMs: Long)
+    data class Winner(
+        val fingerprint: String,
+        val measuredMs: Long,
+        val tcpTrick: String = RealityTcpTricks.STOCK,
+    )
 
     fun networkClass(context: Context): String {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE)
@@ -64,7 +68,10 @@ internal object RealityAssistMemory {
             fp != RealityAssistPolicy.PROFILE) return@runCatching null
         val ms = preferences.getLong(key + "_ms", 0L)
         if (ms !in 1L..30_000L) return@runCatching null
-        Winner(fp!!, ms)
+        val trick = preferences.getString(key + "_trick", RealityTcpTricks.STOCK)
+            ?.takeIf { it in RealityTcpTricks.variants }
+            ?: RealityTcpTricks.STOCK
+        Winner(fp!!, ms, trick)
     }.getOrNull()
 
     fun save(
@@ -74,14 +81,17 @@ internal object RealityAssistMemory {
         bay: Boolean,
         fingerprint: String,
         measuredMs: Long,
+        tcpTrick: String = RealityTcpTricks.STOCK,
     ) {
         if (fingerprint !in RealityAssistPolicy.browserCandidates &&
             fingerprint != RealityAssistPolicy.PROFILE) return
-        if (measuredMs !in 1L..30_000L) return
+        if (measuredMs !in 1L..30_000L ||
+            tcpTrick !in RealityTcpTricks.variants) return
         runCatching {
             val key = key(context, nodeId, network, bay)
             prefs(context).edit()
                 .putString(key + "_fp", fingerprint)
+                .putString(key + "_trick", tcpTrick)
                 .putLong(key + "_ms", measuredMs)
                 .putLong(key + "_at", System.currentTimeMillis())
                 .apply()
@@ -92,7 +102,7 @@ internal object RealityAssistMemory {
         runCatching {
             val key = key(context, nodeId, network, bay)
             prefs(context).edit().remove(key + "_fp").remove(key + "_ms")
-                .remove(key + "_at").apply()
+                .remove(key + "_trick").remove(key + "_at").apply()
         }
     }
 }
