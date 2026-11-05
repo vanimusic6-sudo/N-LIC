@@ -459,7 +459,9 @@ internal class NativeSession(
                         // authenticated browser to test REALITY ClientHello
                         // record splitting and TCP socket adjustments. One core
                         // at a time, same server and credentials, never TUN yet.
-                        val preferred = cached?.fingerprint ?: calibratedChoice
+                        val preferred = cached?.fingerprint?.takeUnless {
+                            it == RealityAssistPolicy.PROFILE
+                        } ?: calibratedChoice
                         val trickResults = mutableListOf<RealityTcpTricks.Measurement>()
                         var chosenTcpTrick = cached?.tcpTrick ?: RealityTcpTricks.STOCK
                         if (adaptive && cached == null && baselineFingerprint != null) {
@@ -566,7 +568,12 @@ internal class NativeSession(
                                     fp else realityFingerprint,
                                 trick
                             ) as? XrayConfigCompiler.Result.Compiled
-                                ?: throw CoreStartException("PROTOCOL_UNSUPPORTED")
+                            if (plan == null) {
+                                // Unsupported optional socket or finalmask
+                                // must not break a verified stock connection.
+                                if (adaptive && attemptIndex < attempts.lastIndex) continue
+                                throw CoreStartException("PROTOCOL_UNSUPPORTED")
+                            }
 
                             // Never add VPN routes or promote a candidate until
                             // a real HTTPS check through the encrypted core
