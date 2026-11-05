@@ -154,4 +154,13 @@
     <string name="nlic_reality_smart_disconnect">Disconnect VPN to change LIC-Assist.</string>
     <string name="nlic_reality_smart_manual_firefox">Manual Firefox fingerprint is selected. Turn on this switch for Smart mode.</string>
     <string name="nlic_reality_smart_manual_chrome">Manual Chrome fingerprint is selected. Turn on this switch for Smart mode.</string>
+    <string name="nlic_reality_compare_button">Compare with LIC-Assist</string>
+    <string name="nlic_reality_compare_description">Six HTTPS checks on the same REALITY server: original, Firefox and Chrome. Does not enable VPN.</string>
+    <string name="nlic_reality_compare_requires_disconnected">Disconnect VPN before comparing.</string>
+    <string name="nlic_reality_compare_require_manual">Disable LIC-Auto and LIC-Bay for this comparison.</string>
+    <string name="nlic_reality_compare_unsupported">Select VLESS + TCP + REALITY.</string>
+    <string name="nlic_reality_compare_cancelled">Comparison stopped when you left the screen.</string>
+    <string name="nlic_reality_compare_failed">Could not run the comparison. Please try again.</string>
+    <string name="nlic_reality_compare_in_progress">Comparing REALITY…</string>
+    <string name="nlic_reality_compare_title">Comparison results</string>
 </resources>
