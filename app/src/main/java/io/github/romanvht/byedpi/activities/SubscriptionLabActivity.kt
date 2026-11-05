@@ -1112,8 +1112,11 @@ class SubscriptionLabActivity : BaseActivity() {
         val passed = rows.count { it.fullSuccess }
         val dialog = AlertDialog.Builder(this)
             .setTitle("LIC-Assist · работает $passed из ${rows.size}")
-            .setSingleChoiceItems(labels, selectedIndex) { _, index ->
+            .setSingleChoiceItems(labels, selectedIndex) { selector, index ->
                 selectedIndex = index
+                (selector as? AlertDialog)
+                    ?.getButton(AlertDialog.BUTTON_POSITIVE)
+                    ?.isEnabled = rows[index].fullSuccess
             }
             .setPositiveButton("Использовать") { _, _ ->
                 val row = rows.getOrNull(selectedIndex)
@@ -1142,12 +1145,8 @@ class SubscriptionLabActivity : BaseActivity() {
             .setNegativeButton(android.R.string.cancel, null)
             .create()
         dialog.setOnShowListener {
-            val apply = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-            apply.isEnabled = selectedIndex >= 0
-            dialog.listView?.setOnItemClickListener { _, _, index, _ ->
-                selectedIndex = index
-                apply.isEnabled = rows.getOrNull(index)?.fullSuccess == true
-            }
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled =
+                selectedIndex >= 0 && rows[selectedIndex].fullSuccess
         }
         dialog.show()
     }
