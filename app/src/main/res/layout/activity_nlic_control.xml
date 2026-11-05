@@ -88,6 +88,20 @@
      android:layout_marginTop="2dp" android:paddingEnd="16dp"
      android:textSize="12sp" android:textColor="@color/nlic_muted"
      android:text="@string/nlic_reality_smart_off"/>
+    <com.google.android.material.button.MaterialButton
+     android:id="@+id/nlic_reality_compare_button"
+     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+     android:layout_width="match_parent" android:layout_height="wrap_content"
+     android:minHeight="48dp" android:layout_marginTop="12dp"
+     android:text="@string/nlic_reality_compare_button"
+     android:textAllCaps="false" android:textSize="14sp"
+     app:cornerRadius="16dp"/>
+    <TextView android:id="@+id/nlic_reality_compare_result"
+     android:layout_width="match_parent" android:layout_height="wrap_content"
+     android:layout_marginTop="8dp" android:paddingStart="4dp"
+     android:paddingEnd="4dp" android:textColor="@color/nlic_text"
+     android:textSize="13sp" android:lineSpacingExtra="3dp"
+     android:visibility="gone"/>
     <com.google.android.material.switchmaterial.SwitchMaterial android:id="@+id/nlic_auto_switch"
      android:layout_width="match_parent" android:layout_height="wrap_content"
      android:layout_marginTop="18dp" android:minHeight="48dp"

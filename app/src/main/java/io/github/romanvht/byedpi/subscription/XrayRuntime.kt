@@ -12,7 +12,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  * No raw configuration or nested Go exception is ever logged.
  * Xray owns local SOCKS; HEV owns Android VpnService's sole TUN.
  */
-internal class XrayRuntime(private val context: Context) : AutoCloseable {
+internal class XrayRuntime(
+    private val context: Context,
+    private val recordCoreStage: Boolean = true,
+) : AutoCloseable {
     companion object {
         private const val TAG = "NLICXray"
         private const val PREFIX = "libv2ray."
@@ -30,7 +33,7 @@ internal class XrayRuntime(private val context: Context) : AutoCloseable {
     fun start(config: String) {
         check(!closed.get() && controller == null)
         check(installed()) { "Xray core is not bundled in this APK" }
-        CoreFailureTrace.mark(context, "XRAY_START")
+        if (recordCoreStage) CoreFailureTrace.mark(context, "XRAY_START")
         try {
             val module = Class.forName(PREFIX + "Libv2ray")
             val callback = Class.forName(PREFIX + "CoreCallbackHandler")
