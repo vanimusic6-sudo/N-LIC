@@ -411,4 +411,12 @@
     <string name="nlic_privacy_confirmation">Mở cài đặt VPN của hệ thống? N-LIC không thể tự bật chặn kết nối khi không có VPN.</string>
     <string name="nlic_privacy_unavailable">Không mở được cài đặt VPN trên thiết bị này.</string>
     <string name="nlic_core_advice_native_crash">Lõi Android dừng trong khi khởi động. Mã bên dưới chỉ ra giai đoạn cuối trước khi lỗi. Đây có thể là lỗi ứng dụng hoặc tương thích động cơ, không nhất thiết do máy chủ. Chỉ chia sẻ mã, không gửi khóa.</string>
+    <string name="nlic_reality_smart_switch">LIC-Assist · REALITY</string>
+    <string name="nlic_reality_smart_on">Bật · kiểm tra kết nối gốc, nếu thất bại sẽ thử dấu vân tay thay thế.</string>
+    <string name="nlic_reality_smart_off">Tắt · dùng cấu hình VLESS trong danh sách đăng ký.</string>
+    <string name="nlic_reality_smart_need_server">Chỉ dùng cho VLESS + TCP + REALITY.</string>
+    <string name="nlic_reality_smart_disable_auto">Chọn một máy chủ cụ thể và tắt LIC-Auto để dùng LIC-Assist.</string>
+    <string name="nlic_reality_smart_disconnect">Ngắt kết nối VPN để thay đổi LIC-Assist.</string>
+    <string name="nlic_reality_smart_manual_firefox">Đã chọn dấu vân tay Firefox thủ công. Bật công tắc để dùng chế độ thông minh.</string>
+    <string name="nlic_reality_smart_manual_chrome">Đã chọn dấu vân tay Chrome thủ công. Bật công tắc để dùng chế độ thông minh.</string>
 </resources>
