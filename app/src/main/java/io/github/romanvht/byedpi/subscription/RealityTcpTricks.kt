@@ -106,7 +106,7 @@ internal object RealityTcpTricks {
             it in RealityAssistPolicy.browserCandidates && it != baselineFp
         } ?: if (baselineFp == RealityAssistPolicy.CHROME) null
             else RealityAssistPolicy.CHROME
-        if (bay) return listOf(Trial(candidateFp, STOCK))
+        if (bay) return listOf(Trial(preferredFp, STOCK))
         val chosen = preferredTrick.takeIf { it in firstFlight } ?: DEFAULT_HELPER
         val helper = listOf(
             Trial(candidateFp, chosen),
