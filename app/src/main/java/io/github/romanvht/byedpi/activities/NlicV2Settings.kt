@@ -16,6 +16,8 @@ import io.github.romanvht.byedpi.BuildConfig
 import io.github.romanvht.byedpi.R
 import io.github.romanvht.byedpi.services.ServiceManager
 import io.github.romanvht.byedpi.subscription.RealityAssistTrace
+import io.github.romanvht.byedpi.subscription.RealityAssistMemory
+import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.utility.getPreferences
 
 /**
@@ -160,21 +162,24 @@ internal object NlicV2Settings {
                 "smart" -> "Умный режим"
                 "firefox" -> "Firefox"
                 "chrome" -> "Chrome"
+                "safari" -> "Safari"
                 else -> "Из конфигурации"
             }
             action("LIC-Assist · $currentName",
-                "Умный режим: при неудаче проверяет тот же REALITY-сервер с альтернативным браузерным uTLS.") {
+                "Умный подбор: Chrome / Firefox / Safari на одном сервере. " +
+                    "Выбранный вариант запоминается для текущей сети на 12 часов.") {
                 requireDisconnected {
                     val choices = arrayOf(
                         "Как в подписке · без изменений",
-                        "Умный режим · проверка REALITY и резервный uTLS",
+                        "Умный режим · подобрать лучший подтверждённый uTLS",
                         "Firefox · только этот отпечаток",
-                        "Chrome · только этот отпечаток"
+                        "Chrome · только этот отпечаток",
+                        "Safari · только этот отпечаток"
                     )
-                    val values = arrayOf("profile", "smart", "firefox", "chrome")
+                    val values = arrayOf("profile", "smart", "firefox", "chrome", "safari")
                     AlertDialog.Builder(activity)
                         .setTitle("LIC-Assist · REALITY TCP")
-                        .setMessage("Используется тот же сервер и VLESS + REALITY. Умный режим сначала пробует исходный отпечаток, а при недоступности защищённого HTTPS — альтернативный. Он может увеличить время подключения. Никакого переключения VPN-сервера, изменения ключей или отключения проверки сертификатов.")
+                        .setMessage("При первом подключении в этой сети Smart последовательно сравнивает совместимые uTLS ClientHello на том же REALITY-сервере, выбирает подтверждённый HTTPS и запоминает его на 12 часов. Первый запуск может быть дольше обычного; повторные быстрее. Без изменения сервера, ключей и сертификатных проверок.")
                         .setSingleChoiceItems(choices,
                             values.indexOf(current).coerceAtLeast(0)) { popup, which ->
                             prefs.edit().putString("nlic_reality_tcp_utls",
@@ -185,6 +190,27 @@ internal object NlicV2Settings {
                         }
                         .setNegativeButton(android.R.string.cancel, null)
                         .show()
+                }
+            }
+            action("Повторить подбор REALITY",
+                "Сбросить выбранный отпечаток для этой сети и проверить заново при следующем подключении") {
+                requireDisconnected {
+                    val selected = runCatching {
+                        val catalog = SubscriptionVault.read(activity.applicationContext)
+                        catalog.allNodes.firstOrNull { it.id == catalog.selectedNodeId }
+                    }.getOrNull()
+                    if (selected != null) {
+                        RealityAssistMemory.invalidate(
+                            activity.applicationContext, selected.id,
+                            RealityAssistMemory.networkClass(activity.applicationContext),
+                            prefs.getBoolean("nlic_core_bay", false)
+                        )
+                    }
+                    RealityAssistTrace.clear(activity.applicationContext)
+                    onRealityModeChanged()
+                    AlertDialog.Builder(activity)
+                        .setMessage("Накопленный выбор для текущего сервера и сети очищен. Умный подбор выполнится при следующем подключении, если LIC-Assist включён.")
+                        .setPositiveButton(android.R.string.ok, null).show()
                 }
             }
         }
@@ -219,9 +245,10 @@ internal object NlicV2Settings {
             val failure = ServiceManager.lastCoreFailureCode
                 ?.takeIf { it.matches(Regex("[A-Z0-9_]{1,64}")) } ?: "—"
             val uTlsAssist = when (prefs.getString("nlic_reality_tcp_utls", "profile")) {
-                "smart" -> "Умный режим (1 резервная попытка)"
+                "smart" -> "Умный подбор из Chrome/Firefox/Safari · кэш 12 ч"
                 "firefox" -> "Firefox (если совместимо)"
                 "chrome" -> "Chrome (если совместимо)"
+                "safari" -> "Safari (если совместимо)"
                 else -> "по конфигурации"
             }
             val report = "N-LIC ${BuildConfig.VERSION_NAME}\nAndroid API ${Build.VERSION.SDK_INT}" +

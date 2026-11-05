@@ -411,7 +411,7 @@
     <string name="nlic_privacy_unavailable">Бұл құрылғыда VPN параметрлерін ашу мүмкін болмады.</string>
     <string name="nlic_core_advice_native_crash">Android жүйесіндегі жергілікті ядро іске қосу кезінде тоқтады. Төмендегі код соңғы кезеңді көрсетеді. Бұл сервер емес, ядро үйлесімділігі болуы мүмкін. Тек кодты жіберіңіз.</string>
     <string name="nlic_reality_smart_switch">LIC-Assist · REALITY</string>
-    <string name="nlic_reality_smart_on">Қосулы · алдымен негізгі қосылым тексеріледі, сәтсіз болса балама таңба сыналады.</string>
+    <string name="nlic_reality_smart_on">Қосулы · алғашқы қосылым Chrome / Firefox / Safari нұсқаларын бір серверде салыстырып, тексерілген таңдауын сақтайды.</string>
     <string name="nlic_reality_smart_off">Өшірулі · жазылымдағы VLESS параметрлері қолданылады.</string>
     <string name="nlic_reality_smart_need_server">Тек VLESS + TCP + REALITY үшін қолжетімді.</string>
     <string name="nlic_reality_smart_disable_auto">LIC-Assist үшін бір серверді таңдап, LIC-Auto функциясын өшіріңіз.</string>
@@ -432,4 +432,5 @@
     <string name="nlic_reality_compare_extended">Толық · 18 қосылым (тұрақтылықты тексеру)</string>
     <string name="nlic_reality_compare_cancel">Салыстыруды тоқтату</string>
     <string name="nlic_reality_compare_stream">Ағын · 3 × 512 КиБ (берілім тұрақтылығы)</string>
+    <string name="nlic_reality_smart_manual_safari">Safari қолмен таңдалған. Ең жақсы тексерілген нұсқаны автоматты таңдау үшін қосқышты қосыңыз.</string>
 </resources>

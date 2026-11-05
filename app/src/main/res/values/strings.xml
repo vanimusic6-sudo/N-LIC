@@ -356,7 +356,7 @@
     <string name="nlic_reality_compare_in_progress">Сравниваем REALITY…</string>
     <string name="nlic_reality_compare_title">Результат сравнения</string>
     <string name="nlic_reality_smart_switch">LIC-Assist · REALITY</string>
-    <string name="nlic_reality_smart_on">Включено · проверка исходного соединения, при сбое — резервный отпечаток.</string>
+    <string name="nlic_reality_smart_on">Включено · первый запуск сравнит Chrome / Firefox / Safari на этом сервере; затем выбранный вариант запоминается.</string>
     <string name="nlic_reality_smart_off">Выключено · используем настройки VLESS из подписки.</string>
     <string name="nlic_reality_smart_need_server">Доступно только для VLESS + TCP + REALITY.</string>
     <string name="nlic_reality_smart_disable_auto">Для LIC-Assist выбери конкретный сервер и выключи LIC-Auto.</string>
@@ -438,4 +438,5 @@
     <string name="nlic_reality_compare_extended">Подробно · 18 подключений (проверка стабильности)</string>
     <string name="nlic_reality_compare_cancel">Остановить сравнение</string>
     <string name="nlic_reality_compare_stream">Поток · 3 × 512 КиБ (стабильность передачи)</string>
+    <string name="nlic_reality_smart_manual_safari">Safari выбран вручную. Включи переключатель, чтобы подбирать лучший вариант автоматически.</string>
 </resources>

@@ -147,7 +147,7 @@
     <string name="test_settings_sni">SNI fake packets</string>
     <string name="test_settings_fulllog">Host response output</string>
     <string name="nlic_reality_smart_switch">LIC-Assist · REALITY</string>
-    <string name="nlic_reality_smart_on">On · checks the original connection and tries an alternate fingerprint if it fails.</string>
+    <string name="nlic_reality_smart_on">On · first connection compares Chrome / Firefox / Safari on the same server, then remembers the verified choice.</string>
     <string name="nlic_reality_smart_off">Off · uses the VLESS settings from the subscription.</string>
     <string name="nlic_reality_smart_need_server">Available only for VLESS + TCP + REALITY.</string>
     <string name="nlic_reality_smart_disable_auto">Select one server and turn off LIC-Auto to use LIC-Assist.</string>
@@ -168,4 +168,5 @@
     <string name="nlic_reality_compare_extended">Extended · 18 connections (stability check)</string>
     <string name="nlic_reality_compare_cancel">Stop comparison</string>
     <string name="nlic_reality_compare_stream">Stream · 3 × 512 KiB (transfer stability)</string>
+    <string name="nlic_reality_smart_manual_safari">Safari is selected manually. Turn on the switch to automatically choose the best verified profile.</string>
 </resources>
