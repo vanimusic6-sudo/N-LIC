@@ -110,6 +110,13 @@
             android:exported="false">
         </service>
 
+        <!-- Compare different REALITY uTLS ClientHello variants without
+             using Android VPN or sharing the long-lived :native engine.
+             A Go panic in a test must not crash the main N-LIC UI. -->
+        <service android:name=".services.RealityCompareService"
+            android:process=":realitycompare"
+            android:exported="false" />
+
         <service
             android:name=".services.TestService"
             android:foregroundServiceType="dataSync"
