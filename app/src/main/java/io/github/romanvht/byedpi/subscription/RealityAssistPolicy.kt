@@ -18,9 +18,6 @@ internal object RealityAssistPolicy {
 
     // In verified modern Xray this is a *curated* set, not every uTLS name.
     val browserCandidates = listOf(CHROME, FIREFOX, SAFARI)
-    private const val MIN_ADVANTAGE_MS = 90L
-    private const val MIN_ADVANTAGE_PCT = 15
-
     data class Measurement(
         val fingerprint: String?, // null -> exact imported profile
         val httpsMs: Long?, // certificate-verified Xray HTTPS, not TCP connect
@@ -32,29 +29,23 @@ internal object RealityAssistPolicy {
             .distinctBy { it ?: baselineFingerprint }
 
     /**
-     * Select an alternate only when it authenticates successfully and beats
-     * a working original by >=90ms AND >=15%, to avoid choosing a transient
-     * lucky jitter sample. If baseline fails, a verified browser variant
-     * is preferable to a broken one. Scores are not censorship verdicts.
+     * Legacy one-off candidate ranking retained for compatibility only.
+     * Full lab uses two HTTPS checks + 512KiB and selects the lowest median
+     * among fully verified candidates. No arbitrary threshold that forces
+     * the original to win despite a measured faster Chrome/Firefox.
      */
     fun chooseBest(
         baselineFingerprint: String,
         samples: List<Measurement>,
     ): String? {
-        val valid = samples.filter { it.httpsMs != null && it.httpsMs in 1L..30_000L }
-            .distinctBy { it.fingerprint ?: baselineFingerprint }
-        val best = valid.minByOrNull { it.httpsMs!! } ?: return null
-        val baseline = valid.firstOrNull {
-            (it.fingerprint ?: baselineFingerprint) == baselineFingerprint
-        }
-        if (baseline == null) return best.fingerprint
-        if (best.fingerprint == null ||
-            (best.fingerprint ?: baselineFingerprint) == baselineFingerprint) return null
-        val old = baseline.httpsMs!!
-        val new = best.httpsMs!!
-        return if (old - new >= MIN_ADVANTAGE_MS &&
-            (old - new) * 100 >= old * MIN_ADVANTAGE_PCT) best.fingerprint
-        else null
+        val valid = samples.filter {
+            it.httpsMs != null && it.httpsMs in 1L..30_000L
+        }.distinctBy { it.fingerprint ?: baselineFingerprint }
+        val candidate = valid.minWithOrNull(
+            compareBy<Measurement> { it.httpsMs ?: Long.MAX_VALUE }
+                .thenBy { if (it.fingerprint == null) 0 else 1 }
+        ) ?: return null
+        return candidate.fingerprint?.takeUnless { it == baselineFingerprint }
     }
 
     /**
