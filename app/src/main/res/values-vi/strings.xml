@@ -432,4 +432,5 @@
     <string name="nlic_reality_compare_quick">Nhanh · 6 kết nối HTTPS</string>
     <string name="nlic_reality_compare_extended">Chi tiết · 18 kết nối (kiểm tra độ ổn định)</string>
     <string name="nlic_reality_compare_cancel">Dừng so sánh</string>
+    <string name="nlic_reality_compare_stream">Luồng · 3 × 512 KiB (độ ổn định truyền)</string>
 </resources>
