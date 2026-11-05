@@ -905,7 +905,10 @@ class SubscriptionLabActivity : BaseActivity() {
             RealityAssistTrace.Event.CALIBRATING_SAFARI ->
                 "LIC-Assist: сравниваем Safari на том же сервере…"
             RealityAssistTrace.Event.CALIBRATING_TRANSPORT ->
-                "LIC-Assist: испытываем разделение TLS и параметры TCP на том же сервере…"
+                "LIC-Assist: проверяем " +
+                    io.github.romanvht.byedpi.subscription.RealityTcpTricks.label(
+                        snapshot.transport
+                    ) + " через HTTPS…"
             RealityAssistTrace.Event.CHECKING_ORIGINAL ->
                 "LIC-Assist: проверяется HTTPS с исходным отпечатком…"
             RealityAssistTrace.Event.RETRYING_FIREFOX ->
@@ -989,8 +992,17 @@ class SubscriptionLabActivity : BaseActivity() {
                     snapshot.transport
                 )
         } else ""
+        val checkingTechnique = if (inProgress && snapshot != null &&
+            snapshot.transport !=
+                io.github.romanvht.byedpi.subscription.RealityTcpTricks.STOCK) {
+            "\nTCP: " +
+                io.github.romanvht.byedpi.subscription.RealityTcpTricks.label(
+                    snapshot.transport
+                )
+        } else ""
         line.text = (if (snapshot != null && !running && !busy && !inProgress)
-            "Последняя попытка · $message" else message) + active
+            "Последняя попытка · $message" else message) +
+            checkingTechnique + active
         line.visibility = View.VISIBLE
     }
 
