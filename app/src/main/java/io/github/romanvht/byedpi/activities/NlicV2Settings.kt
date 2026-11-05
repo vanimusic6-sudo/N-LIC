@@ -15,6 +15,7 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior
 import io.github.romanvht.byedpi.BuildConfig
 import io.github.romanvht.byedpi.R
 import io.github.romanvht.byedpi.services.ServiceManager
+import io.github.romanvht.byedpi.subscription.RealityAssistTrace
 import io.github.romanvht.byedpi.utility.getPreferences
 
 /**
@@ -23,7 +24,12 @@ import io.github.romanvht.byedpi.utility.getPreferences
  * instead of disappearing behind invisible legacy controls.
  */
 internal object NlicV2Settings {
-    fun show(activity: AppCompatActivity, running: Boolean, clear: () -> Unit) {
+    fun show(
+        activity: AppCompatActivity,
+        running: Boolean,
+        onRealityModeChanged: () -> Unit = {},
+        clear: () -> Unit,
+    ) {
         val density = activity.resources.displayMetrics.density
         fun dp(n: Int) = (n * density + .5f).toInt()
         val normal = ContextCompat.getColor(activity, R.color.nlic_text)
@@ -173,6 +179,8 @@ internal object NlicV2Settings {
                             values.indexOf(current).coerceAtLeast(0)) { popup, which ->
                             prefs.edit().putString("nlic_reality_tcp_utls",
                                 values[which]).commit()
+                            RealityAssistTrace.clear(activity.applicationContext)
+                            onRealityModeChanged()
                             popup.dismiss()
                         }
                         .setNegativeButton(android.R.string.cancel, null)
