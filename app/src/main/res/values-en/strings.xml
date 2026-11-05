@@ -169,4 +169,5 @@
     <string name="nlic_reality_compare_cancel">Stop comparison</string>
     <string name="nlic_reality_compare_stream">Stream · 3 × 512 KiB (transfer stability)</string>
     <string name="nlic_reality_smart_manual_safari">Safari is selected manually. Turn on the switch to automatically choose the best verified profile.</string>
+    <string name="nlic_reality_smart_disable_bay">Turn off LIC-Bay for LIC-helper Duet: the external relay controls the TCP socket.</string>
 </resources>
