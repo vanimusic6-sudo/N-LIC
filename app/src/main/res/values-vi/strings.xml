@@ -428,4 +428,7 @@
     <string name="nlic_reality_compare_failed">Không thể chạy phép so sánh. Vui lòng thử lại.</string>
     <string name="nlic_reality_compare_in_progress">Đang so sánh REALITY…</string>
     <string name="nlic_reality_compare_title">Kết quả so sánh</string>
+    <string name="nlic_reality_compare_choose">Chế độ so sánh REALITY</string>
+    <string name="nlic_reality_compare_quick">Nhanh · 6 kết nối HTTPS</string>
+    <string name="nlic_reality_compare_extended">Chi tiết · 18 kết nối (kiểm tra độ ổn định)</string>
 </resources>
