@@ -115,6 +115,7 @@ internal object RealityTcpTricks {
             Trial(candidateFp, chosen),
             Trial(candidateFp, DUET_GATE),
             Trial(candidateFp, DUET_MSS),
+            Trial(candidateFp, TRIO),
             Trial(candidateFp, SPLIT_SOFT),
             Trial(null, DUET),
         )
