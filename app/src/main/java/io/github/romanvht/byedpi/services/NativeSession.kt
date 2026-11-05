@@ -25,6 +25,7 @@ import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
 import io.github.romanvht.byedpi.subscription.LibboxRuntime
 import io.github.romanvht.byedpi.subscription.XrayRuntime
 import io.github.romanvht.byedpi.subscription.XrayConfigCompiler
+import io.github.romanvht.byedpi.subscription.RealityAssistPolicy
 import io.github.romanvht.byedpi.subscription.XrayBayArgs
 import io.github.romanvht.byedpi.subscription.CoreStartException
 import io.github.romanvht.byedpi.subscription.NativeTunConfig
@@ -243,8 +244,11 @@ internal class NativeSession(
             try {
                 // Auto must sample more than one real encrypted server.
                 // The pinned Go delay probe has a 12 s per-node bound.
-                withTimeout(if (xrayMode && config.args.getOrNull(2) == "--nlic-auto")
-                    85_000L else 50_000L) {
+                withTimeout(if (xrayMode &&
+                    (config.args.getOrNull(2) == "--nlic-auto" ||
+                        service.getPreferences().getString(
+                            "nlic_reality_tcp_utls", "profile") == RealityAssistPolicy.SMART))
+                    100_000L else 50_000L) {
                     if (xrayMode) {
                         check(createTunnel != null) { "Xray VPN requires Android TUN" }
                         val bayEnabled = config.args.getOrNull(1) == "--nlic-bay"
@@ -259,16 +263,14 @@ internal class NativeSession(
                         }.joinToString("") { "%02x".format(it.toInt() and 255) }
                         val auth = LocalSocksAuth("nlic", secret)
                         localAuth = auth
-                        // Opt-in fingerprint experiment for the current node only.
-                        val realityFingerprint = when (
-                            service.getPreferences().getString(
-                                "nlic_reality_tcp_utls", "profile"
-                            )
-                        ) {
-                            "chrome" -> "chrome"
-                            "firefox" -> "firefox"
-                            else -> null
-                        }
+                        // Keep the user's VPN protocol, node and REALITY keys.
+                        // Smart mode only tries a browser uTLS fingerprint if the
+                        // exact same node cannot pass authenticated HTTPS egress.
+                        val assistMode = service.getPreferences().getString(
+                            "nlic_reality_tcp_utls", RealityAssistPolicy.PROFILE
+                        ) ?: RealityAssistPolicy.PROFILE
+                        val realityFingerprint =
+                            RealityAssistPolicy.explicitFingerprint(assistMode)
                         val validate: (io.github.romanvht.byedpi.subscription.SubscriptionNode) ->
                             Boolean = { candidate ->
                                 XrayConfigCompiler.compile(
@@ -372,28 +374,79 @@ internal class NativeSession(
                             eligible.first { it.id == best.id }
                         } else eligible.first()
 
-                        val plan = XrayConfigCompiler.compile(
-                            selected, auth, if (bayEnabled) bayPort else null, realityFingerprint
+                        val baselinePlan = XrayConfigCompiler.compile(
+                            selected, auth, if (bayEnabled) bayPort else null
                         ) as? XrayConfigCompiler.Result.Compiled
                             ?: throw CoreStartException("PROTOCOL_UNSUPPORTED")
-                        corePhase = "XRAY_START"; CoreFailureTrace.mark(service, corePhase)
-                        val xray = XrayRuntime(service)
-                        xrayEngine = xray
-                        withContext(Dispatchers.IO) { xray.start(plan.json) }
-                        corePhase = "XRAY_SOCKS"; CoreFailureTrace.mark(service, corePhase)
-                        withTimeout(START_TIMEOUT) {
-                            awaitProxy(config.host, config.port, auth)
-                        }
-                        corePhase = "XRAY_HTTPS"; CoreFailureTrace.mark(service, corePhase)
-                        val nativeHttpsOk = withContext(Dispatchers.IO) {
-                            xray.verifyHttpsViaCore()
-                        }
-                        if (!nativeHttpsOk) {
-                            corePhase = "REMOTE_TEST"; CoreFailureTrace.mark(service, corePhase)
-                            withTimeout(28_000) {
-                                awaitRemoteReadiness(config.host, config.port, auth)
+                        val fingerprintAttempts = RealityAssistPolicy.candidates(
+                            assistMode, baselinePlan, autoEnabled
+                        )
+                        var xrayReady = false
+                        for ((attemptIndex, fp) in fingerprintAttempts.withIndex()) {
+                            val plan = XrayConfigCompiler.compile(
+                                selected, auth, if (bayEnabled) bayPort else null,
+                                if (assistMode == RealityAssistPolicy.SMART)
+                                    fp else realityFingerprint
+                            ) as? XrayConfigCompiler.Result.Compiled
+                                ?: throw CoreStartException("PROTOCOL_UNSUPPORTED")
+
+                            // Never add VPN routes or promote a candidate until
+                            // a real HTTPS check through the encrypted core
+                            // succeeds. The old trial is closed before the
+                            // next fingerprint rebinds localhost SOCKS.
+                            val xray = XrayRuntime(service)
+                            xrayEngine = xray
+                            var remoteCheckStarted = false
+                            var passed = false
+                            try {
+                                corePhase = "XRAY_START"; CoreFailureTrace.mark(service, corePhase)
+                                withContext(Dispatchers.IO) { xray.start(plan.json) }
+                                corePhase = "XRAY_SOCKS"; CoreFailureTrace.mark(service, corePhase)
+                                withTimeout(START_TIMEOUT) {
+                                    awaitProxy(config.host, config.port, auth)
+                                }
+                                corePhase = "XRAY_HTTPS"; CoreFailureTrace.mark(service, corePhase)
+                                val nativeHttpsOk = withContext(Dispatchers.IO) {
+                                    xray.verifyHttpsViaCore()
+                                }
+                                if (!nativeHttpsOk) {
+                                    remoteCheckStarted = true
+                                    corePhase = "REMOTE_TEST"; CoreFailureTrace.mark(service, corePhase)
+                                    withTimeout(28_000) {
+                                        awaitRemoteReadiness(config.host, config.port, auth)
+                                    }
+                                }
+                                passed = true
+                                xrayReady = true
+                            } catch (cancelled: CancellationException) {
+                                // A remote-test timeout may indicate blocked
+                                // egress. A local/native startup timeout never
+                                // justifies changing TLS fingerprints.
+                                if (cancelled !is TimeoutCancellationException ||
+                                    !remoteCheckStarted ||
+                                    attemptIndex == fingerprintAttempts.lastIndex) {
+                                    throw cancelled
+                                }
+                            } catch (e: Exception) {
+                                // Do not interpret a broken Xray core, invalid
+                                // credentials or failed SOCKS authentication as
+                                // DPI. Only retry after the outbound check.
+                                if (!remoteCheckStarted ||
+                                    attemptIndex == fingerprintAttempts.lastIndex) throw e
+                            } finally {
+                                if (!passed) {
+                                    withContext(NonCancellable + Dispatchers.IO) {
+                                        xray.close()
+                                    }
+                                    if (xrayEngine === xray) xrayEngine = null
+                                    if (attemptIndex < fingerprintAttempts.lastIndex) {
+                                        delay(250)
+                                    }
+                                }
                             }
+                            if (passed) break
                         }
+                        if (!xrayReady) throw CoreStartException("REALITY_EGRESS")
                         // Save only the actually verified Auto winner.
                         // Explicit manual selections are never overwritten.
                         if (autoEnabled) withContext(Dispatchers.IO) {
