@@ -410,4 +410,12 @@
     <string name="nlic_privacy_confirmation">Sistem VPN ayarları açılsın mı? N-LIC Android bağlantı engellemesini sizin yerinize etkinleştiremez.</string>
     <string name="nlic_privacy_unavailable">Bu cihazda VPN ayarları açılamıyor.</string>
     <string name="nlic_core_advice_native_crash">Android yerel çekirdeği başlatılırken kapandı. Aşağıdaki kod kapanmadan önceki son aşamayı gösterir. Bu sorun sunucudan değil uygulamadan kaynaklanabilir. Yapılandırma veya anahtar yerine yalnızca kodu paylaşın.</string>
+    <string name="nlic_reality_smart_switch">LIC-Assist · REALITY</string>
+    <string name="nlic_reality_smart_on">Açık · önce mevcut bağlantıyı sınar, başarısız olursa alternatif parmak izi dener.</string>
+    <string name="nlic_reality_smart_off">Kapalı · abonelikteki VLESS ayarlarını kullanır.</string>
+    <string name="nlic_reality_smart_need_server">Yalnızca VLESS + TCP + REALITY ile kullanılabilir.</string>
+    <string name="nlic_reality_smart_disable_auto">LIC-Assist için tek bir sunucu seçin ve LIC-Auto özelliğini kapatın.</string>
+    <string name="nlic_reality_smart_disconnect">LIC-Assist ayarını değiştirmek için VPN bağlantısını kesin.</string>
+    <string name="nlic_reality_smart_manual_firefox">Firefox parmak izi elle seçildi. Akıllı mod için bu anahtarı açın.</string>
+    <string name="nlic_reality_smart_manual_chrome">Chrome parmak izi elle seçildi. Akıllı mod için bu anahtarı açın.</string>
 </resources>

@@ -146,4 +146,12 @@
     <string name="toast_copied">Сopied</string>
     <string name="test_settings_sni">SNI fake packets</string>
     <string name="test_settings_fulllog">Host response output</string>
+    <string name="nlic_reality_smart_switch">LIC-Assist · REALITY</string>
+    <string name="nlic_reality_smart_on">On · checks the original connection and tries an alternate fingerprint if it fails.</string>
+    <string name="nlic_reality_smart_off">Off · uses the VLESS settings from the subscription.</string>
+    <string name="nlic_reality_smart_need_server">Available only for VLESS + TCP + REALITY.</string>
+    <string name="nlic_reality_smart_disable_auto">Select one server and turn off LIC-Auto to use LIC-Assist.</string>
+    <string name="nlic_reality_smart_disconnect">Disconnect VPN to change LIC-Assist.</string>
+    <string name="nlic_reality_smart_manual_firefox">Manual Firefox fingerprint is selected. Turn on this switch for Smart mode.</string>
+    <string name="nlic_reality_smart_manual_chrome">Manual Chrome fingerprint is selected. Turn on this switch for Smart mode.</string>
 </resources>

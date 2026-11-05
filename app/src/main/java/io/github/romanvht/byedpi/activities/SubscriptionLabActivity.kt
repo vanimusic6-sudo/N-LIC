@@ -29,6 +29,7 @@ import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
 import io.github.romanvht.byedpi.subscription.XrayConfigCompiler
 import io.github.romanvht.byedpi.subscription.LocalSocksAuth
 import io.github.romanvht.byedpi.subscription.RealityAssistTrace
+import io.github.romanvht.byedpi.subscription.RealityAssistPolicy
 import io.github.romanvht.byedpi.subscription.SubscriptionCatalog
 import io.github.romanvht.byedpi.subscription.SubscriptionFetcher
 import io.github.romanvht.byedpi.subscription.SubscriptionGroup
@@ -196,7 +197,8 @@ class SubscriptionLabActivity : BaseActivity() {
     }
 
     private fun showCompactSettings() = NlicV2Settings.show(
-        this, appStatus.first == AppStatus.Running
+        this, appStatus.first == AppStatus.Running,
+        onRealityModeChanged = { render() },
     ) {
         runOperation {
             ServiceManager.waitStop()
@@ -656,6 +658,52 @@ class SubscriptionLabActivity : BaseActivity() {
                 SingBoxConfigCompiler.compile(selected) is SingBoxConfigCompiler.Result.Compiled
             }) -> getString(R.string.nlic_control_selected_ok)
             else -> getString(R.string.nlic_control_unsupported)
+        }
+
+        // Explicitly tell the user whether LIC-Assist is ON. A checked switch
+        // reflects actual smart-mode preference, not a past connection result.
+        // Never apply an incompatible setting or change a running VPN tunnel.
+        val assistMode = prefs.getString(
+            "nlic_reality_tcp_utls", RealityAssistPolicy.PROFILE
+        ) ?: RealityAssistPolicy.PROFILE
+        val realityCompatible = BuildConfig.NLIC_XRAY_INCLUDED &&
+            selected?.let { node ->
+                val plan = XrayConfigCompiler.compile(
+                    node, LocalSocksAuth("nlic", "a".repeat(48))
+                ) as? XrayConfigCompiler.Result.Compiled
+                plan != null && RealityAssistPolicy.baselineFingerprint(plan.json) != null
+            } == true
+        val assistSwitch = findViewById<SwitchMaterial>(R.id.nlic_reality_smart_switch)
+        val assistHint = findViewById<TextView>(R.id.nlic_reality_smart_hint)
+        assistSwitch.setOnCheckedChangeListener(null)
+        assistSwitch.isChecked = assistMode == RealityAssistPolicy.SMART
+        assistSwitch.isEnabled = !busy && !runningVpn && !auto && realityCompatible
+        assistHint.setText(when {
+            runningVpn -> R.string.nlic_reality_smart_disconnect
+            !realityCompatible -> R.string.nlic_reality_smart_need_server
+            auto -> R.string.nlic_reality_smart_disable_auto
+            assistMode == RealityAssistPolicy.SMART -> R.string.nlic_reality_smart_on
+            assistMode == RealityAssistPolicy.FIREFOX ->
+                R.string.nlic_reality_smart_manual_firefox
+            assistMode == RealityAssistPolicy.CHROME ->
+                R.string.nlic_reality_smart_manual_chrome
+            else -> R.string.nlic_reality_smart_off
+        })
+        assistSwitch.setOnCheckedChangeListener { _, enabled ->
+            if (busy || runningVpn || auto || !realityCompatible) {
+                render()
+                return@setOnCheckedChangeListener
+            }
+            prefs.edit().putString(
+                "nlic_reality_tcp_utls",
+                if (enabled) RealityAssistPolicy.SMART else RealityAssistPolicy.PROFILE
+            ).commit()
+            // The last connection's trace must not be mistaken for
+            // the freshly changed setting before a new VPN connection.
+            RealityAssistTrace.clear(applicationContext)
+            latestMessage = null
+            locallyVerified = false
+            render()
         }
 
         val autoSwitch = findViewById<SwitchMaterial>(R.id.nlic_auto_switch)

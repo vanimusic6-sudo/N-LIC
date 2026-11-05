@@ -346,6 +346,14 @@
     <string name="nlic_control_add_subscription">＋ Подписка</string>
     <string name="nlic_control_add_link">＋ Ссылка</string>
     <string name="nlic_control_features_title">Умные функции</string>
+    <string name="nlic_reality_smart_switch">LIC-Assist · REALITY</string>
+    <string name="nlic_reality_smart_on">Включено · проверка исходного соединения, при сбое — резервный отпечаток.</string>
+    <string name="nlic_reality_smart_off">Выключено · используем настройки VLESS из подписки.</string>
+    <string name="nlic_reality_smart_need_server">Доступно только для VLESS + TCP + REALITY.</string>
+    <string name="nlic_reality_smart_disable_auto">Для LIC-Assist выбери конкретный сервер и выключи LIC-Auto.</string>
+    <string name="nlic_reality_smart_disconnect">Отключи VPN, чтобы изменить LIC-Assist.</string>
+    <string name="nlic_reality_smart_manual_firefox">Сейчас используется ручной отпечаток Firefox. Включи переключатель для умного режима.</string>
+    <string name="nlic_reality_smart_manual_chrome">Сейчас используется ручной отпечаток Chrome. Включи переключатель для умного режима.</string>
     <string name="nlic_control_auto_title">LIC-Auto · лучший сервер</string>
     <string name="nlic_control_auto_desc">Проверяет зашифрованное соединение нескольких серверов и выбирает доступный. Можно выключить.</string>
     <string name="nlic_control_bay_title">LIC-Bay · через ByeDPI</string>
