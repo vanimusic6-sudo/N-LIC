@@ -439,4 +439,5 @@
     <string name="nlic_reality_compare_cancel">Остановить сравнение</string>
     <string name="nlic_reality_compare_stream">Поток · 3 × 512 КиБ (стабильность передачи)</string>
     <string name="nlic_reality_smart_manual_safari">Safari выбран вручную. Включи переключатель, чтобы подбирать лучший вариант автоматически.</string>
+    <string name="nlic_reality_smart_disable_bay">Для LIC-helper (Duet) выключи LIC-Bay: внешний прокси управляет TCP-подключением.</string>
 </resources>
