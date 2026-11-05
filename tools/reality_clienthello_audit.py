@@ -56,6 +56,10 @@ def tcp_packet(frame: bytes, linktype: int):
             return None
         if frame[offset + 9] != 6:
             return None
+        ip_size = struct.unpack_from("!H", frame, offset + 2)[0]
+        if ip_size < ihl + 20 or len(frame) < offset + ip_size:
+            return None
+        frame = frame[:offset + ip_size]
         # IP fragmentation is NOT TCP segmentation. Deliberately skip
         # fragmented IPv4 datagrams rather than mis-reassemble them.
         flags_frag = struct.unpack_from("!H", frame, offset + 6)[0]
@@ -67,6 +71,10 @@ def tcp_packet(frame: bytes, linktype: int):
     elif version == 6:
         if len(frame) < offset + 40 or frame[offset + 6] != 6:
             return None
+        ip_size = struct.unpack_from("!H", frame, offset + 4)[0] + 40
+        if len(frame) < offset + ip_size:
+            return None
+        frame = frame[:offset + ip_size]
         src = frame[offset + 8:offset + 24]
         dst = frame[offset + 24:offset + 40]
         tcp = offset + 40
@@ -146,7 +154,7 @@ def audit(path: Path):
             if len(flow["segment_lengths"]) >= MAX_SEGMENTS:
                 continue
             relative = (seq - flow["seq"]) & 0xFFFFFFFF
-            if relative >= MAX_TLS:
+            if relative >= flow["expected"]:
                 continue
             useful = payload[:min(len(payload), flow["expected"] - relative)]
             if not useful:
