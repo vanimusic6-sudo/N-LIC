@@ -431,4 +431,5 @@
     <string name="nlic_reality_compare_quick">Жылдам · 6 HTTPS қосылымы</string>
     <string name="nlic_reality_compare_extended">Толық · 18 қосылым (тұрақтылықты тексеру)</string>
     <string name="nlic_reality_compare_cancel">Салыстыруды тоқтату</string>
+    <string name="nlic_reality_compare_stream">Ағын · 3 × 512 КиБ (берілім тұрақтылығы)</string>
 </resources>

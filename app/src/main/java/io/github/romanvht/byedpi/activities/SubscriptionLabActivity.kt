@@ -207,10 +207,15 @@ class SubscriptionLabActivity : BaseActivity() {
                     .setTitle(R.string.nlic_reality_compare_choose)
                     .setItems(arrayOf(
                         getString(R.string.nlic_reality_compare_quick),
-                        getString(R.string.nlic_reality_compare_extended)
+                        getString(R.string.nlic_reality_compare_extended),
+                        getString(R.string.nlic_reality_compare_stream)
                     )) { _, choice ->
                         startRealityComparison(
-                            if (choice == 1) 18 else 6
+                            when (choice) {
+                                1 -> 18
+                                2 -> 3 // 3×512 KiB through selected REALITY
+                                else -> 6
+                            }
                         )
                     }
                     .setNegativeButton(android.R.string.cancel, null)

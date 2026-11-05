@@ -16,6 +16,8 @@ import io.github.romanvht.byedpi.subscription.LocalSocksAuth
 import io.github.romanvht.byedpi.subscription.RealityAssistPolicy
 import io.github.romanvht.byedpi.subscription.RealityComparison
 import io.github.romanvht.byedpi.subscription.RealityTransportProbe
+import io.github.romanvht.byedpi.subscription.RealityStreamProbe
+import io.github.romanvht.byedpi.subscription.RealityStreamComparison
 import io.github.romanvht.byedpi.subscription.SubscriptionNode
 import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.subscription.TunnelHealthProbe
@@ -23,6 +25,7 @@ import io.github.romanvht.byedpi.subscription.XrayConfigCompiler
 import io.github.romanvht.byedpi.subscription.XrayRuntime
 import io.github.romanvht.byedpi.utility.getPreferences
 import java.security.SecureRandom
+import java.net.Socket
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -58,6 +61,7 @@ internal class RealityCompareService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var activeJob: Job? = null
+    @Volatile private var activeStreamSocket: Socket? = null
     private val ipc by lazy {
         Messenger(Handler(Looper.getMainLooper()) { message ->
             if (message.what == START && activeJob?.isActive != true) {
@@ -76,12 +80,14 @@ internal class RealityCompareService : Service() {
     override fun onBind(intent: Intent): IBinder = ipc.binder
 
     override fun onUnbind(intent: Intent?): Boolean {
+        activeStreamSocket?.close()
         activeJob?.cancel()
         stopSelf()
         return false
     }
 
     override fun onDestroy() {
+        activeStreamSocket?.close()
         activeJob?.cancel()
         scope.cancel()
         super.onDestroy()
@@ -112,7 +118,9 @@ internal class RealityCompareService : Service() {
 
     private suspend fun compare(client: Messenger, trials: Int) {
         try {
-            val schedule = RealityComparison.schedule(trials)
+            val streamTest = trials == RealityStreamComparison.TRIALS
+            val schedule = if (streamTest)
+                RealityStreamComparison.sequence else RealityComparison.schedule(trials)
             if (schedule == null) {
                 reply(client, ERROR, "Недопустимый режим сравнения.")
                 return
@@ -168,6 +176,7 @@ internal class RealityCompareService : Service() {
                     "TCP до VPN-сервера не подтвердился. HTTPS-проверки всё равно выполняются…")
             }
             val samples = mutableListOf<RealityComparison.Sample>()
+            val streamSamples = mutableListOf<RealityStreamComparison.Sample>()
             for ((index, fingerprint) in schedule.withIndex()) {
                 coroutineContext.ensureActive()
                 if (!noOtherVpn()) {
@@ -183,22 +192,36 @@ internal class RealityCompareService : Service() {
                 reply(client, PROGRESS,
                     "Проверка ${index + 1}/${schedule.size} · $title\n" +
                         "Проверяется реальный HTTPS через тот же REALITY-сервер…")
-                val sample = withContext(Dispatchers.IO) {
-                    verify(node, auth, fingerprint)
+                if (streamTest) {
+                    val sample = withContext(Dispatchers.IO) {
+                        verifyStream(node, auth, fingerprint)
+                    }
+                    streamSamples += RealityStreamComparison.Sample(fingerprint, sample)
+                    val outcome = if (sample.successful)
+                        "Передано 512 КиБ через TLS"
+                    else "Передача прервана · ${sample.failure ?: "UNKNOWN"}"
+                    reply(client, PROGRESS,
+                        "Проверка ${index + 1}/3 · $title: $outcome")
+                } else {
+                    val sample = withContext(Dispatchers.IO) {
+                        verify(node, auth, fingerprint)
+                    }
+                    samples += sample
+                    val result = if (sample.success)
+                        "HTTPS прошёл · ${sample.latencyMs} мс"
+                    else "HTTPS не подтвердился · этап ${sample.failureStage ?: "UNKNOWN"}"
+                    reply(client, PROGRESS,
+                        "Проверка ${index + 1}/${schedule.size} · $title: $result")
                 }
-                samples += sample
-                // We report the exact measured success, but a failure does
-                // not identify censorship: server, DNS, TLS and upstream
-                // availability can also be responsible.
-                val result = if (sample.success)
-                    "HTTPS прошёл · ${sample.latencyMs} мс"
-                else "HTTPS не подтвердился · этап ${sample.failureStage ?: "UNKNOWN"}"
-                reply(client, PROGRESS,
-                    "Проверка ${index + 1}/${schedule.size} · $title: $result")
                 if (index < schedule.lastIndex) delay(350)
             }
-            val summary = RealityComparison.report(samples, trials, tcpResult)
-            reply(client, FINISHED, summary.details, summary.compact)
+            if (streamTest) {
+                val report = RealityStreamComparison.summarize(streamSamples)
+                reply(client, FINISHED, report.details, report.compact)
+            } else {
+                val summary = RealityComparison.report(samples, trials, tcpResult)
+                reply(client, FINISHED, summary.details, summary.compact)
+            }
         } catch (cancelled: CancellationException) {
             // Client left the screen; do not continue network testing.
             throw cancelled
@@ -281,4 +304,49 @@ internal class RealityCompareService : Service() {
             runtime.close()
         }
     }
+
+    /** One streaming sample; separate Xray runtime, same server and credentials. */
+    private fun verifyStream(
+        node: SubscriptionNode,
+        auth: LocalSocksAuth,
+        fingerprint: String,
+    ): RealityStreamProbe.Result {
+        val alternate = fingerprint.takeUnless { it == RealityComparison.ORIGINAL }
+        val compiled = XrayConfigCompiler.compile(
+            node, auth, realityClientFingerprint = alternate
+        ) as? XrayConfigCompiler.Result.Compiled
+            ?: return RealityStreamProbe.Result(false, 0, null, null, "CONFIG")
+        val runtime = XrayRuntime(applicationContext, recordCoreStage = false)
+        var stage = "XRAY_START"
+        try {
+            runtime.start(compiled.json)
+            stage = "LOCAL_SOCKS"
+            val deadline = SystemClock.elapsedRealtime() + 4_000L
+            var ready = false
+            while (SystemClock.elapsedRealtime() < deadline) {
+                if (TunnelHealthProbe.checkLocal("127.0.0.1",
+                        XrayConfigCompiler.SOCKS_PORT, auth)) {
+                    ready = true
+                    break
+                }
+                Thread.sleep(120)
+            }
+            if (!ready) return RealityStreamProbe.Result(
+                false, 0, null, null, "LOCAL_SOCKS"
+            )
+            stage = "HTTPS_STREAM"
+            try {
+                return RealityStreamProbe.run(
+                    "127.0.0.1", XrayConfigCompiler.SOCKS_PORT, auth
+                ) { socket -> activeStreamSocket = socket }
+            } finally {
+                activeStreamSocket = null
+            }
+        } catch (_: Exception) {
+            return RealityStreamProbe.Result(false, 0, null, null, stage)
+        } finally {
+            runtime.close()
+        }
+    }
+
 }
