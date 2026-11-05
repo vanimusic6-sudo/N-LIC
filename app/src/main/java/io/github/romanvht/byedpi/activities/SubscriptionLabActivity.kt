@@ -197,7 +197,8 @@ class SubscriptionLabActivity : BaseActivity() {
     }
 
     private fun showCompactSettings() = NlicV2Settings.show(
-        this, appStatus.first == AppStatus.Running
+        this, appStatus.first == AppStatus.Running,
+        onRealityModeChanged = { render() },
     ) {
         runOperation {
             ServiceManager.waitStop()
