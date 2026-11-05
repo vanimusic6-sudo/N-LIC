@@ -25,6 +25,7 @@ import io.github.romanvht.byedpi.subscription.XrayConfigCompiler
 import io.github.romanvht.byedpi.subscription.XrayRuntime
 import io.github.romanvht.byedpi.utility.getPreferences
 import java.security.SecureRandom
+import java.net.Socket
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -60,6 +61,7 @@ internal class RealityCompareService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var activeJob: Job? = null
+    @Volatile private var activeStreamSocket: Socket? = null
     private val ipc by lazy {
         Messenger(Handler(Looper.getMainLooper()) { message ->
             if (message.what == START && activeJob?.isActive != true) {
@@ -78,12 +80,14 @@ internal class RealityCompareService : Service() {
     override fun onBind(intent: Intent): IBinder = ipc.binder
 
     override fun onUnbind(intent: Intent?): Boolean {
+        activeStreamSocket?.close()
         activeJob?.cancel()
         stopSelf()
         return false
     }
 
     override fun onDestroy() {
+        activeStreamSocket?.close()
         activeJob?.cancel()
         scope.cancel()
         super.onDestroy()
@@ -331,9 +335,13 @@ internal class RealityCompareService : Service() {
                 false, 0, null, null, "LOCAL_SOCKS"
             )
             stage = "HTTPS_STREAM"
-            return RealityStreamProbe.run(
-                "127.0.0.1", XrayConfigCompiler.SOCKS_PORT, auth
-            )
+            try {
+                return RealityStreamProbe.run(
+                    "127.0.0.1", XrayConfigCompiler.SOCKS_PORT, auth
+                ) { socket -> activeStreamSocket = socket }
+            } finally {
+                activeStreamSocket = null
+            }
         } catch (_: Exception) {
             return RealityStreamProbe.Result(false, 0, null, null, stage)
         } finally {
