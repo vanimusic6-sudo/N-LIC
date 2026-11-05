@@ -101,8 +101,11 @@ internal object RealityTcpTricks {
         browsers: List<String?>,
         baselineFp: String,
         bay: Boolean,
+        pinnedFingerprint: Boolean = false,
     ): List<Trial> {
-        val candidateFp = preferredFp?.takeIf {
+        val candidateFp = if (pinnedFingerprint) {
+            preferredFp?.takeIf { it in RealityAssistPolicy.browserCandidates }
+        } else preferredFp?.takeIf {
             it in RealityAssistPolicy.browserCandidates && it != baselineFp
         } ?: if (baselineFp == RealityAssistPolicy.CHROME) null
             else RealityAssistPolicy.CHROME
