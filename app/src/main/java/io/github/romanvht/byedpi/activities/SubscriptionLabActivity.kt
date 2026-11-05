@@ -1140,7 +1140,9 @@ class SubscriptionLabActivity : BaseActivity() {
         if (appStatus.first == AppStatus.Running || busy ||
             prefs.getBoolean("nlic_core_bay", false) ||
             prefs.getBoolean("nlic_core_auto", false)) return
+        val chosenNodeId = readCatalog().selectedNodeId ?: return
         prefs.edit()
+            .putString("nlic_reality_manual_node", chosenNodeId)
             .putString("nlic_reality_tcp_utls", RealityAssistPolicy.SMART)
             .putString("nlic_reality_fp_manual", profile.fingerprint
                 ?: RealityAssistPolicy.PROFILE)
@@ -1193,6 +1195,7 @@ class SubscriptionLabActivity : BaseActivity() {
         if (appStatus.first == AppStatus.Running || busy) return
         prefs.edit()
             .remove("nlic_reality_fp_manual")
+            .remove("nlic_reality_manual_node")
             .putString("nlic_reality_tcp_trick_manual", "auto")
             .commit()
         val catalog = readCatalog()
@@ -1262,9 +1265,20 @@ class SubscriptionLabActivity : BaseActivity() {
                 val recommended = verified.minByOrNull {
                     it.medianMs ?: Long.MAX_VALUE
                 }
+                val shortResults = matrixEntries.orEmpty().joinToString("\n") { row ->
+                    val mark = when {
+                        row.good -> "✓"
+                        row.passed > 0 -> "!"
+                        else -> "×"
+                    }
+                    "$mark ${row.profile.label}: ${row.passed}/2" +
+                        (row.medianMs?.let { " · ${it} мс" } ?: "")
+                }
                 AlertDialog.Builder(this)
                     .setTitle("Проверка всех способов")
-                    .setMessage(outcome)
+                    .setMessage(shortResults + "\n\nЛучший по медиане двух проб: " +
+                        (recommended?.profile?.label ?: "не найден") +
+                        ". Разница может быть сетевым шумом.")
                     .setPositiveButton("Применить лучший") { _, _ ->
                         recommended?.profile?.let { applyWorkbenchProfile(it) }
                     }
