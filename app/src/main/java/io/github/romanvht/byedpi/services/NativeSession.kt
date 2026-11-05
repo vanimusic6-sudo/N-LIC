@@ -438,7 +438,8 @@ internal class NativeSession(
                         val attempts = if (adaptive && baselineFingerprint != null) {
                             RealityTcpTricks.attempts(
                                 preferred, chosenTcpTrick, fingerprintAttempts,
-                                baselineFingerprint, bayEnabled
+                                baselineFingerprint, bayEnabled,
+                                pinnedFingerprint = forcedFingerprint != null
                             )
                         } else fingerprintAttempts.map {
                             RealityTcpTricks.Trial(it, RealityTcpTricks.STOCK)
