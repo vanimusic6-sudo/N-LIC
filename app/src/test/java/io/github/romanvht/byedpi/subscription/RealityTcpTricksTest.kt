@@ -51,7 +51,7 @@ class RealityTcpTricksTest {
                 .getAsJsonArray("lengths").size() >= 1)
             if (trick in listOf(
                 RealityTcpTricks.DUET, RealityTcpTricks.DUET_GATE,
-                RealityTcpTricks.DUET_MSS
+                RealityTcpTricks.DUET_MSS,
                 RealityTcpTricks.FIRST_WRITE,
                 RealityTcpTricks.FIRST_BURST
             )) assertEquals("2", mask.getAsJsonObject("settings")
