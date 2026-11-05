@@ -192,7 +192,7 @@ internal class RealityCompareService : Service() {
             node, auth, realityClientFingerprint = alternate
         ) as? XrayConfigCompiler.Result.Compiled
             ?: return RealityComparison.Sample(fingerprint, false, null)
-        val runtime = XrayRuntime(applicationContext)
+        val runtime = XrayRuntime(applicationContext, recordCoreStage = false)
         try {
             // Stop and close each core before starting the next variation.
             // A successful local SOCKS negotiation is not enough: a real
