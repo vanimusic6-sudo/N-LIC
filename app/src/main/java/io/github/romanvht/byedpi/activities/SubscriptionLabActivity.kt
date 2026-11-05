@@ -776,13 +776,14 @@ class SubscriptionLabActivity : BaseActivity() {
             val manualTrick = prefs.getString(
                 "nlic_reality_tcp_trick_manual", "auto"
             )
-            if (manualTrick in io.github.romanvht.byedpi.subscription
+            if (manualTrick != null &&
+                manualTrick in io.github.romanvht.byedpi.subscription
                     .RealityTcpTricks.variants &&
                 manualTrick != io.github.romanvht.byedpi.subscription
                     .RealityTcpTricks.STOCK && !bay) {
                 assistHint.text = "TCP выбран вручную: " +
                     io.github.romanvht.byedpi.subscription.RealityTcpTricks.label(
-                        manualTrick!!
+                        manualTrick
                     ) + ". При неудаче будет проверен безопасный резерв."
             } else if (winner != null) {
                 val name = when (winner.fingerprint) {
