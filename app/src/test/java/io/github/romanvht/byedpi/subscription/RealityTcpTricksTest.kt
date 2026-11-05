@@ -140,6 +140,13 @@ class RealityTcpTricksTest {
         assertTrue(a.size <= 7)
     }
 
+    @Test fun localOrCancelledFailuresDoNotTriggerCostlyCoreRestartLoops() {
+        assertFalse(RealityTcpTricks.retryEgressOnly(true, true, false))
+        assertFalse(RealityTcpTricks.retryEgressOnly(true, false, true))
+        assertFalse(RealityTcpTricks.retryEgressOnly(false, true, true))
+        assertTrue(RealityTcpTricks.retryEgressOnly(true, true, true))
+    }
+
     @Test fun failureRecoveryIsBoundedAndNewStreamModesAreReal() {
         val attempts = RealityTcpTricks.attempts(null, RealityTcpTricks.DUET,
             listOf(null, "chrome", "firefox"), "chrome", false)
