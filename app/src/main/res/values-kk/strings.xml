@@ -427,4 +427,7 @@
     <string name="nlic_reality_compare_failed">Салыстыру орындалмады. Қайта көріңіз.</string>
     <string name="nlic_reality_compare_in_progress">REALITY салыстырылуда…</string>
     <string name="nlic_reality_compare_title">Салыстыру нәтижелері</string>
+    <string name="nlic_reality_compare_choose">REALITY салыстыру режимі</string>
+    <string name="nlic_reality_compare_quick">Жылдам · 6 HTTPS қосылымы</string>
+    <string name="nlic_reality_compare_extended">Толық · 18 қосылым (тұрақтылықты тексеру)</string>
 </resources>
