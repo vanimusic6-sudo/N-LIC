@@ -159,7 +159,10 @@ class ByeDpiVpnService : VpnService() {
                     try {
                         builder.addDisallowedApplication(packageName)
                     } catch (e: Exception) {
-                        Log.e(TAG, "Не удалось добавить приложение $packageName в черный список", e)
+                        // Avoid printing package names or exception text to
+                        // logcat. A rejected blacklist entry stays routed
+                        // through VPN, rather than leaking to the carrier.
+                        Log.w(TAG, "Ignored invalid VPN exclusion")
                     }
                 }
 
