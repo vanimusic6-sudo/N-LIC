@@ -92,6 +92,16 @@ class SubscriptionLabActivity : BaseActivity() {
                         )?.mapNotNull { RealityAssistLab.parse(it) }
                         comparisonRows = rows?.takeIf { it.isNotEmpty() }
                         endRealityComparison(content, compact, showDialog = true)
+                        // The user already opted into Smart: select the
+                        // fastest fully verified strategy automatically
+                        // after the explicit full test, not during a random
+                        // background check. The dialog still lets them
+                        // override it with any other fully verified row.
+                        if (prefs.getString("nlic_reality_tcp_utls", "profile") ==
+                            RealityAssistPolicy.SMART) {
+                            rows?.let { RealityAssistLab.best(it) }
+                                ?.let { applyLabChoice(it, automatic = true) }
+                        }
                     }
                     RealityCompareService.ERROR -> endRealityComparison(content)
                 }
@@ -1120,26 +1130,7 @@ class SubscriptionLabActivity : BaseActivity() {
             }
             .setPositiveButton("Использовать") { _, _ ->
                 val row = rows.getOrNull(selectedIndex)
-                if (row?.fullSuccess != true || row.medianMs == null) {
-                    toastMessage("Этот способ не подтвердил соединение.")
-                    return@setPositiveButton
-                }
-                val catalog = readCatalog()
-                val node = catalog.allNodes.firstOrNull { it.id == catalog.selectedNodeId }
-                if (node == null) {
-                    toastMessage("Выбери сервер и повтори проверку.")
-                    return@setPositiveButton
-                }
-                RealityAssistMemory.save(applicationContext, node.id,
-                    RealityAssistMemory.networkClass(applicationContext),
-                    bay = false, fingerprint = row.fingerprint,
-                    measuredMs = row.medianMs!!, tcpTrick = row.trick)
-                prefs.edit().putString("nlic_reality_tcp_utls", RealityAssistPolicy.SMART)
-                    .putString("nlic_reality_tcp_trick_manual", "auto").commit()
-                RealityAssistTrace.clear(applicationContext)
-                comparisonResult = "Выбрано: ${row.title()} · HTTPS 2/2 · 512 КиБ ✓"
-                locallyVerified = false
-                render()
+                if (row != null) applyLabChoice(row, automatic = false)
             }
             .setNeutralButton("Подробности") { _, _ -> showComparisonDialog(details) }
             .setNegativeButton(android.R.string.cancel, null)
@@ -1149,6 +1140,44 @@ class SubscriptionLabActivity : BaseActivity() {
                 selectedIndex >= 0 && rows[selectedIndex].fullSuccess
         }
         dialog.show()
+    }
+
+    /**
+     * Only fully verified manual-lab rows are eligible. AtomicFile storage
+     * is shared with the isolated Android VPN process, and the result is
+     * deliberately scoped to the manually selected node and network class.
+     */
+    private fun applyLabChoice(
+        row: RealityAssistLab.Row,
+        automatic: Boolean,
+    ): Boolean {
+        val ms = row.medianMs
+        if (!row.fullSuccess || ms == null) {
+            if (!automatic) toastMessage("Этот способ не подтвердил HTTPS и поток.")
+            return false
+        }
+        val catalog = readCatalog()
+        val node = catalog.allNodes.firstOrNull { it.id == catalog.selectedNodeId }
+        if (node == null) {
+            if (!automatic) toastMessage("Сервер изменился. Повтори проверку.")
+            return false
+        }
+        val saved = RealityAssistMemory.save(applicationContext, node.id,
+            RealityAssistMemory.networkClass(applicationContext),
+            bay = false, fingerprint = row.fingerprint,
+            measuredMs = ms, tcpTrick = row.trick)
+        if (!saved) {
+            if (!automatic) toastMessage("Не удалось сохранить выбранный способ.")
+            return false
+        }
+        prefs.edit().putString("nlic_reality_tcp_utls", RealityAssistPolicy.SMART)
+            .remove("nlic_reality_tcp_trick_manual").commit()
+        RealityAssistTrace.clear(applicationContext)
+        comparisonResult = "Выбрано: ${row.title()} · HTTPS 2/2 · 512 КиБ ✓"
+        locallyVerified = false
+        render()
+        if (!automatic) toastMessage("Будет использован: ${row.title()}")
+        return true
     }
 
     private fun toastMessage(text: String) {
