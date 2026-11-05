@@ -15,6 +15,7 @@ import android.os.SystemClock
 import io.github.romanvht.byedpi.subscription.LocalSocksAuth
 import io.github.romanvht.byedpi.subscription.RealityAssistPolicy
 import io.github.romanvht.byedpi.subscription.RealityComparison
+import io.github.romanvht.byedpi.subscription.RealityTransportProbe
 import io.github.romanvht.byedpi.subscription.SubscriptionNode
 import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.subscription.TunnelHealthProbe
@@ -154,6 +155,18 @@ internal class RealityCompareService : Service() {
                 return
             }
 
+            // A single raw TCP check is independent of the encrypted
+            // REALITY handshake. Do not turn TCP success into a VPN verdict.
+            val sameServer = RealityTransportProbe.endpoint(baseline.json)
+            val tcpResult = withContext(Dispatchers.IO) {
+                sameServer?.let { RealityTransportProbe.checkTcp(it) }
+            }
+            if (tcpResult != null) {
+                reply(client, PROGRESS, if (tcpResult.connected)
+                    "TCP до VPN-сервера доступен. Начинаем HTTPS-проверки…"
+                else
+                    "TCP до VPN-сервера не подтвердился. HTTPS-проверки всё равно выполняются…")
+            }
             val samples = mutableListOf<RealityComparison.Sample>()
             for ((index, fingerprint) in schedule.withIndex()) {
                 coroutineContext.ensureActive()
@@ -184,7 +197,7 @@ internal class RealityCompareService : Service() {
                     "Проверка ${index + 1}/${schedule.size} · $title: $result")
                 if (index < schedule.lastIndex) delay(350)
             }
-            val summary = RealityComparison.report(samples, trials)
+            val summary = RealityComparison.report(samples, trials, tcpResult)
             reply(client, FINISHED, summary.details, summary.compact)
         } catch (cancelled: CancellationException) {
             // Client left the screen; do not continue network testing.
