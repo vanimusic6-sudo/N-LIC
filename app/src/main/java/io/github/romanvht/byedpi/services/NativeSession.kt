@@ -28,6 +28,7 @@ import io.github.romanvht.byedpi.subscription.XrayConfigCompiler
 import io.github.romanvht.byedpi.subscription.RealityAssistPolicy
 import io.github.romanvht.byedpi.subscription.RealityAssistMemory
 import io.github.romanvht.byedpi.subscription.RealityTcpTricks
+import io.github.romanvht.byedpi.subscription.RealityStreamProbe
 import io.github.romanvht.byedpi.subscription.RealityAssistTrace
 import io.github.romanvht.byedpi.subscription.XrayBayArgs
 import io.github.romanvht.byedpi.subscription.CoreStartException
@@ -624,6 +625,21 @@ internal class NativeSession(
                                     corePhase = "REMOTE_TEST"; CoreFailureTrace.mark(service, corePhase)
                                     withTimeout(if (adaptive) 10_000L else 28_000L) {
                                         awaitRemoteReadiness(config.host, config.port, auth)
+                                    }
+                                }
+                                if (adaptive && trick != RealityTcpTricks.STOCK) {
+                                    // TCP resegmentation can let a short HTTPS
+                                    // check pass but disrupt longer transfers.
+                                    // Verify a complete certificate-checked
+                                    // 512KiB body before routing any Android
+                                    // app traffic through this candidate.
+                                    corePhase = "XRAY_STREAM"
+                                    CoreFailureTrace.mark(service, corePhase)
+                                    val stream = withContext(Dispatchers.IO) {
+                                        RealityStreamProbe.run(config.host, config.port, auth)
+                                    }
+                                    if (!stream.successful) {
+                                        throw CoreStartException("REALITY_STREAM_EGRESS")
                                     }
                                 }
                                 passed = true
