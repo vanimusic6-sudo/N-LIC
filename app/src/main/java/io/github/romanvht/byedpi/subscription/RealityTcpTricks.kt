@@ -55,7 +55,7 @@ internal object RealityTcpTricks {
      */
     fun chooseBest(samples: List<Measurement>): String {
         val valid = samples.filter {
-            it.trick in variants && it.httpsMs in 1L..30_000L
+            it.trick in variants && it.httpsMs != null && it.httpsMs in 1L..30_000L
         }.distinctBy { it.trick }
         val baseline = valid.firstOrNull { it.trick == STOCK }
         val fastest = valid.minByOrNull { it.httpsMs!! } ?: return STOCK
