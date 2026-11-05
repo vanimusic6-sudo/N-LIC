@@ -588,8 +588,11 @@ internal class NativeSession(
                                 // egress. A local/native startup timeout never
                                 // justifies changing TLS fingerprints.
                                 if (cancelled !is TimeoutCancellationException ||
-                                    !remoteCheckStarted ||
-                                    attemptIndex == attempts.lastIndex) {
+                                    !RealityTcpTricks.retryEgressOnly(
+                                        adaptive,
+                                        attemptIndex < attempts.lastIndex,
+                                        remoteCheckStarted
+                                    )) {
                                     throw cancelled
                                 }
                             } catch (e: Exception) {
@@ -599,8 +602,11 @@ internal class NativeSession(
                                 // cores repeatedly, heats the phone and hides
                                 // the real failure. Only actual encrypted
                                 // egress failures justify switching profile.
-                                if (!remoteCheckStarted || !adaptive ||
-                                    attemptIndex == attempts.lastIndex) throw e
+                                if (!RealityTcpTricks.retryEgressOnly(
+                                        adaptive,
+                                        attemptIndex < attempts.lastIndex,
+                                        remoteCheckStarted
+                                    )) throw e
                             } finally {
                                 if (!passed) {
                                     withContext(NonCancellable + Dispatchers.IO) {
