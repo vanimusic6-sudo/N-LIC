@@ -418,4 +418,13 @@
     <string name="nlic_reality_smart_disconnect">LIC-Assist параметрін өзгерту үшін VPN қосылымын ажыратыңыз.</string>
     <string name="nlic_reality_smart_manual_firefox">Firefox таңбасы қолмен таңдалған. Ақылды режим үшін қосқышты қосыңыз.</string>
     <string name="nlic_reality_smart_manual_chrome">Chrome таңбасы қолмен таңдалған. Ақылды режим үшін қосқышты қосыңыз.</string>
+    <string name="nlic_reality_compare_button">LIC-Assist арқылы салыстыру</string>
+    <string name="nlic_reality_compare_description">Бір REALITY серверінде алты HTTPS тексерісі: бастапқы, Firefox және Chrome. VPN қосылмайды.</string>
+    <string name="nlic_reality_compare_requires_disconnected">Салыстыру алдында VPN желісін ажыратыңыз.</string>
+    <string name="nlic_reality_compare_require_manual">Салыстыру үшін LIC-Auto және LIC-Bay функцияларын өшіріңіз.</string>
+    <string name="nlic_reality_compare_unsupported">VLESS + TCP + REALITY таңдаңыз.</string>
+    <string name="nlic_reality_compare_cancelled">Экраннан шыққанда салыстыру тоқтатылды.</string>
+    <string name="nlic_reality_compare_failed">Салыстыру орындалмады. Қайта көріңіз.</string>
+    <string name="nlic_reality_compare_in_progress">REALITY салыстырылуда…</string>
+    <string name="nlic_reality_compare_title">Салыстыру нәтижелері</string>
 </resources>
