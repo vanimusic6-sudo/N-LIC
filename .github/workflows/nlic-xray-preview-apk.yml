@@ -2,7 +2,7 @@ name: N-LIC V2 Release APK (DEV signed)
 
 on:
   push:
-    branches: [feature/nlic-xray-core-20261104, feature/nlic-dual-mode-resilience-20261104 , feature/nlic-v2-ui-core, feature/lic-assist-reality-tcp-20261105, feature/lic-reality-smart-assist-20261105]
+    branches: [feature/nlic-xray-core-20261104, feature/nlic-dual-mode-resilience-20261104 , feature/nlic-v2-ui-core, feature/lic-assist-reality-tcp-20261105, feature/lic-reality-smart-assist-20261105, fix/lic-reality-visible-status-20261105]
     paths:
       - app/**
       - .github/workflows/nlic-xray-preview-apk.yml
