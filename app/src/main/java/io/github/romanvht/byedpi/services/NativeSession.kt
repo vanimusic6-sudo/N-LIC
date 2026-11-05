@@ -385,11 +385,17 @@ internal class NativeSession(
                         )
                         val eligibleReality = RealityAssistPolicy
                             .baselineFingerprint(baselinePlan.json) != null
-                        val traceEligible = eligibleReality && !autoEnabled
+                        // LIC-Auto disables only Smart's alternate retry.
+                        // A manually selected Firefox/Chrome fingerprint is
+                        // still applied during Auto selection and must be
+                        // reported honestly after end-to-end HTTPS succeeds.
+                        val traceEligible = eligibleReality &&
+                            (!autoEnabled || assistMode != RealityAssistPolicy.SMART)
                         RealityAssistTrace.mark(service, when {
                             assistMode == RealityAssistPolicy.PROFILE ->
                                 RealityAssistTrace.Event.SKIPPED_DISABLED
-                            autoEnabled -> RealityAssistTrace.Event.SKIPPED_AUTO
+                            autoEnabled && assistMode == RealityAssistPolicy.SMART ->
+                                RealityAssistTrace.Event.SKIPPED_AUTO
                             !eligibleReality -> RealityAssistTrace.Event.SKIPPED_UNSUPPORTED
                             else -> RealityAssistTrace.Event.STARTING_ORIGINAL
                         })
