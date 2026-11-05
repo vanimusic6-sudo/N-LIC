@@ -27,6 +27,7 @@ internal object RealityAssistTrace {
         CALIBRATING_CHROME,
         CALIBRATING_FIREFOX,
         CALIBRATING_SAFARI,
+        CALIBRATING_TRANSPORT,
         CHECKING_ORIGINAL,
         RETRYING_FIREFOX,
         RETRYING_CHROME,
@@ -49,7 +50,12 @@ internal object RealityAssistTrace {
         FAILED,
     }
 
-    data class Snapshot(val event: Event, val timeMillis: Long)
+    data class Snapshot(
+        val event: Event,
+        val timeMillis: Long,
+        val fingerprint: String? = null,
+        val transport: String = RealityTcpTricks.STOCK,
+    )
 
     fun clear(context: Context) {
         runCatching {
@@ -58,14 +64,26 @@ internal object RealityAssistTrace {
         }
     }
 
-    fun mark(context: Context, event: Event) {
+    fun mark(
+        context: Context, event: Event,
+        fingerprint: String? = null,
+        transport: String = RealityTcpTricks.STOCK,
+    ) {
         runCatching {
+            // Persist ONLY a finite set of nonsecret profile identifiers.
+            val safeFingerprint = fingerprint?.takeIf {
+                it in RealityAssistPolicy.browserCandidates
+            } ?: RealityAssistPolicy.PROFILE
+            val safeTransport = transport.takeIf {
+                it in RealityTcpTricks.variants
+            } ?: RealityTcpTricks.STOCK
             val file = AtomicFile(File(context.filesDir, FILE))
-            val payload = "${System.currentTimeMillis()}:${event.name}"
-                .toByteArray(Charsets.US_ASCII)
+            val payload = "${System.currentTimeMillis()}:${event.name}:" +
+                "$safeFingerprint:$safeTransport"
+            val encoded = payload.toByteArray(Charsets.US_ASCII)
             val stream = file.startWrite()
             try {
-                stream.write(payload)
+                stream.write(encoded)
                 file.finishWrite(stream)
             } catch (error: Throwable) {
                 file.failWrite(stream)
@@ -76,16 +94,24 @@ internal object RealityAssistTrace {
 
     fun recent(context: Context): Snapshot? = runCatching {
         val file = AtomicFile(File(context.filesDir, FILE))
-        if (!file.baseFile.exists() || file.baseFile.length() !in 1L..85L) {
+        if (!file.baseFile.exists() || file.baseFile.length() !in 1L..140L) {
             return@runCatching null
         }
         val encoded = file.openRead().bufferedReader(Charsets.US_ASCII).use { it.readText() }
         val timestamp = encoded.substringBefore(':').toLongOrNull()
             ?: return@runCatching null
-        val state = runCatching { Event.valueOf(encoded.substringAfter(':')) }
+        val parts = encoded.split(':')
+        if (parts.size !in 2..4) return@runCatching null
+        val state = runCatching { Event.valueOf(parts[1]) }
             .getOrNull() ?: return@runCatching null
+        val fingerprint = parts.getOrNull(2)?.takeIf {
+            it in RealityAssistPolicy.browserCandidates
+        }
+        val transport = parts.getOrNull(3)?.takeIf {
+            it in RealityTcpTricks.variants
+        } ?: RealityTcpTricks.STOCK
         val elapsed = System.currentTimeMillis() - timestamp
         if (elapsed !in 0..MAX_AGE_MS) return@runCatching null
-        Snapshot(state, timestamp)
+        Snapshot(state, timestamp, fingerprint, transport)
     }.getOrNull()
 }

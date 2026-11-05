@@ -773,15 +773,29 @@ class SubscriptionLabActivity : BaseActivity() {
                 applicationContext, selected.id,
                 RealityAssistMemory.networkClass(applicationContext), bay
             )
-            if (winner != null) {
+            val manualTrick = prefs.getString(
+                "nlic_reality_tcp_trick_manual", "auto"
+            )
+            if (manualTrick != null &&
+                manualTrick in io.github.romanvht.byedpi.subscription
+                    .RealityTcpTricks.variants &&
+                manualTrick != io.github.romanvht.byedpi.subscription
+                    .RealityTcpTricks.STOCK && !bay) {
+                assistHint.text = "TCP выбран вручную: " +
+                    io.github.romanvht.byedpi.subscription.RealityTcpTricks.label(
+                        manualTrick
+                    ) + ". При неудаче будет проверен безопасный резерв."
+            } else if (winner != null) {
                 val name = when (winner.fingerprint) {
                     RealityAssistPolicy.CHROME -> "Chrome"
                     RealityAssistPolicy.FIREFOX -> "Firefox"
                     RealityAssistPolicy.SAFARI -> "Safari"
                     else -> "из подписки"
                 }
-                assistHint.text = "Подобрано для этой сети: $name · HTTPS проверен. " +
-                    "На следующем подключении этот вариант будет первым."
+                val technique = io.github.romanvht.byedpi.subscription
+                    .RealityTcpTricks.label(winner.tcpTrick)
+                assistHint.text = "Подобрано для этой сети: $name · $technique. " +
+                    "HTTPS проверен · этот вариант будет первым при подключении."
             }
         }
         assistSwitch.setOnCheckedChangeListener { _, enabled ->
@@ -902,6 +916,11 @@ class SubscriptionLabActivity : BaseActivity() {
                 "LIC-Assist: сравниваем Firefox на том же сервере…"
             RealityAssistTrace.Event.CALIBRATING_SAFARI ->
                 "LIC-Assist: сравниваем Safari на том же сервере…"
+            RealityAssistTrace.Event.CALIBRATING_TRANSPORT ->
+                "LIC-Assist: проверяем " +
+                    io.github.romanvht.byedpi.subscription.RealityTcpTricks.label(
+                        snapshot.transport
+                    ) + " через HTTPS…"
             RealityAssistTrace.Event.CHECKING_ORIGINAL ->
                 "LIC-Assist: проверяется HTTPS с исходным отпечатком…"
             RealityAssistTrace.Event.RETRYING_FIREFOX ->
@@ -960,6 +979,7 @@ class SubscriptionLabActivity : BaseActivity() {
             RealityAssistTrace.Event.CALIBRATING_CHROME,
             RealityAssistTrace.Event.CALIBRATING_FIREFOX,
             RealityAssistTrace.Event.CALIBRATING_SAFARI,
+            RealityAssistTrace.Event.CALIBRATING_TRANSPORT,
             RealityAssistTrace.Event.CHECKING_ORIGINAL,
             RealityAssistTrace.Event.RETRYING_FIREFOX,
             RealityAssistTrace.Event.RETRYING_CHROME,
@@ -971,8 +991,30 @@ class SubscriptionLabActivity : BaseActivity() {
             RealityAssistTrace.Event.CHECKING_MANUAL_CHROME,
             RealityAssistTrace.Event.CHECKING_MANUAL_SAFARI
         )
-        line.text = if (snapshot != null && !running && !busy && !inProgress)
-            "Последняя попытка · $message" else message
+        val active = if (snapshot?.event?.name?.startsWith("PASSED_") == true &&
+            configured == RealityAssistPolicy.SMART) {
+            val browser = when (snapshot.fingerprint) {
+                RealityAssistPolicy.CHROME -> "Chrome"
+                RealityAssistPolicy.FIREFOX -> "Firefox"
+                RealityAssistPolicy.SAFARI -> "Safari"
+                else -> "из подписки"
+            }
+            "\nРабочая комбинация: $browser · " +
+                io.github.romanvht.byedpi.subscription.RealityTcpTricks.label(
+                    snapshot.transport
+                )
+        } else ""
+        val checkingTechnique = if (inProgress && snapshot != null &&
+            snapshot.transport !=
+                io.github.romanvht.byedpi.subscription.RealityTcpTricks.STOCK) {
+            "\nTCP: " +
+                io.github.romanvht.byedpi.subscription.RealityTcpTricks.label(
+                    snapshot.transport
+                )
+        } else ""
+        line.text = (if (snapshot != null && !running && !busy && !inProgress)
+            "Последняя попытка · $message" else message) +
+            checkingTechnique + active
         line.visibility = View.VISIBLE
     }
 

@@ -17,6 +17,7 @@ import io.github.romanvht.byedpi.R
 import io.github.romanvht.byedpi.services.ServiceManager
 import io.github.romanvht.byedpi.subscription.RealityAssistTrace
 import io.github.romanvht.byedpi.subscription.RealityAssistMemory
+import io.github.romanvht.byedpi.subscription.RealityTcpTricks
 import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.utility.getPreferences
 
@@ -190,6 +191,47 @@ internal object NlicV2Settings {
                         }
                         .setNegativeButton(android.R.string.cancel, null)
                         .show()
+                }
+            }
+            val manualTrick = prefs.getString(
+                "nlic_reality_tcp_trick_manual", "auto"
+            ) ?: "auto"
+            val selectedTrickName = if (manualTrick == "auto") "Автоматически"
+                else RealityTcpTricks.label(manualTrick)
+            action("Способ TCP · $selectedTrickName",
+                "Выбери самостоятельно разделение ClientHello, MSS, TCP Fast Open или KeepAlive. " +
+                    "Только при включённом LIC-Assist; при неудаче остаётся безопасный резерв.") {
+                requireDisconnected {
+                    if (prefs.getBoolean("nlic_core_bay", false)) {
+                        AlertDialog.Builder(activity)
+                            .setMessage("Сначала выключи LIC-Bay. " +
+                                "ByeDPI создаёт физический TCP-сокет отдельно, " +
+                                "поэтому настройки Xray не воздействовали бы на него.")
+                            .setPositiveButton(android.R.string.ok, null).show()
+                    } else {
+                        val ids = listOf("auto") + RealityTcpTricks.variants
+                            .filter { it != RealityTcpTricks.STOCK }
+                        val captions = ids.map {
+                            if (it == "auto") "Авто · подобрать по реальному HTTPS"
+                            else RealityTcpTricks.label(it)
+                        }
+                        AlertDialog.Builder(activity)
+                            .setTitle("LIC-Assist · способ TCP/REALITY")
+                            .setMessage("Изменяется только способ передачи ClientHello или " +
+                                "параметры TCP на том же сервере. " +
+                                "Это эксперимент, а не гарантия обхода блокировки.")
+                            .setSingleChoiceItems(captions.toTypedArray(),
+                                ids.indexOf(manualTrick).coerceAtLeast(0)) { dialog, index ->
+                                prefs.edit().putString(
+                                    "nlic_reality_tcp_trick_manual", ids[index]
+                                ).commit()
+                                RealityAssistTrace.clear(activity.applicationContext)
+                                onRealityModeChanged()
+                                dialog.dismiss()
+                            }
+                            .setNegativeButton(android.R.string.cancel, null)
+                            .show()
+                    }
                 }
             }
             action("Повторить подбор REALITY",

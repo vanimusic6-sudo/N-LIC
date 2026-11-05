@@ -27,6 +27,8 @@ import io.github.romanvht.byedpi.subscription.XrayRuntime
 import io.github.romanvht.byedpi.subscription.XrayConfigCompiler
 import io.github.romanvht.byedpi.subscription.RealityAssistPolicy
 import io.github.romanvht.byedpi.subscription.RealityAssistMemory
+import io.github.romanvht.byedpi.subscription.RealityTcpTricks
+import io.github.romanvht.byedpi.subscription.RealityStreamProbe
 import io.github.romanvht.byedpi.subscription.RealityAssistTrace
 import io.github.romanvht.byedpi.subscription.XrayBayArgs
 import io.github.romanvht.byedpi.subscription.CoreStartException
@@ -397,6 +399,14 @@ internal class NativeSession(
                         val cached = if (adaptive) RealityAssistMemory.load(
                             service, selected.id, networkClass, bayEnabled
                         ) else null
+                        val forcedTcpTrick = if (adaptive && !bayEnabled) {
+                            service.getPreferences().getString(
+                                "nlic_reality_tcp_trick_manual", "auto"
+                            )?.takeIf {
+                                it in RealityTcpTricks.variants &&
+                                    it != RealityTcpTricks.STOCK
+                            }
+                        } else null
                         val measurements = mutableListOf<RealityAssistPolicy.Measurement>()
                         var calibratedChoice: String? = null
 
@@ -453,13 +463,86 @@ internal class NativeSession(
                             )
                         }
 
-                        // A cached tested winner is first. Cold calibration may
-                        // choose Chrome, Firefox, Safari or the original node.
-                        // All fallbacks preserve SNI, keys and the same server.
-                        val preferred = cached?.fingerprint ?: calibratedChoice
+                        // Browser and packetization are independent control
+                        // dimensions. A fresh Smart run uses the best HTTPS-
+                        // authenticated browser to test REALITY ClientHello
+                        // record splitting and TCP socket adjustments. One core
+                        // at a time, same server and credentials, never TUN yet.
+                        val preferred = cached?.fingerprint?.takeUnless {
+                            it == RealityAssistPolicy.PROFILE
+                        } ?: calibratedChoice
+                        val trickResults = mutableListOf<RealityTcpTricks.Measurement>()
+                        var chosenTcpTrick = forcedTcpTrick ?: cached?.tcpTrick
+                            ?: RealityTcpTricks.STOCK
+                        if (adaptive && cached == null && forcedTcpTrick == null &&
+                            baselineFingerprint != null) {
+                            val original = measurements.firstOrNull {
+                                (it.fingerprint ?: baselineFingerprint) ==
+                                    (preferred ?: baselineFingerprint)
+                            }?.httpsMs
+                            trickResults += RealityTcpTricks.Measurement(
+                                RealityTcpTricks.STOCK, original
+                            )
+                            for (trick in RealityTcpTricks.available(bayEnabled)) {
+                                if (trick == RealityTcpTricks.STOCK) continue
+                                RealityAssistTrace.mark(
+                                    service, RealityAssistTrace.Event.CALIBRATING_TRANSPORT,
+                                    preferred, trick
+                                )
+                                val plan = XrayConfigCompiler.compile(
+                                    selected, auth, if (bayEnabled) bayPort else null,
+                                    preferred, trick
+                                ) as? XrayConfigCompiler.Result.Compiled
+                                if (plan == null) {
+                                    trickResults += RealityTcpTricks.Measurement(trick, null)
+                                    continue
+                                }
+                                val trial = XrayRuntime(service)
+                                xrayEngine = trial
+                                var sample: Long? = null
+                                try {
+                                    corePhase = "XRAY_TRICK"
+                                    CoreFailureTrace.mark(service, corePhase)
+                                    withContext(Dispatchers.IO) { trial.start(plan.json) }
+                                    withTimeout(5_000L) {
+                                        awaitProxy(config.host, config.port, auth)
+                                    }
+                                    // This is a real authenticated HTTPS
+                                    // request through REALITY, not a fake TCP
+                                    // success. Failure is not proof of DPI.
+                                    sample = withContext(Dispatchers.IO) {
+                                        trial.measureHttpsLatencyMs()
+                                    }?.takeIf { it in 1L..30_000L }
+                                } catch (cancelled: CancellationException) {
+                                    if (cancelled !is TimeoutCancellationException)
+                                        throw cancelled
+                                } catch (_: Exception) {
+                                    // Unsupported network option or blocked
+                                    // egress: never expose an unverified trick.
+                                } finally {
+                                    trickResults += RealityTcpTricks.Measurement(trick, sample)
+                                    withContext(NonCancellable + Dispatchers.IO) {
+                                        trial.close()
+                                    }
+                                    if (xrayEngine === trial) xrayEngine = null
+                                    delay(160)
+                                }
+                            }
+                            chosenTcpTrick = RealityTcpTricks.chooseBest(trickResults)
+                        }
                         val fingerprintAttempts = RealityAssistPolicy.candidates(
                             assistMode, baselinePlan, autoEnabled, preferred
                         )
+                        val attempts = if (adaptive && baselineFingerprint != null) {
+                            RealityTcpTricks.attempts(
+                                preferred, chosenTcpTrick, fingerprintAttempts,
+                                baselineFingerprint, bayEnabled
+                            )
+                        } else {
+                            fingerprintAttempts.map {
+                                RealityTcpTricks.Trial(it, RealityTcpTricks.STOCK)
+                            }
+                        }
                         RealityAssistTrace.mark(service, when {
                             assistMode == RealityAssistPolicy.PROFILE ->
                                 RealityAssistTrace.Event.SKIPPED_DISABLED
@@ -474,9 +557,12 @@ internal class NativeSession(
                         // not successful end-to-end VPN connectivity.
                         var verifiedAssist: RealityAssistTrace.Event? = null
                         var verifiedFingerprint: String? = null
+                        var verifiedTcpTrick = RealityTcpTricks.STOCK
                         var verifiedHttpsMs: Long? = null
                         var xrayReady = false
-                        for ((attemptIndex, fp) in fingerprintAttempts.withIndex()) {
+                        for ((attemptIndex, attempt) in attempts.withIndex()) {
+                            val fp = attempt.fingerprint
+                            val trick = attempt.trick
                             if (traceEligible && assistMode == RealityAssistPolicy.SMART &&
                                 attemptIndex > 0) {
                                 RealityAssistTrace.mark(service, when (fp) {
@@ -492,9 +578,15 @@ internal class NativeSession(
                             val plan = XrayConfigCompiler.compile(
                                 selected, auth, if (bayEnabled) bayPort else null,
                                 if (assistMode == RealityAssistPolicy.SMART)
-                                    fp else realityFingerprint
+                                    fp else realityFingerprint,
+                                trick
                             ) as? XrayConfigCompiler.Result.Compiled
-                                ?: throw CoreStartException("PROTOCOL_UNSUPPORTED")
+                            if (plan == null) {
+                                // Unsupported optional socket or finalmask
+                                // must not break a verified stock connection.
+                                if (adaptive && attemptIndex < attempts.lastIndex) continue
+                                throw CoreStartException("PROTOCOL_UNSUPPORTED")
+                            }
 
                             // Never add VPN routes or promote a candidate until
                             // a real HTTPS check through the encrypted core
@@ -530,7 +622,7 @@ internal class NativeSession(
                                         assistMode == RealityAssistPolicy.SAFARI ->
                                             RealityAssistTrace.Event.CHECKING_MANUAL_SAFARI
                                         else -> RealityAssistTrace.Event.CHECKING_MANUAL_CHROME
-                                    })
+                                    }, fp, trick)
                                 }
                                 verificationStarted =
                                     android.os.SystemClock.elapsedRealtime()
@@ -545,9 +637,25 @@ internal class NativeSession(
                                         awaitRemoteReadiness(config.host, config.port, auth)
                                     }
                                 }
+                                if (adaptive && trick != RealityTcpTricks.STOCK) {
+                                    // TCP resegmentation can let a short HTTPS
+                                    // check pass but disrupt longer transfers.
+                                    // Verify a complete certificate-checked
+                                    // 512KiB body before routing any Android
+                                    // app traffic through this candidate.
+                                    corePhase = "XRAY_STREAM"
+                                    CoreFailureTrace.mark(service, corePhase)
+                                    val stream = withContext(Dispatchers.IO) {
+                                        RealityStreamProbe.run(config.host, config.port, auth)
+                                    }
+                                    if (!stream.successful) {
+                                        throw CoreStartException("REALITY_STREAM_EGRESS")
+                                    }
+                                }
                                 passed = true
                                 xrayReady = true
                                 verifiedFingerprint = fp
+                                verifiedTcpTrick = trick
                                 verifiedHttpsMs = (
                                     android.os.SystemClock.elapsedRealtime() -
                                         verificationStarted
@@ -577,22 +685,22 @@ internal class NativeSession(
                                 // justifies changing TLS fingerprints.
                                 if (cancelled !is TimeoutCancellationException ||
                                     !remoteCheckStarted ||
-                                    attemptIndex == fingerprintAttempts.lastIndex) {
+                                    attemptIndex == attempts.lastIndex) {
                                     throw cancelled
                                 }
                             } catch (e: Exception) {
                                 // Do not interpret a broken Xray core, invalid
                                 // credentials or failed SOCKS authentication as
                                 // DPI. Only retry after the outbound check.
-                                if (!remoteCheckStarted ||
-                                    attemptIndex == fingerprintAttempts.lastIndex) throw e
+                                if ((!remoteCheckStarted && !adaptive) ||
+                                    attemptIndex == attempts.lastIndex) throw e
                             } finally {
                                 if (!passed) {
                                     withContext(NonCancellable + Dispatchers.IO) {
                                         xray.close()
                                     }
                                     if (xrayEngine === xray) xrayEngine = null
-                                    if (attemptIndex < fingerprintAttempts.lastIndex) {
+                                    if (attemptIndex < attempts.lastIndex) {
                                         delay(250)
                                     }
                                 }
@@ -639,19 +747,30 @@ internal class NativeSession(
                         // Only now is a new preferred fingerprint persisted.
                         // Existing good cache remains fresh until its 12h TTL,
                         // so reconnects cannot cause constant rescanning.
-                        if (adaptive) {
+                        if (adaptive && forcedTcpTrick == null) {
                             val chosen = verifiedFingerprint ?: RealityAssistPolicy.PROFILE
-                            if (cached == null || cached.fingerprint != chosen) {
-                                val calibrationMs = measurements.firstOrNull {
+                            if (cached == null || cached.fingerprint != chosen ||
+                                cached.tcpTrick != verifiedTcpTrick) {
+                                val calibrationMs = if (verifiedTcpTrick !=
+                                    RealityTcpTricks.STOCK) {
+                                    trickResults.firstOrNull {
+                                        it.trick == verifiedTcpTrick
+                                    }?.httpsMs
+                                } else measurements.firstOrNull {
                                     it.fingerprint == verifiedFingerprint
                                 }?.httpsMs
                                 RealityAssistMemory.save(
                                     service, selected.id, networkClass, bayEnabled,
-                                    chosen, calibrationMs ?: verifiedHttpsMs ?: 1000L
+                                    chosen, calibrationMs ?: verifiedHttpsMs ?: 1000L,
+                                    verifiedTcpTrick
                                 )
                             }
                         }
-                        verifiedAssist?.let { RealityAssistTrace.mark(service, it) }
+                        verifiedAssist?.let {
+                            RealityAssistTrace.mark(
+                                service, it, verifiedFingerprint, verifiedTcpTrick
+                            )
+                        }
                     } else if (config.args.firstOrNull() == "--nlic-libbox") {
                         check(createTunnel != null) {
                             "LIC-Core requires VPN mode; proxy-only service is unsupported"
