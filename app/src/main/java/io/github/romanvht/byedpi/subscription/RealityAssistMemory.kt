@@ -57,13 +57,13 @@ internal object RealityAssistMemory {
         val preferences = prefs(context)
         val key = key(context, nodeId, network, bay)
         val recorded = preferences.getLong(key + "_at", 0L)
-        if (System.currentTimeMillis() - recorded !in 0..TTL_MS)
+        if (System.currentTimeMillis() - recorded !in 0L..TTL_MS)
             return@runCatching null
         val fp = preferences.getString(key + "_fp", null)
         if (fp !in RealityAssistPolicy.browserCandidates &&
             fp != RealityAssistPolicy.PROFILE) return@runCatching null
         val ms = preferences.getLong(key + "_ms", 0L)
-        if (ms !in 1..30_000) return@runCatching null
+        if (ms !in 1L..30_000L) return@runCatching null
         Winner(fp!!, ms)
     }.getOrNull()
 
@@ -77,7 +77,7 @@ internal object RealityAssistMemory {
     ) {
         if (fingerprint !in RealityAssistPolicy.browserCandidates &&
             fingerprint != RealityAssistPolicy.PROFILE) return
-        if (measuredMs !in 1..30_000) return
+        if (measuredMs !in 1L..30_000L) return
         runCatching {
             val key = key(context, nodeId, network, bay)
             prefs(context).edit()
