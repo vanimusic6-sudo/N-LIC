@@ -399,6 +399,14 @@ internal class NativeSession(
                         val cached = if (adaptive) RealityAssistMemory.load(
                             service, selected.id, networkClass, bayEnabled
                         ) else null
+                        val forcedTcpTrick = if (adaptive && !bayEnabled) {
+                            service.getPreferences().getString(
+                                "nlic_reality_tcp_trick_manual", "auto"
+                            )?.takeIf {
+                                it in RealityTcpTricks.variants &&
+                                    it != RealityTcpTricks.STOCK
+                            }
+                        } else null
                         val measurements = mutableListOf<RealityAssistPolicy.Measurement>()
                         var calibratedChoice: String? = null
 
@@ -464,8 +472,10 @@ internal class NativeSession(
                             it == RealityAssistPolicy.PROFILE
                         } ?: calibratedChoice
                         val trickResults = mutableListOf<RealityTcpTricks.Measurement>()
-                        var chosenTcpTrick = cached?.tcpTrick ?: RealityTcpTricks.STOCK
-                        if (adaptive && cached == null && baselineFingerprint != null) {
+                        var chosenTcpTrick = forcedTcpTrick ?: cached?.tcpTrick
+                            ?: RealityTcpTricks.STOCK
+                        if (adaptive && cached == null && forcedTcpTrick == null &&
+                            baselineFingerprint != null) {
                             val original = measurements.firstOrNull {
                                 (it.fingerprint ?: baselineFingerprint) ==
                                     (preferred ?: baselineFingerprint)
@@ -737,7 +747,7 @@ internal class NativeSession(
                         // Only now is a new preferred fingerprint persisted.
                         // Existing good cache remains fresh until its 12h TTL,
                         // so reconnects cannot cause constant rescanning.
-                        if (adaptive) {
+                        if (adaptive && forcedTcpTrick == null) {
                             val chosen = verifiedFingerprint ?: RealityAssistPolicy.PROFILE
                             if (cached == null || cached.fingerprint != chosen ||
                                 cached.tcpTrick != verifiedTcpTrick) {
