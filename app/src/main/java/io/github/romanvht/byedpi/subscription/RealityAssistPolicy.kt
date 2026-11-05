@@ -45,12 +45,12 @@ internal object RealityAssistPolicy {
     internal fun baselineFingerprint(compiled: String): String? = runCatching {
         val outbound = JsonParser.parseString(compiled).asJsonObject
             .getAsJsonArray("outbounds")[0].asJsonObject
-        if (outbound.get("protocol")?.asString != "vless") return null
-        val stream = outbound.getAsJsonObject("streamSettings") ?: return null
+        if (outbound.get("protocol")?.asString != "vless") return@runCatching null
+        val stream = outbound.getAsJsonObject("streamSettings") ?: return@runCatching null
         if (stream.get("network")?.asString != "raw" ||
-            stream.get("security")?.asString != "reality") return null
+            stream.get("security")?.asString != "reality") return@runCatching null
         val fp = stream.getAsJsonObject("realitySettings")?.get("fingerprint")
-            ?.asString?.lowercase() ?: return null
+            ?.asString?.lowercase() ?: return@runCatching null
         fp
     }.getOrNull()
 }
