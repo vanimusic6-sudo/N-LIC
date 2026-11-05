@@ -141,7 +141,11 @@ class SubscriptionLabActivity : BaseActivity() {
         override fun run() {
             if (!realityStatusVisible) return
             updateRealityAssistStatus()
-            window.decorView.postDelayed(this, 800L)
+            // Status is a tiny cross-process AtomicFile, not a live
+            // waveform. Frequent 800 ms polling during long idle periods
+            // causes unnecessary wakeups and main-thread UI churn.
+            window.decorView.postDelayed(this,
+                if (busy || comparisonRunning) 2_000L else 5_000L)
         }
     }
 
