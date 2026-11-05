@@ -62,18 +62,46 @@ internal object TunnelHealthProbe {
         target: String = TARGET,
     ): Boolean = probe(host, port, auth, target) == EgressResult.OK
 
+    /**
+     * Stage measurements for an HTTPS request through the existing SOCKS5
+     * tunnel. IMPORTANT: SOCKS CONNECT is not a direct measurement of the
+     * underlying REALITY/TLS handshake; the proxy may acknowledge early.
+     * targetTlsMs is TLS to a fixed HTTPS health endpoint, NOT REALITY TLS.
+     */
+    internal data class DetailedProbe(
+        val result: EgressResult,
+        val localTcpMs: Long?,
+        val socksConnectMs: Long?,
+        val targetTlsMs: Long?,
+        val httpResponseMs: Long?,
+        val totalMs: Long,
+    )
+
     internal fun probe(
         host: String, port: Int, auth: LocalSocksAuth? = null,
         target: String = TARGET,
-    ): EgressResult {
+    ): EgressResult = probeDetailed(host, port, auth, target).result
+
+    internal fun probeDetailed(
+        host: String, port: Int, auth: LocalSocksAuth? = null,
+        target: String = TARGET,
+    ): DetailedProbe {
         val path = requireNotNull(TRUSTED_HTTPS_PROBES[target])
+        val started = System.nanoTime()
+        fun elapsed() = ((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(1L)
         var stage = EgressResult.CONNECT
-        return try {
+        var localTcpMs: Long? = null
+        var socksMs: Long? = null
+        var targetTlsMs: Long? = null
+        var httpMs: Long? = null
+        val result = try {
             Socket().use { socket ->
                 socket.connect(InetSocketAddress(host, port), TIMEOUT)
                 socket.soTimeout = TIMEOUT
+                localTcpMs = elapsed()
                 stage = EgressResult.SOCKS
                 connectDomain(socket, target, 443, auth)
+                socksMs = (elapsed() - localTcpMs!!).coerceAtLeast(1L)
                 stage = EgressResult.TLS
                 val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
                 (factory.createSocket(socket, target, 443, true) as SSLSocket).use { tls ->
@@ -82,29 +110,32 @@ internal object TunnelHealthProbe {
                         endpointIdentificationAlgorithm = "HTTPS"
                     }
                     tls.startHandshake()
+                    targetTlsMs = (elapsed() - localTcpMs!! - socksMs!!).coerceAtLeast(1L)
                     stage = EgressResult.HTTP
-                    tls.outputStream.write(("GET $path HTTP/1.1\r\n" +
-                        "Host: $target\r\nConnection: close\r\n\r\n")
+                    tls.outputStream.write(("GET $path HTTP/1.1\\r\\n" +
+                        "Host: $target\\r\\nConnection: close\\r\\n\\r\\n")
                         .toByteArray(Charsets.US_ASCII))
                     tls.outputStream.flush()
                     val line = StringBuilder()
                     val input = tls.inputStream
                     while (line.length < 128) {
-                        val c = input.read()
-                        if (c < 0 || c == 10) break
-                        line.append(c.toChar())
+                        val ch = input.read()
+                        if (ch < 0 || ch == 10) break
+                        line.append(ch.toChar())
                     }
+                    httpMs = (elapsed() - localTcpMs!! - socksMs!! -
+                        targetTlsMs!!).coerceAtLeast(1L)
                     if (acceptsHttpsResponse(line.toString())) EgressResult.OK
                     else EgressResult.HTTP
                 }
             }
         } catch (error: Exception) {
-            // Only stage and exception *type*, never nested exception text.
-            // SOCKS5 CONNECT may succeed before the remote encrypted
-            // protocol authenticates, so TLS failures do not prove that
-            // a VLESS/REALITY or WireGuard server itself failed TLS.
+            // Category only: nested errors may expose addresses, SNI,
+            // routes, subscription credentials or private metadata.
             if (stage == EgressResult.TLS) classifyTlsFailure(error) else stage
         }
+        return DetailedProbe(result, localTcpMs, socksMs, targetTlsMs,
+            httpMs, elapsed())
     }
 
     /** A cert-verified HTTPS success (200-399) proves end-to-end egress.
