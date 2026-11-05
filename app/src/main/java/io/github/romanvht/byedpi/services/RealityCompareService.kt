@@ -18,6 +18,8 @@ import io.github.romanvht.byedpi.subscription.RealityComparison
 import io.github.romanvht.byedpi.subscription.RealityTransportProbe
 import io.github.romanvht.byedpi.subscription.RealityStreamProbe
 import io.github.romanvht.byedpi.subscription.RealityStreamComparison
+import io.github.romanvht.byedpi.subscription.RealityWorkbench
+import io.github.romanvht.byedpi.subscription.RealityTcpTricks
 import io.github.romanvht.byedpi.subscription.SubscriptionNode
 import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.subscription.TunnelHealthProbe
@@ -57,6 +59,8 @@ internal class RealityCompareService : Service() {
         const val TEXT = "text"
         const val COMPACT = "compact"
         const val TRIALS = "trials"
+        const val MATRIX = 100
+        const val MATRIX_DATA = "matrix_data"
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -94,13 +98,15 @@ internal class RealityCompareService : Service() {
     }
 
     private fun reply(
-        client: Messenger, what: Int, value: String, compact: String? = null
+        client: Messenger, what: Int, value: String, compact: String? = null,
+        matrixData: String? = null,
     ) {
         try {
             client.send(Message.obtain(null, what).apply {
                 data = Bundle().apply {
                     putString(TEXT, value)
                     if (compact != null) putString(COMPACT, compact)
+                    if (matrixData != null) putString(MATRIX_DATA, matrixData)
                 }
             })
         } catch (_: RemoteException) {
@@ -118,8 +124,10 @@ internal class RealityCompareService : Service() {
 
     private suspend fun compare(client: Messenger, trials: Int) {
         try {
+            val matrixTest = trials == MATRIX
             val streamTest = trials == RealityStreamComparison.TRIALS
-            val schedule = if (streamTest)
+            val schedule = if (matrixTest) emptyList()
+                else if (streamTest)
                 RealityStreamComparison.sequence else RealityComparison.schedule(trials)
             if (schedule == null) {
                 reply(client, ERROR, "Недопустимый режим сравнения.")
@@ -160,6 +168,36 @@ internal class RealityCompareService : Service() {
                 RealityAssistPolicy.baselineFingerprint(baseline.json) == null) {
                 reply(client, ERROR,
                     "Выбранный профиль не поддерживает сравнение VLESS + TCP + REALITY.")
+                return
+            }
+
+            if (matrixTest) {
+                val baselineFp = RealityAssistPolicy.baselineFingerprint(
+                    baseline.json
+                ) ?: "chrome"
+                val profiles = RealityWorkbench.profiles(baselineFp)
+                val results = mutableListOf<RealityWorkbench.Sample>()
+                for ((index, profile) in RealityWorkbench.schedule(profiles).withIndex()) {
+                    coroutineContext.ensureActive()
+                    if (!noOtherVpn()) {
+                        reply(client, ERROR, "Обнаружен VPN. Проверка отменена.")
+                        return
+                    }
+                    reply(client, PROGRESS,
+                        "Проверка ${index + 1}/${profiles.size * 2} · ${profile.label}")
+                    val sample = withContext(Dispatchers.IO) {
+                        verify(node, auth, profile.fingerprint
+                            ?: RealityComparison.ORIGINAL, profile.trick)
+                    }
+                    results += RealityWorkbench.Sample(
+                        profile.id, sample.latencyMs.takeIf { sample.success },
+                        sample.failureStage?.takeIf { !sample.success }
+                    )
+                    if (index < profiles.size * 2 - 1) delay(160)
+                }
+                val report = RealityWorkbench.evaluate(profiles, results)
+                reply(client, FINISHED, report.details, report.compact,
+                    if (report.complete) RealityWorkbench.encode(report.entries) else null)
                 return
             }
 
@@ -238,10 +276,12 @@ internal class RealityCompareService : Service() {
         node: SubscriptionNode,
         auth: LocalSocksAuth,
         fingerprint: String,
+        tcpTrick: String = RealityTcpTricks.STOCK,
     ): RealityComparison.Sample {
         val alternate = fingerprint.takeUnless { it == RealityComparison.ORIGINAL }
         val compiled = XrayConfigCompiler.compile(
-            node, auth, realityClientFingerprint = alternate
+            node, auth, realityClientFingerprint = alternate,
+            realityTcpTrick = tcpTrick
         ) as? XrayConfigCompiler.Result.Compiled
             ?: return RealityComparison.Sample(fingerprint, false, null,
                 failureStage = "CONFIG")
