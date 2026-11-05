@@ -435,10 +435,15 @@ internal class NativeEngine(
                 putStringArray(EngineProtocol.APPS, configuration.apps.toTypedArray())
             })
         }
+        // Smart REALITY may need two verified attempts on the *same*
+        // server. Keep the engine supervision budget longer than the
+        // bounded native probe budget; ordinary connects remain unchanged.
         awaitStarted(
             if (configuration.args.firstOrNull() == "--nlic-xray" &&
-                configuration.args.getOrNull(2) == "--nlic-auto"
-            ) 95_000L else 60_000L
+                (configuration.args.getOrNull(2) == "--nlic-auto" ||
+                    application.getPreferences().getString(
+                        "nlic_reality_tcp_utls", "profile") == "smart")
+            ) 110_000L else 60_000L
         )
     }
 
