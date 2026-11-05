@@ -12,8 +12,10 @@ import java.security.SecureRandom
  * password, subscription link, SSID or traffic content is persisted.
  */
 internal object RealityAssistMemory {
-    private const val STORE = "nlic_reality_adaptive_v1"
-    private const val TTL_MS = 12L * 60 * 60 * 1000
+    // v2 intentionally ignores v1's single-shot background measurements.
+    // Only results from the explicit full HTTPS + stream lab (or a
+    // successful same-node recovery) are now stored.
+    private const val STORE = "nlic_reality_user_verified_v2"
 
     data class Winner(
         val fingerprint: String,
@@ -61,7 +63,10 @@ internal object RealityAssistMemory {
         val preferences = prefs(context)
         val key = key(context, nodeId, network, bay)
         val recorded = preferences.getLong(key + "_at", 0L)
-        if (System.currentTimeMillis() - recorded !in 0L..TTL_MS)
+        // Do not silently revert a user-selected working connection
+        // to baseline after 12 hours. The choice stays until retesting,
+        // changing networks/nodes, or a verified fallback replaces it.
+        if (recorded <= 0L || recorded > System.currentTimeMillis())
             return@runCatching null
         val fp = preferences.getString(key + "_fp", null)
         if (fp !in RealityAssistPolicy.browserCandidates &&
