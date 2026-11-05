@@ -136,7 +136,10 @@ internal object RealityStreamProbe {
         return received
     }
 
-    fun run(host: String, port: Int, auth: LocalSocksAuth): Result {
+    fun run(
+        host: String, port: Int, auth: LocalSocksAuth,
+        onSocketOpened: (Socket) -> Unit = {},
+    ): Result {
         var stage = "SOCKS"
         val began = System.nanoTime()
         val expiry = began + MAX_DURATION_MS * 1_000_000L
@@ -144,6 +147,9 @@ internal object RealityStreamProbe {
         var bodyMs: Long? = null
         try {
             Socket().use { socket ->
+                // The bound service can close this socket on user cancel;
+                // no background stream continues after leaving the screen.
+                onSocketOpened(socket)
                 socket.connect(InetSocketAddress(host, port), TIMEOUT_MS)
                 socket.soTimeout = TIMEOUT_MS
                 TunnelHealthProbe.connectDomain(socket, TARGET, 443, auth)
