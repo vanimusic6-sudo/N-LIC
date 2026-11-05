@@ -763,6 +763,8 @@ class SubscriptionLabActivity : BaseActivity() {
                 R.string.nlic_reality_smart_manual_firefox
             assistMode == RealityAssistPolicy.CHROME ->
                 R.string.nlic_reality_smart_manual_chrome
+            assistMode == RealityAssistPolicy.SAFARI ->
+                R.string.nlic_reality_smart_manual_safari
             else -> R.string.nlic_reality_smart_off
         })
         if (!runningVpn && assistMode == RealityAssistPolicy.SMART &&
