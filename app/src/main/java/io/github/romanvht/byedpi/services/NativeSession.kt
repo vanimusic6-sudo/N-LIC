@@ -381,23 +381,92 @@ internal class NativeSession(
                             selected, auth, if (bayEnabled) bayPort else null
                         ) as? XrayConfigCompiler.Result.Compiled
                             ?: throw CoreStartException("PROTOCOL_UNSUPPORTED")
-                        val fingerprintAttempts = RealityAssistPolicy.candidates(
-                            assistMode, baselinePlan, autoEnabled
-                        )
-                        val eligibleReality = RealityAssistPolicy
-                            .baselineFingerprint(baselinePlan.json) != null
-                        // LIC-Auto disables only Smart's alternate retry.
-                        // A manually selected Firefox/Chrome fingerprint is
-                        // still applied during Auto selection and must be
-                        // reported honestly after end-to-end HTTPS succeeds.
+                        val baselineFingerprint = RealityAssistPolicy
+                            .baselineFingerprint(baselinePlan.json)
+                        val eligibleReality = baselineFingerprint != null
+                        val adaptive = eligibleReality && !autoEnabled &&
+                            assistMode == RealityAssistPolicy.SMART
                         val traceEligible = eligibleReality &&
                             (!autoEnabled || assistMode != RealityAssistPolicy.SMART)
+
+                        // Persistent data contain only a salted node identifier,
+                        // a coarse network class and a safe uTLS label.
+                        val networkClass = if (adaptive) {
+                            RealityAssistMemory.networkClass(service)
+                        } else "other"
+                        val cached = if (adaptive) RealityAssistMemory.load(
+                            service, selected.id, networkClass, bayEnabled
+                        ) else null
+                        val measurements = mutableListOf<RealityAssistPolicy.Measurement>()
+                        var calibratedChoice: String? = null
+
+                        if (adaptive && cached == null && baselineFingerprint != null) {
+                            // A single opt-in calibration on a new node/network.
+                            // No parallel handshakes; never make a TUN before
+                            // a working fingerprint is selected and verified.
+                            for (fp in RealityAssistPolicy.calibrationCandidates(
+                                baselineFingerprint
+                            )) {
+                                RealityAssistTrace.mark(service, when (fp) {
+                                    RealityAssistPolicy.CHROME ->
+                                        RealityAssistTrace.Event.CALIBRATING_CHROME
+                                    RealityAssistPolicy.FIREFOX ->
+                                        RealityAssistTrace.Event.CALIBRATING_FIREFOX
+                                    RealityAssistPolicy.SAFARI ->
+                                        RealityAssistTrace.Event.CALIBRATING_SAFARI
+                                    else -> RealityAssistTrace.Event.CALIBRATING_ORIGINAL
+                                })
+                                val plan = XrayConfigCompiler.compile(
+                                    selected, auth, if (bayEnabled) bayPort else null, fp
+                                ) as? XrayConfigCompiler.Result.Compiled ?: continue
+                                val trial = XrayRuntime(service)
+                                xrayEngine = trial
+                                var sample: Long? = null
+                                try {
+                                    corePhase = "XRAY_CALIBRATE"
+                                    CoreFailureTrace.mark(service, corePhase)
+                                    withContext(Dispatchers.IO) { trial.start(plan.json) }
+                                    withTimeout(5_000) {
+                                        awaitProxy(config.host, config.port, auth)
+                                    }
+                                    // Go measures authenticated HTTPS over the
+                                    // actual REALITY outbound, not a TCP ping.
+                                    sample = withContext(Dispatchers.IO) {
+                                        trial.measureHttpsLatencyMs()
+                                    }?.takeIf { it in 1L..30_000L }
+                                } catch (cancelled: CancellationException) {
+                                    if (cancelled !is TimeoutCancellationException)
+                                        throw cancelled
+                                } catch (_: Exception) {
+                                    // Failed profile is not proof of DPI.
+                                } finally {
+                                    measurements += RealityAssistPolicy.Measurement(fp, sample)
+                                    withContext(NonCancellable + Dispatchers.IO) {
+                                        trial.close()
+                                    }
+                                    if (xrayEngine === trial) xrayEngine = null
+                                    delay(160) // release the authenticated SOCKS port
+                                }
+                            }
+                            calibratedChoice = RealityAssistPolicy.chooseBest(
+                                baselineFingerprint, measurements
+                            )
+                        }
+
+                        // A cached tested winner is first. Cold calibration may
+                        // choose Chrome, Firefox, Safari or the original node.
+                        // All fallbacks preserve SNI, keys and the same server.
+                        val preferred = cached?.fingerprint ?: calibratedChoice
+                        val fingerprintAttempts = RealityAssistPolicy.candidates(
+                            assistMode, baselinePlan, autoEnabled, preferred
+                        )
                         RealityAssistTrace.mark(service, when {
                             assistMode == RealityAssistPolicy.PROFILE ->
                                 RealityAssistTrace.Event.SKIPPED_DISABLED
                             autoEnabled && assistMode == RealityAssistPolicy.SMART ->
                                 RealityAssistTrace.Event.SKIPPED_AUTO
-                            !eligibleReality -> RealityAssistTrace.Event.SKIPPED_UNSUPPORTED
+                            !eligibleReality ->
+                                RealityAssistTrace.Event.SKIPPED_UNSUPPORTED
                             else -> RealityAssistTrace.Event.STARTING_ORIGINAL
                         })
                         // Mark as successful only after Xray HTTPS AND Android
