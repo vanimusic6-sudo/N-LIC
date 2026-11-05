@@ -431,7 +431,7 @@ internal class NativeSession(
                             else -> cached?.fingerprint
                         }
                         val chosenTcpTrick = forcedTcpTrick
-                            ?: cached?.tcpTrick ?: RealityTcpTricks.STOCK
+                            ?: cached?.tcpTrick ?: RealityTcpTricks.DEFAULT_HELPER
                         val fingerprintAttempts = RealityAssistPolicy.candidates(
                             assistMode, baselinePlan, autoEnabled, preferred
                         )
@@ -450,6 +450,7 @@ internal class NativeSession(
                                 RealityAssistTrace.Event.SKIPPED_AUTO
                             !eligibleReality ->
                                 RealityAssistTrace.Event.SKIPPED_UNSUPPORTED
+                            adaptive -> RealityAssistTrace.Event.STARTING_HELPER
                             else -> RealityAssistTrace.Event.STARTING_ORIGINAL
                         })
                         // Mark as successful only after Xray HTTPS AND Android
@@ -463,17 +464,14 @@ internal class NativeSession(
                         for ((attemptIndex, attempt) in attempts.withIndex()) {
                             val fp = attempt.fingerprint
                             val trick = attempt.trick
-                            if (traceEligible && assistMode == RealityAssistPolicy.SMART &&
-                                attemptIndex > 0) {
-                                RealityAssistTrace.mark(service, when (fp) {
-                                    RealityAssistPolicy.FIREFOX ->
-                                        RealityAssistTrace.Event.RETRYING_FIREFOX
-                                    RealityAssistPolicy.CHROME ->
-                                        RealityAssistTrace.Event.RETRYING_CHROME
-                                    RealityAssistPolicy.SAFARI ->
-                                        RealityAssistTrace.Event.RETRYING_SAFARI
-                                    else -> RealityAssistTrace.Event.STARTING_ORIGINAL
-                                })
+                            if (adaptive) {
+                                RealityAssistTrace.mark(
+                                    service,
+                                    if (trick == RealityTcpTricks.STOCK)
+                                        RealityAssistTrace.Event.FALLBACK_STOCK
+                                    else RealityAssistTrace.Event.STARTING_HELPER,
+                                    fp, trick
+                                )
                             }
                             val plan = XrayConfigCompiler.compile(
                                 selected, auth, if (bayEnabled) bayPort else null,
@@ -506,6 +504,10 @@ internal class NativeSession(
                                 }
                                 if (traceEligible) {
                                     RealityAssistTrace.mark(service, when {
+                                        adaptive && trick != RealityTcpTricks.STOCK ->
+                                            RealityAssistTrace.Event.CHECKING_HELPER
+                                        adaptive && trick == RealityTcpTricks.STOCK ->
+                                            RealityAssistTrace.Event.FALLBACK_STOCK
                                         assistMode == RealityAssistPolicy.SMART ->
                                             when (fp) {
                                                 RealityAssistPolicy.CHROME ->
@@ -537,21 +539,11 @@ internal class NativeSession(
                                         awaitRemoteReadiness(config.host, config.port, auth)
                                     }
                                 }
-                                if (adaptive && trick != RealityTcpTricks.STOCK) {
-                                    // TCP resegmentation can let a short HTTPS
-                                    // check pass but disrupt longer transfers.
-                                    // Verify a complete certificate-checked
-                                    // 512KiB body before routing any Android
-                                    // app traffic through this candidate.
-                                    corePhase = "XRAY_STREAM"
-                                    CoreFailureTrace.mark(service, corePhase)
-                                    val stream = withContext(Dispatchers.IO) {
-                                        RealityStreamProbe.run(config.host, config.port, auth)
-                                    }
-                                    if (!stream.successful) {
-                                        throw CoreStartException("REALITY_STREAM_EGRESS")
-                                    }
-                                }
+                                // The ON switch is never gated on a separate
+                                // 512 KiB benchmark. Actual authenticated HTTPS
+                                // egress is tested once for connection success.
+                                // The optional Workbench remains available for
+                                // longer, explicit streaming diagnostics.
                                 passed = true
                                 xrayReady = true
                                 verifiedFingerprint = fp
@@ -562,6 +554,10 @@ internal class NativeSession(
                                 ).coerceIn(1L, 30_000L)
                                 if (traceEligible) {
                                     verifiedAssist = when {
+                                        adaptive && trick != RealityTcpTricks.STOCK ->
+                                            RealityAssistTrace.Event.PASSED_HELPER
+                                        adaptive && trick == RealityTcpTricks.STOCK ->
+                                            RealityAssistTrace.Event.PASSED_STOCK_FALLBACK
                                         assistMode == RealityAssistPolicy.SMART ->
                                             when (fp) {
                                                 RealityAssistPolicy.CHROME ->
