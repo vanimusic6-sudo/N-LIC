@@ -75,6 +75,10 @@ internal object NativeTunConfig {
                 addProperty("insecure", false)
             })
         })
+        // Bounded in-memory LRU avoids repeated encrypted lookups and radio
+        // wakeups. Do not enable persistent DNS cache or ECS metadata.
+        dns.addProperty("cache_capacity", 2048)
+        dns.addProperty("timeout", "8s")
         dns.addProperty("final", "lic-private-doh")
         return root.toString()
     }
