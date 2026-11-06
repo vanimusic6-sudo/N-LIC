@@ -31,6 +31,7 @@ internal object NlicV2Settings {
         activity: AppCompatActivity,
         running: Boolean,
         onRealityModeChanged: () -> Unit = {},
+        onRealityWorkbench: () -> Unit = {},
         clear: () -> Unit,
     ) {
         val density = activity.resources.displayMetrics.density
@@ -107,11 +108,15 @@ internal object NlicV2Settings {
         action("Все настройки", "Оформление, язык, автоматизация, сеть и параметры приложения") {
             activity.startActivity(Intent(activity, SettingsActivity::class.java))
         }
-        action("Автозапуск и автоматическое подключение", "Управление запуском N-LIC") {
-            activity.startActivity(Intent(activity, SettingsActivity::class.java))
-        }
-
         section("Обход DPI")
+        if (BuildConfig.NLIC_XRAY_INCLUDED) {
+            action(
+                "REALITY · профиль и проверка",
+                "LIC-helper, ручной транспорт и проверка вариантов"
+            ) {
+                requireDisconnected { onRealityWorkbench() }
+            }
+        }
         action("Ядро локального обхода",
             "Стабильный ByeDPI или экспериментальное N-LIC V2") {
             requireDisconnected {
