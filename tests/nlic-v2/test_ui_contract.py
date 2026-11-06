@@ -53,7 +53,8 @@ assert 'RealityAssistTrace.clear(applicationContext)' in activity
 assert "onRealityModeChanged = { render() }" in activity
 assert ids["nlic_reality_smart_switch"].get(android + "visibility") != "gone"
 assert ids["nlic_reality_smart_hint"].get(android + "visibility") != "gone"
-assert ids["nlic_reality_compare_button"].get(android + "visibility") != "gone"
+assert ids["nlic_reality_compare_button"].get(android + "visibility") == "gone"
+assert "REALITY · профиль и проверка" in settings
 assert "R.id.nlic_reality_compare_button" in activity
 assert "RealityCompareService.START" in activity
 for caption in (

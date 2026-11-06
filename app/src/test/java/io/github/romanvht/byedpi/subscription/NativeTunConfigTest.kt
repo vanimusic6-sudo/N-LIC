@@ -23,6 +23,9 @@ class NativeTunConfigTest {
         assertEquals("socks", inbounds[1].asJsonObject.get("type").asString)
         assertEquals("lic-vpn", root.getAsJsonObject("route").get("final").asString)
         assertEquals("lic-private-doh", root.getAsJsonObject("dns").get("final").asString)
+        assertEquals(2048, root.getAsJsonObject("dns").get("cache_capacity").asInt)
+        assertEquals("8s", root.getAsJsonObject("dns").get("timeout").asString)
+        assertFalse(root.getAsJsonObject("dns").has("client_subnet"))
         val doh = root.getAsJsonObject("dns").getAsJsonArray("servers")[1].asJsonObject
         assertEquals("https", doh.get("type").asString)
         assertEquals("lic-vpn", doh.get("detour").asString)

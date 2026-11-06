@@ -90,7 +90,7 @@ internal object SubscriptionVault {
         }
     }
 
-    fun addManual(context: Context, nodes: List<SubscriptionNode>): Int {
+    @Synchronized fun addManual(context: Context, nodes: List<SubscriptionNode>): Int {
         if (nodes.isEmpty()) return 0
         val old = read(context)
         val unique = (old.manual + nodes).distinctBy { it.id }.take(500)
@@ -98,7 +98,7 @@ internal object SubscriptionVault {
         return unique.size - old.manual.size
     }
 
-    fun updateGroup(context: Context, group: SubscriptionGroup) {
+    @Synchronized fun updateGroup(context: Context, group: SubscriptionGroup) {
         val old = read(context)
         val existing = old.groups.filterNot { it.url == group.url }
         write(context, old.copy(groups = existing + group))
@@ -112,9 +112,14 @@ internal object SubscriptionVault {
             val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
             if (store.containsAlias(KEY_ALIAS)) store.deleteEntry(KEY_ALIAS)
         }
+        // Clearing saved subscriptions must also erase per-node strategy
+        // decisions and the last cross-process handshake status. Neither
+        // should survive a user-initiated privacy wipe.
+        RealityAssistMemory.clear(context)
+        RealityAssistTrace.clear(context)
     }
 
-    fun select(context: Context, nodeId: String) {
+    @Synchronized fun select(context: Context, nodeId: String) {
         val data = read(context)
         require(data.allNodes.any { it.id == nodeId }) { "Unknown node" }
         write(context, data.copy(selectedNodeId = nodeId))

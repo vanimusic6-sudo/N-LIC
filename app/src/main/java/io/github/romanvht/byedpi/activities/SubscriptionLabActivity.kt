@@ -141,7 +141,11 @@ class SubscriptionLabActivity : BaseActivity() {
         override fun run() {
             if (!realityStatusVisible) return
             updateRealityAssistStatus()
-            window.decorView.postDelayed(this, 800L)
+            // Status is a tiny cross-process AtomicFile, not a live
+            // waveform. Frequent 800 ms polling during long idle periods
+            // causes unnecessary wakeups and main-thread UI churn.
+            window.decorView.postDelayed(this,
+                if (busy || comparisonRunning) 2_000L else 5_000L)
         }
     }
 
@@ -307,6 +311,16 @@ class SubscriptionLabActivity : BaseActivity() {
     private fun showCompactSettings() = NlicV2Settings.show(
         this, appStatus.first == AppStatus.Running,
         onRealityModeChanged = { render() },
+        onRealityWorkbench = {
+            if (connectionMode() == ConnectionMode.SUBSCRIPTION) {
+                findViewById<MaterialButton>(R.id.nlic_reality_compare_button).performClick()
+            } else {
+                AlertDialog.Builder(this)
+                    .setMessage("Проверка REALITY доступна в режиме VPN-сервер.")
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+        },
     ) {
         runOperation {
             ServiceManager.waitStop()
