@@ -311,6 +311,9 @@ class SubscriptionLabActivity : BaseActivity() {
     private fun showCompactSettings() = NlicV2Settings.show(
         this, appStatus.first == AppStatus.Running,
         onRealityModeChanged = { render() },
+        onRealityWorkbench = {
+            findViewById<MaterialButton>(R.id.nlic_reality_compare_button).performClick()
+        },
     ) {
         runOperation {
             ServiceManager.waitStop()
