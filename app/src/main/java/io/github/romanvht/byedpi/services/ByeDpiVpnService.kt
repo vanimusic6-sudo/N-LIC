@@ -148,7 +148,7 @@ class ByeDpiVpnService : VpnService() {
             coreActive = coreActive,
             xrayActive = xrayActive,
             configuredDns = configuration.dns,
-        ).forEach(builder::addDnsServer)
+        ).forEach { server -> builder.addDnsServer(server) }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             // Respect mobile carrier metering; do not falsely advertise unmetered data.
