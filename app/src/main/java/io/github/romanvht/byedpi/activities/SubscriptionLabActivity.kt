@@ -312,7 +312,14 @@ class SubscriptionLabActivity : BaseActivity() {
         this, appStatus.first == AppStatus.Running,
         onRealityModeChanged = { render() },
         onRealityWorkbench = {
-            findViewById<MaterialButton>(R.id.nlic_reality_compare_button).performClick()
+            if (connectionMode() == ConnectionMode.SUBSCRIPTION) {
+                findViewById<MaterialButton>(R.id.nlic_reality_compare_button).performClick()
+            } else {
+                AlertDialog.Builder(this)
+                    .setMessage("Проверка REALITY доступна в режиме VPN-сервер.")
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
         },
     ) {
         runOperation {
