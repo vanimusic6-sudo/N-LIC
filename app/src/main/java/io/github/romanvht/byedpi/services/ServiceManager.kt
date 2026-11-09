@@ -83,19 +83,19 @@ object ServiceManager {
             }
         }
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                manager.registerDefaultNetworkCallback(listener)
-            } else {
-                manager.registerNetworkCallback(
-                    NetworkRequest.Builder()
-                        .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                        .build(),
-                    listener,
-                )
-            }
+            // Default-network callbacks commonly switch to our own VPN after
+            // establishment. Observe only physical Internet-capable networks,
+            // otherwise VPN capability changes can cause false reconnect loops.
+            manager.registerNetworkCallback(
+                NetworkRequest.Builder()
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+                    .build(),
+                listener,
+            )
             networkListener = listener
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not register radio listener", e)
+        } catch (_: Exception) {
+            Log.w(TAG, "Could not register physical network listener")
         }
     }
 

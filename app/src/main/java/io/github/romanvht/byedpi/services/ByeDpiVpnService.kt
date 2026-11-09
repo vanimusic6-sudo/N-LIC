@@ -126,11 +126,12 @@ class ByeDpiVpnService : VpnService() {
         ).addRoute("0.0.0.0", 0)
 
         val mobileIpv6 = getPreferences().getBoolean("nlic_mobile_ipv6_auto", true)
-        // An encrypted LIC-Core session must never accidentally let IPv6
-        // escape when the mobile link advertises a dual-stack network.
-        // Legacy ByeDPI keeps its existing per-carrier IPv6 policy.
-        if (coreActive ||
-            AccessPolicy.shouldCaptureIpv6(configuration.ipv6, underlyingLink, mobileIpv6)) {
+        val legacyIpv6Capture =
+            AccessPolicy.shouldCaptureIpv6(configuration.ipv6, underlyingLink, mobileIpv6)
+        // Encrypted subscription modes are fail-closed for IPv6: a destination
+        // unsupported by the remote VPN fails inside the tunnel instead of
+        // escaping over the physical carrier.
+        if (VpnLeakPolicy.captureIpv6(coreActive, xrayActive, legacyIpv6Capture)) {
             builder.addAddress(
                 if (coreActive) NativeTunConfig.IPV6_ADDRESS else "fd00::1",
                 if (coreActive) NativeTunConfig.IPV6_PREFIX else 128
@@ -138,13 +139,16 @@ class ByeDpiVpnService : VpnService() {
                 .addRoute("::", 0)
         }
 
-        if (coreActive) {
-            // sing-box 1.14 native TUN hijacks port 53 on this synthetic IP;
-            // visited domain names do not go to the carrier DNS resolver.
-            builder.addDnsServer(NativeTunConfig.IPV4_DNS)
-        } else if (configuration.dns.isNotBlank()) {
-            builder.addDnsServer(configuration.dns)
-        }
+        // Encrypted subscription modes never inherit a carrier resolver.
+        // sing-box uses its synthetic DNS + DoH. In Xray mode Android's DNS
+        // packets enter TUN -> HEV -> authenticated SOCKS -> encrypted Xray.
+        // This protects them from local access-network DPI; the remote VPN
+        // operator/resolver may still observe DNS metadata.
+        VpnLeakPolicy.dnsServers(
+            coreActive = coreActive,
+            xrayActive = xrayActive,
+            configuredDns = configuration.dns,
+        ).forEach { server -> builder.addDnsServer(server) }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             // Respect mobile carrier metering; do not falsely advertise unmetered data.
@@ -158,8 +162,11 @@ class ByeDpiVpnService : VpnService() {
                 for (packageName in configuration.apps) {
                     try {
                         builder.addDisallowedApplication(packageName)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Не удалось добавить приложение $packageName в черный список", e)
+                    } catch (_: Exception) {
+                        // Avoid printing package names or exception text to
+                        // logcat. A rejected blacklist entry stays routed
+                        // through VPN, rather than leaking to the carrier.
+                        Log.w(TAG, "Ignored invalid VPN exclusion")
                     }
                 }
 
@@ -175,8 +182,11 @@ class ByeDpiVpnService : VpnService() {
                     try {
                         builder.addAllowedApplication(packageName)
                         allowed++
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Не удалось добавить приложение $packageName в белый список", e)
+                    } catch (_: Exception) {
+                        // No package identifiers or system exception text in
+                        // diagnostic logs; a failed allow-list rule must not
+                        // be reported as successfully routed.
+                        Log.w(TAG, "Ignored invalid VPN inclusion")
                     }
                 }
                 check(allowed > 0) { "Select at least one installed app for VPN whitelist" }

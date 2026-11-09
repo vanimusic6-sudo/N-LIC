@@ -22,15 +22,32 @@ internal object RealityAssistMemory {
     )
 
     fun networkClass(context: Context): String {
+        // After establishing the VPN, activeNetwork often points to our
+        // *virtual* interface. Using it breaks the per-network cache and
+        // may misreport the physical carrier. Never collect SSID or cell ID.
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE)
             as? ConnectivityManager ?: return "other"
-        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return "other"
-        return when {
-            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
-            caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "mobile"
-            caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ethernet"
-            else -> "other"
-        }
+        return runCatching {
+            val physical = cm.allNetworks.mapNotNull { network ->
+                val caps = cm.getNetworkCapabilities(network)
+                    ?: return@mapNotNull null
+                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) ||
+                    !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ||
+                    !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN))
+                    return@mapNotNull null
+                val label = when {
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "mobile"
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ethernet"
+                    else -> "other"
+                }
+                label to caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            }
+            val validated = physical.filter { it.second }.map { it.first }.distinct()
+            val names = if (validated.isNotEmpty()) validated
+                else physical.map { it.first }.distinct()
+            names.singleOrNull() ?: "other"
+        }.getOrDefault("other")
     }
 
     private fun prefs(context: Context) = context.getSharedPreferences(
@@ -96,6 +113,11 @@ internal object RealityAssistMemory {
                 .putLong(key + "_at", System.currentTimeMillis())
                 .apply()
         }
+    }
+
+    /** User-triggered privacy wipe, including the per-install hashing salt. */
+    fun clear(context: Context) {
+        prefs(context).edit().clear().commit()
     }
 
     fun invalidate(context: Context, nodeId: String, network: String, bay: Boolean) {

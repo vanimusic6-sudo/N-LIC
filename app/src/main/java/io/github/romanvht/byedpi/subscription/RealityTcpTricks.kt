@@ -19,6 +19,8 @@ internal object RealityTcpTricks {
     const val DUET_GATE = "lic-duet-gate"
     const val DUET_MSS = "lic-duet-mss"
     const val TRIO = "lic-trio"
+    const val FIRST_WRITE = "lic-first-write"
+    const val FIRST_BURST = "lic-first-burst"
     const val SPLIT_SOFT = "split-soft"
     const val SPLIT_EARLY = "split-early"
     const val SPLIT_ZERO = "split-zero"
@@ -30,6 +32,7 @@ internal object RealityTcpTricks {
     // The first set changes packetization; the last two change TCP
     // connection/idle behavior. They are not all DPI bypasses.
     val variants = listOf(STOCK, DUET, DUET_GATE, DUET_MSS, TRIO,
+        FIRST_WRITE, FIRST_BURST,
         SPLIT_SOFT, SPLIT_EARLY, SPLIT_ZERO,
         MSS_1200, MSS_900, TFO_OFF, IDLE_KEEPALIVE)
 
@@ -38,6 +41,7 @@ internal object RealityTcpTricks {
     const val DEFAULT_HELPER = DUET
 
     private val firstFlight = setOf(DUET, DUET_GATE, DUET_MSS, TRIO,
+        FIRST_WRITE, FIRST_BURST,
         SPLIT_SOFT, SPLIT_EARLY, SPLIT_ZERO)
 
     data class Measurement(val trick: String, val httpsMs: Long?)
@@ -48,6 +52,8 @@ internal object RealityTcpTricks {
         DUET_GATE -> "LIC-Duet Gate · раннее разделение"
         DUET_MSS -> "LIC-Duet Frame · TLS + MSS"
         TRIO -> "LIC-Trio · три TLS-фрагмента"
+        FIRST_WRITE -> "LIC-FirstWrite · начало TCP-потока"
+        FIRST_BURST -> "LIC-FirstBurst · первые две записи"
         SPLIT_SOFT -> "разделение ClientHello"
         SPLIT_EARLY -> "раннее разделение ClientHello"
         SPLIT_ZERO -> "TLS-записи без паузы"
@@ -111,20 +117,30 @@ internal object RealityTcpTricks {
             else RealityAssistPolicy.CHROME
         if (bay) return listOf(Trial(preferredFp, STOCK))
         val chosen = preferredTrick.takeIf { it in firstFlight } ?: DEFAULT_HELPER
+        // At most five resource-intensive helper attempts on failure.
+        // A *verified* stock path remains available after them; no direct
+        // Internet fallback and no pre-connection probe matrix.
         val helper = listOf(
             Trial(candidateFp, chosen),
+            Trial(candidateFp, DUET),
             Trial(candidateFp, DUET_GATE),
+            Trial(candidateFp, FIRST_WRITE),
             Trial(candidateFp, DUET_MSS),
             Trial(candidateFp, TRIO),
-            Trial(candidateFp, SPLIT_SOFT),
-            Trial(null, DUET),
-        )
-        val lastResort = (listOf(candidateFp, null) + browsers)
+        ).distinctBy { (it.fingerprint ?: baselineFp) to it.trick }.take(5)
+        val stock = (listOf(candidateFp, null) + browsers)
             .map { Trial(it, STOCK) }
-        return (helper + lastResort)
-            .distinctBy { (it.fingerprint ?: baselineFp) to it.trick }
-            .take(9)
+            .distinctBy { (it.fingerprint ?: baselineFp) to it.trick }.take(2)
+        return helper + stock
     }
+
+    /**
+     * Only a confirmed encrypted egress failure is a reason to reconfigure
+     * Xray and retry. Native startup, configuration, local SOCKS and user
+     * cancellations must not create a hot restart loop.
+     */
+    fun retryEgressOnly(adaptive: Boolean, hasMore: Boolean, outboundProbeFailed: Boolean) =
+        adaptive && hasMore && outboundProbeFailed
 
     /**
      * Materially alter outgoing REALITY TCP packetization/handshake only
@@ -140,11 +156,18 @@ internal object RealityTcpTricks {
             stream.get("security")?.asString != "reality") return false
 
         if (trick in firstFlight) {
-            // finalmask is applied after REALITY encryption. All splits
-            // are explicit TLS-record slices, not raw random-byte injection.
+            // FinalMask applies after REALITY transport processing. TLS
+            // record segmentation and TCP-stream write slicing preserve
+            // byte order; neither injects invalid or forged packets.
             if (stream.has("finalmask")) return false
             val settings = JsonObject().apply {
-                addProperty("packets", "tlshello")
+                // TLS-record fragmentation and raw first-write slicing
+                // are different mechanisms. Both preserve the byte stream.
+                addProperty("packets", when (trick) {
+                    FIRST_WRITE -> "1"
+                    FIRST_BURST -> "1-2"
+                    else -> "tlshello"
+                })
                 when (trick) {
                     SPLIT_SOFT -> {
                         add("lengths", strings("180-260"))
@@ -164,16 +187,28 @@ internal object RealityTcpTricks {
                     DUET, DUET_MSS -> {
                         add("lengths", strings("160-220"))
                         add("delays", strings("3-5"))
-                        addProperty("maxSplit", "1")
+                        // Xray counts *pieces*, not cut points:
+                        // 2 pieces = one split into two TLS records.
+                        addProperty("maxSplit", "2")
                     }
                     DUET_GATE -> {
                         add("lengths", strings("48-80"))
                         add("delays", strings("7-11"))
-                        addProperty("maxSplit", "1")
+                        addProperty("maxSplit", "2")
                     }
                     TRIO -> {
                         add("lengths", strings("80-112", "160-192"))
                         add("delays", strings("2-4", "3-5"))
+                        addProperty("maxSplit", "3")
+                    }
+                    FIRST_WRITE -> {
+                        add("lengths", strings("112-160"))
+                        add("delays", strings("3-5"))
+                        addProperty("maxSplit", "2")
+                    }
+                    FIRST_BURST -> {
+                        add("lengths", strings("144-200"))
+                        add("delays", strings("1-3"))
                         addProperty("maxSplit", "2")
                     }
                 }
