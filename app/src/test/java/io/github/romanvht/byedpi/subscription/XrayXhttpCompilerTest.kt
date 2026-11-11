@@ -86,6 +86,64 @@ class XrayXhttpCompilerTest {
         assertEquals("tls", stream.get("security").asString)
     }
 
+    @Test fun nativeXrayJsonImportPreservesOnlyExplicitXhttpOutbound() {
+        val profile = """
+          {
+            "inbounds":[{"protocol":"socks","listen":"0.0.0.0","port":30000}],
+            "outbounds":[{
+              "protocol":"vless","tag":"Provider XHTTP",
+              "settings":{"vnext":[{
+                "address":"edge.example","port":443,
+                "users":[{"id":"$uuid","encryption":"none"}]
+              }]},
+              "streamSettings":{
+                "network":"xhttp","security":"reality",
+                "xhttpSettings":{"path":"/protected","mode":"auto"},
+                "realitySettings":{
+                  "serverName":"cover.example.com","fingerprint":"chrome",
+                  "password":"$key","shortId":""
+                }
+              }
+            }],
+            "routing":{"rules":[{"type":"field","outboundTag":"direct"}]}
+          }
+        """.trimIndent()
+        val imported = VPNFileImport.parse("provider.json", profile)
+        assertEquals(1, imported.size)
+        val stream = requireNotNull(compile(imported.single()))
+            .getAsJsonObject("streamSettings")
+        assertEquals("xhttp", stream.get("network").asString)
+        assertEquals("/protected", stream.getAsJsonObject("xhttpSettings")
+            .get("path").asString)
+        assertEquals("reality", stream.get("security").asString)
+    }
+
+    @Test fun nativeXrayJsonRejectsInsecureOrDynamicDownloadRouting() {
+        val insecure = """
+          {"outbounds":[{"protocol":"vless",
+            "settings":{"vnext":[{"address":"edge.example","port":443,
+              "users":[{"id":"$uuid"}]}]},
+            "streamSettings":{"network":"xhttp","security":"tls",
+              "xhttpSettings":{"path":"/"},
+              "tlsSettings":{"serverName":"edge.example","allowInsecure":true}}
+          }]}
+        """.trimIndent()
+        assertTrue(runCatching { VPNFileImport.parse("provider.json", insecure) }
+            .getOrDefault(emptyList()).isEmpty())
+        val withDownload = """
+          {"outbounds":[{"protocol":"vless",
+            "settings":{"vnext":[{"address":"edge.example","port":443,
+              "users":[{"id":"$uuid"}]}]},
+            "streamSettings":{"network":"xhttp","security":"tls",
+              "xhttpSettings":{"path":"/",
+                "downloadSettings":{"address":"unknown.example"}},
+              "tlsSettings":{"serverName":"edge.example"}}
+          }]}
+        """.trimIndent()
+        assertTrue(runCatching { VPNFileImport.parse("provider.json", withDownload) }
+            .getOrDefault(emptyList()).isEmpty())
+    }
+
     @Test fun rawRealityProfileIsNotSilentlyConvertedToXhttp() {
         val node = uri("type=tcp&security=reality&sni=cover.example.com&pbk=$key")
         assertFalse(XrayXhttpCompiler.isXhttp(node))
