@@ -33,7 +33,8 @@ internal object VPNFileImport {
         return when {
             cleaned.startsWith("[Interface]", true) ||
                 cleaned.lines().any { it.trim().equals("[Interface]", true) } ->
-                listOfNotNull(importWireGuard(name, cleaned))
+                listOfNotNull(if (AmneziaProfileParser.looksLikeAmnezia(cleaned))
+                    importAmnezia(name, cleaned) else importWireGuard(name, cleaned))
             cleaned.startsWith("{") || cleaned.startsWith("[") ->
                 parseJson(name, cleaned)
             else -> SubscriptionImport.parse(cleaned, name)
@@ -200,6 +201,27 @@ internal object VPNFileImport {
             recursiveInsecure(obj)) return null
         obj
         } catch (_: Exception) { null }
+    }
+
+    private fun importAmnezia(name: String, data: String): SubscriptionNode? {
+        val profile = AmneziaProfileParser.parse(data) ?: return null
+        // Raw text is encrypted at rest by SubscriptionVault, never logged.
+        // AWG is not usable through ordinary Xray/sing-box WireGuard.
+        val stored = "awgconf://" + URLEncoder.encode(profile.rawConfig, "UTF-8")
+        return makeNode(stored, name + " · AWG " + when (profile.version) {
+            AmneziaProfileParser.Version.V31 -> "3.1"
+            AmneziaProfileParser.Version.V2 -> "2.x"
+            AmneziaProfileParser.Version.LEGACY -> "1.x"
+        }, "AMNEZIAWG", profile.host, profile.port, name)
+    }
+
+    fun readAmnezia(node: SubscriptionNode): AmneziaProfileParser.Profile? {
+        if (node.protocol != "AMNEZIAWG" ||
+            !node.originalUri.startsWith("awgconf://")) return null
+        return runCatching {
+            val source = URLDecoder.decode(node.originalUri.substringAfter("awgconf://"), "UTF-8")
+            AmneziaProfileParser.parse(source)
+        }.getOrNull()?.takeIf { it.host == node.host && it.port == node.port }
     }
 
     private fun importWireGuard(name: String, data: String): SubscriptionNode? {
