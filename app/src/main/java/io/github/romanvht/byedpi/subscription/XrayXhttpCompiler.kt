@@ -66,10 +66,11 @@ internal object XrayXhttpCompiler {
         if (uri.scheme?.lowercase(Locale.ROOT) != "vless" ||
             uri.host != node.host || uri.port != node.port) return null
         val q = query(uri)
+        val unsafeFlags = setOf("insecure", "allowinsecure",
+            "skip-cert-verify", "skipcertverify")
+        val truthy = setOf("1", "true", "yes", "on")
         if (q["type"]?.lowercase(Locale.ROOT) != "xhttp" ||
-            q["insecure"] == "1" || q["insecure"] == "true" ||
-            q["allowinsecure"] == "1" || q["allowinsecure"] == "true" ||
-            q["skip-cert-verify"] == "1" || q["skip-cert-verify"] == "true")
+            unsafeFlags.any { key -> q[key]?.trim()?.lowercase(Locale.ROOT) in truthy })
             return null
         if (q["encryption"].orEmpty().ifBlank { "none" } != "none") return null
         val sec = q["security"]?.lowercase(Locale.ROOT) ?: return null
