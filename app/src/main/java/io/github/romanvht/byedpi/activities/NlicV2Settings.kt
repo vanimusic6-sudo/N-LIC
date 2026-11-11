@@ -18,6 +18,7 @@ import io.github.romanvht.byedpi.services.ServiceManager
 import io.github.romanvht.byedpi.subscription.RealityAssistTrace
 import io.github.romanvht.byedpi.subscription.RealityAssistMemory
 import io.github.romanvht.byedpi.subscription.RealityTcpTricks
+import io.github.romanvht.byedpi.subscription.PacketDesyncPolicy
 import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.utility.getPreferences
 
@@ -115,6 +116,38 @@ internal object NlicV2Settings {
                 "LIC-helper, ручной транспорт и проверка вариантов"
             ) {
                 requireDisconnected { onRealityWorkbench() }
+            }
+        }
+        if (BuildConfig.NLIC_XRAY_INCLUDED) {
+            action("LIC-Bay · пакеты TCP",
+                "Fake TTL или OOB вместо разрезания TLS. Только для REALITY/RAW, без root.") {
+                requireDisconnected {
+                    val prefs = activity.getPreferences()
+                    val activeMode = if (!prefs.getBoolean(PacketDesyncPolicy.PREF_KEY, true))
+                        PacketDesyncPolicy.LEGACY
+                    else prefs.getString(PacketDesyncPolicy.MODE_KEY,
+                        PacketDesyncPolicy.FAKE_TTL)
+                    val modes = listOf(PacketDesyncPolicy.FAKE_TTL,
+                        PacketDesyncPolicy.DISOOB, PacketDesyncPolicy.LEGACY)
+                    AlertDialog.Builder(activity)
+                        .setTitle("Пакетная помощь LIC-Bay")
+                        .setSingleChoiceItems(arrayOf(
+                            "Fake TTL · ложная TCP-запись с ограниченным TTL",
+                            "TCP OOB · внеполосный байт в начале TLS",
+                            "Отключить · оставить прежний профиль ByeDPI"
+                        ), modes.indexOf(activeMode).coerceAtLeast(0)) { d, position ->
+                            val mode = modes.getOrNull(position)
+                                ?: PacketDesyncPolicy.LEGACY
+                            prefs.edit()
+                                .putBoolean(PacketDesyncPolicy.PREF_KEY,
+                                    mode != PacketDesyncPolicy.LEGACY)
+                                .putString(PacketDesyncPolicy.MODE_KEY, mode)
+                                .apply()
+                            d.dismiss()
+                        }
+                        .setMessage("Только при включённом LIC-Bay и совместимом REALITY/RAW. Это сокетные механизмы ByeDPI, не NFQUEUE/Zapret2 и не универсальный обход.")
+                        .setNegativeButton(android.R.string.cancel, null).show()
+                }
             }
         }
         action("Ядро локального обхода",
