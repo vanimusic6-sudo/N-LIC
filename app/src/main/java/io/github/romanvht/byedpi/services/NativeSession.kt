@@ -350,7 +350,9 @@ internal class NativeSession(
                                     // Core HTTPS is certificate-validated,
                                     // not a bare TCP/SOCKS handshake.
                                     val nativeMs = withContext(Dispatchers.IO) {
-                                        trial.measureHttpsLatencyMs()
+                                        trial.measureHttpsLatencyMs() ?:
+                                            trial.measureHttpsLatencyMs(
+                                                "https://cp.cloudflare.com/generate_204")
                                     }
                                     if (nativeMs != null) {
                                         firstVerified = candidate
