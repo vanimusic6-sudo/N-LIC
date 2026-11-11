@@ -85,9 +85,9 @@ internal object AmneziaProfileParser {
         if ("0.0.0.0/0" !in allowedIps || allowedIps.any { !validCidr(it) }) return null
         if (iface["address"].orEmpty().contains(':') && "::/0" !in allowedIps) return null
         if (iface["dns"]?.split(',')?.any { !validDnsLiteral(it.trim()) } == true) return null
-        if (iface["mtu"]?.toIntOrNull()?.let { it !in 1280..1500 } == true) return null
-        if (iface["listenport"]?.toIntOrNull()?.let { it !in 0..65535 } == true) return null
-        if (peer["persistentkeepalive"]?.toIntOrNull()?.let { it !in 0..120 } == true) return null
+        if (iface["mtu"]?.let { it.toIntOrNull() !in 1280..1500 } == true) return null
+        if (iface["listenport"]?.let { it.toIntOrNull() !in 0..65535 } == true) return null
+        if (!validRange(peer["persistentkeepalive"], 65_535L)) return null
         val endpoint = peer["endpoint"] ?: return null
         val url = URI("awg://$endpoint")
         val host = url.host ?: return null
@@ -97,13 +97,10 @@ internal object AmneziaProfileParser {
             url.userInfo != null || url.path.isNotEmpty() || url.query != null)
             return null
 
-        if (!validUnsigned(iface["jc"], 128) ||
-            !validUnsigned(iface["jmin"], 1280) ||
-            !validUnsigned(iface["jmax"], 1280) ||
-            !validUnsigned(iface["s1"], 1280) ||
-            !validUnsigned(iface["s2"], 1280) ||
-            !validUnsigned(iface["s3"], 1280) ||
-            !validUnsigned(iface["s4"], 1280)) return null
+        // AWG 3.1 uses uint16 fields; limiting to MTU would reject valid
+        // provider settings. Actual network usability remains engine-owned.
+        if (listOf("jc", "jmin", "jmax", "s1", "s2", "s3", "s4")
+                .any { !validUnsigned(iface[it], 65_535) }) return null
         val jmin = iface["jmin"]?.toIntOrNull() ?: 0
         val jmax = iface["jmax"]?.toIntOrNull() ?: 0
         if (jmin > jmax) return null
@@ -114,8 +111,7 @@ internal object AmneziaProfileParser {
         for (key in listOf("contentpaddingaddition", "rekeyaftertime",
             "rekeytimeout", "rejectaftertime", "keepalivetimeout",
             "maxhandshakeattempts")) {
-            val upper = if (key == "contentpaddingaddition") 1500L else 3600L
-            if (!validRange(iface[key], upper)) return null
+            if (!validRange(iface[key], 65_535L)) return null
         }
         for (key in listOf("randomtrailers", "disablecookies")) {
             if (iface[key]?.lowercase(Locale.ROOT) !in setOf(null, "on", "off"))
@@ -125,7 +121,9 @@ internal object AmneziaProfileParser {
         // but reject multiline, long or shell-like material instead of executing it.
         for (key in listOf("i1", "i2", "i3", "i4", "i5")) {
             val value = iface[key] ?: continue
-            if (value.length > 1024 || value.any { it.code !in 33..126 }) return null
+            // The CPS grammar uses spaces inside tags such as
+            // '<b 0xHEX><r 32><t>'; don't reject ordinary ASCII spaces.
+            if (value.length > 1024 || value.any { it.code !in 32..126 }) return null
         }
 
         val hpKey = iface["headerprotectionkey"]
@@ -140,6 +138,22 @@ internal object AmneziaProfileParser {
             if (listOf("s1", "s2", "s3", "s4")
                     .any { (iface[it]?.toIntOrNull() ?: 0) < 12 }) return null
         }
+        // Custom H1-H4 ranges must not intersect, otherwise the peer cannot
+        // unambiguously determine the AWG packet type.
+        val hRanges = listOf("h1", "h2", "h3", "h4").mapNotNull { key ->
+            val raw = iface[key] ?: return@mapNotNull null
+            val m = numeric.matchEntire(raw) ?: return null
+            val first = m.groupValues[1].toLongOrNull() ?: return null
+            val last = m.groupValues[2].ifEmpty { m.groupValues[1] }
+                .toLongOrNull() ?: return null
+            first..last
+        }
+        if (hRanges.indices.any { i ->
+                (i + 1 until hRanges.size).any { j ->
+                    hRanges[i].first <= hRanges[j].last &&
+                        hRanges[j].first <= hRanges[i].last
+                }
+            }) return null
         val version = when {
             v31 -> Version.V31
             listOf("s3", "s4").any { it in iface } ||
