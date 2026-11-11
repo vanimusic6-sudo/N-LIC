@@ -63,6 +63,9 @@ internal object VPNFileImport {
         return outbounds.take(100).mapNotNull { element ->
             runCatching {
                 val outbound = element.asJsonObject
+                if (outbound.has("protocol") && !outbound.has("type")) {
+                    return@runCatching importXrayXhttp(name, outbound)
+                }
                 val type = outbound.get("type")?.asString ?: return@runCatching null
                 if (type !in setOf("vless", "vmess", "trojan",
                         "shadowsocks", "hysteria2", "tuic", "anytls")) return@runCatching null
@@ -89,6 +92,88 @@ internal object VPNFileImport {
                 makeNode(real, label, type.uppercase(), server, port, name)
             }.getOrNull()
         }
+    }
+
+    /**
+     * Secure data-only import of explicit VLESS/XHTTP Xray JSON outbounds.
+     * Never execute provider-defined Xray inbounds, DNS, routing, proxy
+     * chains or experimental settings. Convert only a validated remote
+     * endpoint into N-LIC's bounded, encrypted node representation.
+     */
+    private fun importXrayXhttp(name: String, src: JsonObject): SubscriptionNode? {
+        if (src.get("protocol")?.asString != "vless" || recursiveInsecure(src))
+            return null
+        val stream = src.getAsJsonObject("streamSettings") ?: return null
+        if (stream.get("network")?.asString !in setOf("xhttp", "splithttp")) return null
+        val security = stream.get("security")?.asString ?: return null
+        if (security !in setOf("tls", "reality")) return null
+        val xhttp = stream.getAsJsonObject("xhttpSettings")
+            ?: stream.getAsJsonObject("splithttpSettings") ?: return null
+        // Do not silently drop a separate upstream/download destination.
+        if (xhttp.has("downloadSettings")) return null
+        val next = src.getAsJsonObject("settings")?.getAsJsonArray("vnext")
+            ?.takeIf { it.size() == 1 }?.firstOrNull()?.asJsonObject
+            ?: return null
+        val users = next.getAsJsonArray("users")?.takeIf { it.size() == 1 }
+            ?: return null
+        val user = users[0].asJsonObject
+        val host = next.get("address")?.asString ?: return null
+        val port = next.get("port")?.asInt ?: return null
+        if (!safeEndpoint(host, port) ||
+            user.get("flow")?.asString.orEmpty().isNotBlank()) return null
+        val id = user.get("id")?.asString ?: return null
+        val normalized = JsonObject().apply {
+            addProperty("type", "vless")
+            addProperty("server", host)
+            addProperty("server_port", port)
+            addProperty("uuid", id)
+            add("transport", JsonObject().apply {
+                addProperty("type", "xhttp")
+                addProperty("path", xhttp.get("path")?.asString ?: "/")
+                xhttp.get("host")?.asString?.let { addProperty("host", it) }
+                addProperty("mode", xhttp.get("mode")?.asString ?: "auto")
+                xhttp.getAsJsonObject("extra")?.let {
+                    add("extra", it.deepCopy())
+                }
+            })
+            add("tls", JsonObject().apply {
+                addProperty("enabled", true)
+                if (security == "reality") {
+                    val reality = stream.getAsJsonObject("realitySettings")
+                        ?: return null
+                    addProperty("server_name", reality.get("serverName")?.asString
+                        ?: return null)
+                    reality.get("fingerprint")?.asString?.let { fp ->
+                        add("utls", JsonObject().apply {
+                            addProperty("enabled", true)
+                            addProperty("fingerprint", fp)
+                        })
+                    }
+                    add("reality", JsonObject().apply {
+                        addProperty("enabled", true)
+                        addProperty("public_key", reality.get("password")?.asString
+                            ?: reality.get("publicKey")?.asString ?: return null)
+                        addProperty("short_id", reality.get("shortId")?.asString ?: "")
+                        addProperty("spider_x", reality.get("spiderX")?.asString ?: "/")
+                    })
+                } else {
+                    val tls = stream.getAsJsonObject("tlsSettings") ?: return null
+                    addProperty("server_name", tls.get("serverName")?.asString
+                        ?: return null)
+                    tls.get("fingerprint")?.asString?.let { fp ->
+                        add("utls", JsonObject().apply {
+                            addProperty("enabled", true)
+                            addProperty("fingerprint", fp)
+                        })
+                    }
+                    tls.getAsJsonArray("alpn")?.let { add("alpn", it.deepCopy()) }
+                }
+            })
+        }
+        val raw = "nlicjson://" + URLEncoder.encode(normalized.toString(), "UTF-8")
+        val label = src.get("tag")?.asString?.take(65)?.replace(safeLabel, "")
+            ?.ifBlank { null } ?: "$name · VLESS/XHTTP"
+        return makeNode(raw, label, "VLESS", host, port, name)
     }
 
     private fun recursiveInsecure(value: com.google.gson.JsonElement): Boolean {
