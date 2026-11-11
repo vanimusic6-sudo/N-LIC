@@ -48,6 +48,11 @@ internal object XrayConfigCompiler {
         return try {
             val outbound = if (node.protocol == "WIREGUARD") {
                 wireguard(node)
+            } else if (XrayXhttpCompiler.isXhttp(node)) {
+                // XHTTP is an Xray-only transport. sing-box 1.14 rejects
+                // it, so compile explicit provider XHTTP nodes directly.
+                // No RAW/TCP profile is ever automatically converted.
+                XrayXhttpCompiler.compile(node)
             } else {
                 val compiled = SingBoxConfigCompiler.compile(node)
                     as? SingBoxConfigCompiler.Result.Compiled
