@@ -46,7 +46,7 @@ internal object XrayConfigCompiler {
             }
         }
         return try {
-            val outbound = if (node.protocol == "WIREGUARD") {
+            val outbound = (if (node.protocol == "WIREGUARD") {
                 wireguard(node)
             } else if (XrayXhttpCompiler.isXhttp(node)) {
                 // XHTTP is an Xray-only transport. sing-box 1.14 rejects
@@ -60,7 +60,7 @@ internal object XrayConfigCompiler {
                 val singOutbound = JsonParser.parseString(compiled.config)
                     .asJsonObject.getAsJsonArray("outbounds")[0].asJsonObject
                 convert(singOutbound)
-            } ?: return Result.Unsupported("Unsupported Xray transport")
+            }) ?: return Result.Unsupported("Unsupported Xray transport")
 
             // LIC-Assist changes only Xray's uTLS ClientHello, never the
             // VPN server, credentials, VLESS flow, SNI or REALITY auth.
