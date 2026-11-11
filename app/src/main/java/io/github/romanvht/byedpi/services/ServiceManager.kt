@@ -10,6 +10,8 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
+import android.os.SystemClock
+import io.github.romanvht.byedpi.subscription.AutoRecoveryPolicy
 import android.util.Log
 import io.github.romanvht.byedpi.R
 import io.github.romanvht.byedpi.data.*
@@ -40,6 +42,9 @@ object ServiceManager {
     private var networkListener: ConnectivityManager.NetworkCallback? = null
     private var observedAccessType: AccessType = AccessType.UNKNOWN
     private var transitionJob: Job? = null
+    private var recoveryJob: Job? = null
+    private var recoveryArmed = false
+    private var recoveryAttempts = 0
 
     // This field is intentionally process-local and contains only a fixed
     // diagnostic code. Never persist a native exception or subscription URI.
@@ -53,7 +58,8 @@ object ServiceManager {
      */
     private fun beginNetworkObservation(app: Application) {
         if (networkListener != null ||
-            !app.getPreferences().getBoolean("nlic_restart_on_network_change", false)) return
+            !(app.getPreferences().getBoolean("nlic_restart_on_network_change", false) ||
+              app.getPreferences().getBoolean("nlic_core_auto", false))) return
         val manager = app.getSystemService(Context.CONNECTIVITY_SERVICE)
             as? ConnectivityManager ?: return
         observedAccessType = NetworkEnvironment.capture(app).type
@@ -72,7 +78,8 @@ object ServiceManager {
                     observedAccessType = currentType
                     if (LinkChangePolicy.shouldRestart(
                             lastType, currentType,
-                            app.getPreferences().getBoolean("nlic_restart_on_network_change", false),
+                            (app.getPreferences().getBoolean("nlic_restart_on_network_change", false) ||
+                                app.getPreferences().getBoolean("nlic_core_auto", false)),
                             session?.mode == Mode.VPN && session?.stopping == false &&
                                 !TestService.isRunning,
                         )) {
@@ -128,6 +135,7 @@ object ServiceManager {
         val stopped = CompletableDeferred<Unit>()
         var stopping = false
         var job: Job? = null
+        var runningSinceMs = 0L
     }
 
     fun start(context: Context, mode: Mode) {
@@ -137,6 +145,7 @@ object ServiceManager {
 
     suspend fun waitStart(context: Context, mode: Mode): Boolean {
         val app = context.applicationContext as Application
+        clearRecovery()
         val command = commands.incrementAndGet()
         return withContext(Dispatchers.Main.immediate) {
             startSession(app, mode, command)
@@ -148,6 +157,7 @@ object ServiceManager {
     }
 
     suspend fun waitStop() {
+        clearRecovery()
         commands.incrementAndGet()
         withContext(Dispatchers.Main.immediate + NonCancellable) {
             application?.let {
@@ -161,6 +171,8 @@ object ServiceManager {
 
     fun restart(context: Context, mode: Mode) {
         val app = context.applicationContext as Application
+        recoveryJob?.cancel()
+        recoveryJob = null
         val command = commands.incrementAndGet()
         scope.launch {
             if (TestService.isRunning) return@launch
@@ -356,6 +368,11 @@ object ServiceManager {
                 }
                 if (!current.stopping) {
                     lastCoreFailureCode = null
+                    if (current.expectedCore && current.mode == Mode.VPN &&
+                        application?.getPreferences()?.getBoolean("nlic_core_auto", false) == true) {
+                        recoveryArmed = true
+                        current.runningSinceMs = SystemClock.elapsedRealtime()
+                    }
                     publish(current.mode, AppStatus.Running, STARTED_BROADCAST)
                     current.started.complete(true)
                 }
@@ -384,7 +401,8 @@ object ServiceManager {
                             "TUN", "HEV", "HEV_EXIT", "ENGINE_EXIT",
                             "XRAY_START", "XRAY_SOCKS", "XRAY_TUN", "XRAY_HEV",
                             "XRAY_HTTPS",
-                            "XRAY_MODE_UNSUPPORTED", "AUTO_PROBE", "AUTO_NO_WORKING_SERVER"
+                            "XRAY_MODE_UNSUPPORTED", "AUTO_PROBE", "AUTO_NO_WORKING_SERVER",
+                            "AUTO_EGRESS_LOST", "REALITY_EGRESS"
                         )
                         val lastNativeStage = application?.let {
                             io.github.romanvht.byedpi.subscription.CoreFailureTrace.recent(it)
@@ -410,7 +428,9 @@ object ServiceManager {
                 withContext(NonCancellable) {
                     try {
                         current.engine.stop()
+                        val recover = shouldRecover(current, failed)
                         finish(current, failed && !current.stopping)
+                        if (recover) application?.let { scheduleRecovery(it) }
                     } catch (e: Exception) {
                         Log.e(TAG, "Could not confirm native process exit", e)
                         current.started.complete(false)
@@ -418,11 +438,51 @@ object ServiceManager {
                         publish(current.mode, AppStatus.Halted, FAILED_BROADCAST)
                         scope.launch {
                             current.engine.awaitStopped()
+                            val recover = shouldRecover(current, failed = true)
                             finish(current, failed = true)
+                            if (recover) application?.let { scheduleRecovery(it) }
                         }
                     }
                 }
             }
+        }
+    }
+
+    private fun clearRecovery() {
+        recoveryJob?.cancel()
+        recoveryJob = null
+        recoveryArmed = false
+        recoveryAttempts = 0
+    }
+
+    private fun shouldRecover(current: Session, failed: Boolean): Boolean {
+        if (!failed || current.stopping || !recoveryArmed ||
+            !current.expectedCore || current.mode != Mode.VPN) return false
+        val app = application ?: return false
+        if (!app.getPreferences().getBoolean("nlic_core_auto", false) ||
+            !app.getPreferences().getBoolean("nlic_core_mode", false)) return false
+        if (!AutoRecoveryPolicy.retryable(lastCoreFailureCode)) return false
+        if (current.runningSinceMs > 0L &&
+            SystemClock.elapsedRealtime() - current.runningSinceMs > 300_000L) {
+            recoveryAttempts = 0 // A stable five-minute session clears the backoff.
+        }
+        return true
+    }
+
+    private fun scheduleRecovery(app: Application) {
+        recoveryJob?.cancel()
+        val waitMs = AutoRecoveryPolicy.delayMs(recoveryAttempts++)
+        val token = commands.get()
+        recoveryJob = scope.launch {
+            delay(waitMs)
+            // Never revive a stopped or manually reconfigured VPN.
+            if (commands.get() != token || session != null ||
+                TestService.isRunning || !recoveryArmed ||
+                !app.getPreferences().getBoolean("nlic_core_mode", false) ||
+                !app.getPreferences().getBoolean("nlic_core_auto", false) ||
+                VpnService.prepare(app) != null) return@launch
+            val next = commands.incrementAndGet()
+            startSession(app, Mode.VPN, next)
         }
     }
 
