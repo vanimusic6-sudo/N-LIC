@@ -69,6 +69,26 @@ class AmneziaProfileParserTest {
             "HeaderProtectionKey = $key", "HeaderProtectionKey = bad")))
     }
 
+    @Test fun acceptsValidCpsAndUint32RangeFromProvider() {
+        val profile = conf("I1 = <b 0xdeadbeef><r 32><t>")
+            .replace("H1 = 1", "H1 = 100000-200000")
+            .replace("H2 = 2", "H2 = 300000-400000")
+            .replace("Jmax = 150", "Jmax = 65535")
+            .replace("RekeyAfterTime = 100-120", "RekeyAfterTime = 5000-65535")
+        val value = AmneziaProfileParser.parse(profile)
+        assertNotNull(value)
+        assertEquals(AmneziaProfileParser.Version.V31, value!!.version)
+        assertTrue(value.rawConfig.contains("<b 0xdeadbeef><r 32><t>"))
+    }
+
+    @Test fun rejectsMalformedHeaderOverlapAndNumbers() {
+        assertNull(AmneziaProfileParser.parse(conf()
+            .replace("H1 = 1", "H1 = 1-100")
+            .replace("H2 = 2", "H2 = 50-150")))
+        assertNull(AmneziaProfileParser.parse(conf().replace("MTU = 1350", "MTU = nonsense")))
+        assertNull(AmneziaProfileParser.parse(conf().replace("S2 = 25", "S2 = 65536")))
+    }
+
     @Test fun plainWireGuardDoesNotBecomeAwg() {
         val normal = """
             [Interface]
