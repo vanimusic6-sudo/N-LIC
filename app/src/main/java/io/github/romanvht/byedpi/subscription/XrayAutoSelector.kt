@@ -7,12 +7,12 @@ package io.github.romanvht.byedpi.subscription
  * outbound and checking authenticated, certificate-validated HTTPS.
  * Bare TCP-connect time is never mistaken for VPN readiness.
  *
- * During initial connection only: no background polling, automatic
- * migration or silent replacement of a working user-selected tunnel.
+ * Selection runs only for Auto. A separate guarded watchdog handles recovery
+ * after a verified tunnel fails; manual selection remains untouched.
  * Only pre-validated profiles are included. No credentials logged.
  */
 internal object XrayAutoSelector {
-    const val MAX_CANDIDATES = 3
+    const val MAX_CANDIDATES = 6
 
     data class Measurement(val id: String, val elapsedMs: Long)
 
@@ -29,6 +29,9 @@ internal object XrayAutoSelector {
         val selected = nodes.firstOrNull { it.id == selectedId }
         val ordered = sequence {
             if (selected != null) yield(selected)
+            // Try one representative of each transport family before repeating it.
+            // The sequence is lazy; costly compile/validation remains bounded.
+            yieldAll(nodes.asSequence().filter { it.id != selectedId }.distinctBy { it.protocol })
             yieldAll(nodes.asSequence().filter { it.id != selectedId })
         }
         val chosen = ArrayList<SubscriptionNode>(MAX_CANDIDATES)
