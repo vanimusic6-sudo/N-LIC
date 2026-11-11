@@ -48,7 +48,8 @@ internal object AmneziaProfileParser {
         }
     }
 
-    fun parse(text: String): Profile? = try {
+    fun parse(text: String): Profile? {
+        return try {
         if (text.length !in 60..65_536 || !looksLikeAmnezia(text)) return null
         val iface = linkedMapOf<String, String>()
         val peer = linkedMapOf<String, String>()
@@ -152,6 +153,7 @@ internal object AmneziaProfileParser {
     } catch (_: Exception) {
         // Never log user config, key or endpoint on malformed data.
         null
+    }
     }
 
     private fun validBase64Key(value: String?): Boolean {
