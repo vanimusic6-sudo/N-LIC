@@ -1,8 +1,6 @@
 package io.github.romanvht.byedpi.subscription
 
 import java.net.URI
-import java.nio.charset.StandardCharsets
-import java.util.Base64
 import java.util.Locale
 
 /**
@@ -158,10 +156,12 @@ internal object AmneziaProfileParser {
 
     private fun validBase64Key(value: String?): Boolean {
         if (value == null || !base64Alphabet.matches(value)) return false
-        return runCatching {
-            val decoded = Base64.getDecoder().decode(value)
-            decoded.size == 32 && Base64.getEncoder().encodeToString(decoded) == value
-        }.getOrDefault(false)
+        // 32-byte key = 43 base64 sextets followed by a single "=".
+        // The final sextet must have its low two padding bits cleared.
+        // This is pure JVM / Android 24 compatible (no java.util.Base64).
+        val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+        val last = alphabet.indexOf(value[42])
+        return last >= 0 && (last and 0x03) == 0
     }
 
     private fun validCidr(s: String): Boolean {
