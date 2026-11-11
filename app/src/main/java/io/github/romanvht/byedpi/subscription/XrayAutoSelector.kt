@@ -24,14 +24,18 @@ internal object XrayAutoSelector {
     ): List<SubscriptionNode> {
         // Compiling one Xray JSON can be expensive (WireGuard PEM, VMess
         // import). The UI may hold 500 nodes: examine at most enough to
-        // fill the three candidate slots instead of compiling all 500 on
+        // fill the six candidate slots instead of compiling all 500 on
         // every Compose/View re-render or connection attempt.
         val selected = nodes.firstOrNull { it.id == selectedId }
         val ordered = sequence {
             if (selected != null) yield(selected)
             // Try one representative of each transport family before repeating it.
             // The sequence is lazy; costly compile/validation remains bounded.
-            yieldAll(nodes.asSequence().filter { it.id != selectedId }.distinctBy { it.protocol })
+            yieldAll(nodes.asSequence().filter { it.id != selectedId }.distinctBy {
+                // XHTTP has a materially different HTTP transport even
+                // though its application protocol is still VLESS.
+                if (XrayXhttpCompiler.isXhttp(it)) "VLESS-XHTTP" else it.protocol
+            })
             yieldAll(nodes.asSequence().filter { it.id != selectedId })
         }
         val chosen = ArrayList<SubscriptionNode>(MAX_CANDIDATES)
