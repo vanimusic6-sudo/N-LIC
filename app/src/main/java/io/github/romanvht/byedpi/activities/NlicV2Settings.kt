@@ -145,7 +145,6 @@ internal object NlicV2Settings {
                                 .apply()
                             d.dismiss()
                         }
-                        .setMessage("Только при включённом LIC-Bay и совместимом REALITY/RAW. Это сокетные механизмы ByeDPI, не NFQUEUE/Zapret2 и не универсальный обход.")
                         .setNegativeButton(android.R.string.cancel, null).show()
                 }
             }
