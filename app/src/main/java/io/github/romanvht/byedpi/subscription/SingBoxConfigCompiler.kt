@@ -163,7 +163,7 @@ internal object SingBoxConfigCompiler {
             addProperty("tag", "lic-auto")
             add("outbounds", tags)
             addProperty("url", "https://www.gstatic.com/generate_204")
-            addProperty("interval", "10m")
+            addProperty("interval", "45s")
             addProperty("tolerance", 120)
             addProperty("idle_timeout", "30m")
             addProperty("interrupt_exist_connections", false)

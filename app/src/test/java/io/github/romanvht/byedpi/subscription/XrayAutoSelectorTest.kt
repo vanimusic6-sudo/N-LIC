@@ -16,8 +16,8 @@ class XrayAutoSelectorTest {
         val chosen = XrayAutoSelector.candidates(list, "C", false) {
             it.protocol == "VLESS"
         }
-        assertEquals(listOf("C", "A", "D"), chosen.map { it.id })
-        assertEquals(3, chosen.size)
+        assertEquals(listOf("C", "A", "D", "E"), chosen.map { it.id })
+        assertEquals(4, chosen.size)
     }
 
     @Test fun bestRequiresVerifiedHttpsAndRanksSmallestLatency() {
