@@ -91,6 +91,7 @@ internal class NativeSession(
     private var tunnelThread: Thread? = null
     private var tunFd: ParcelFileDescriptor? = null
     private var startJob: Job? = null
+    private var healthJob: Job? = null
 
     val binder: IBinder get() = messenger.binder
 
@@ -128,6 +129,7 @@ internal class NativeSession(
         reply(EngineProtocol.STOPPING)
         handler.postDelayed({ terminate() }, STOP_TIMEOUT)
         startJob?.cancel()
+        healthJob?.cancel()
         thread(name = "NativeEngineStop") {
             try {
                 if (tunnelThread != null) TProxyService.stopTunnel()
@@ -326,57 +328,50 @@ internal class NativeSession(
                         }
                         if (eligible.isEmpty()) throw CoreStartException("BAY_UDP_UNAVAILABLE")
 
-                        // LIC-Auto tests a bounded set with the ACTUAL
-                        // encrypted Xray outbound (not TCP endpoint ping).
-                        // Every failed candidate is stopped before trying
-                        // another. No VPN routes exist until a winner passes.
+                        // LIC-Auto commits the FIRST verified encrypted egress.
+                        // Keep its core alive: no ranking scan or second handshake.
                         val selected = if (autoEnabled) {
-                            val measurements = mutableListOf<
-                                io.github.romanvht.byedpi.subscription.XrayAutoSelector.Measurement>()
+                            var firstVerified:
+                                io.github.romanvht.byedpi.subscription.SubscriptionNode? = null
                             for (candidate in eligible) {
                                 corePhase = "AUTO_PROBE"; CoreFailureTrace.mark(service, corePhase)
                                 val compiled = XrayConfigCompiler.compile(
-                                    candidate, auth, if (bayEnabled) bayPort else null, realityFingerprint
+                                    candidate, auth, if (bayEnabled) bayPort else null,
+                                    realityFingerprint
                                 ) as? XrayConfigCompiler.Result.Compiled ?: continue
                                 val trial = XrayRuntime(service)
                                 xrayEngine = trial
+                                var passedAutoProbe = false
                                 try {
                                     withContext(Dispatchers.IO) { trial.start(compiled.json) }
                                     withTimeout(5_000) {
                                         awaitProxy(config.host, config.port, auth)
                                     }
-                                    val began = android.os.SystemClock.elapsedRealtime()
+                                    // Core HTTPS is certificate-validated,
+                                    // not a bare TCP/SOCKS handshake.
                                     val nativeMs = withContext(Dispatchers.IO) {
                                         trial.measureHttpsLatencyMs()
                                     }
-                                    // Go core.Dial is certificate-validated
-                                    // and bounded to 12 s. Never equate a
-                                    // plain TCP or local SOCKS handshake with
-                                    // an Auto candidate working over VPN.
-                                    if (nativeMs != null) measurements +=
-                                        io.github.romanvht.byedpi.subscription.XrayAutoSelector.Measurement(
-                                            candidate.id,
-                                            nativeMs ?: (android.os.SystemClock.elapsedRealtime() -
-                                                began).coerceAtLeast(1),
-                                        )
-                                } catch (_: TimeoutCancellationException) {
-                                    // Candidate timed out: do not promote it.
-                                } catch (cancelled: CancellationException) {
-                                    throw cancelled
-                                } catch (_: Exception) {
-                                    // Only a safe code is exposed; configs and
-                                    // JNI exceptions may contain credentials.
-                                } finally {
-                                    withContext(NonCancellable + Dispatchers.IO) {
-                                        trial.close()
+                                    if (nativeMs != null) {
+                                        firstVerified = candidate
+                                        passedAutoProbe = true
                                     }
-                                    if (xrayEngine === trial) xrayEngine = null
-                                    delay(200) // release the previous SOCKS port
+                                } catch (cancelled: CancellationException) {
+                                    if (cancelled !is TimeoutCancellationException) throw cancelled
+                                } catch (_: Exception) {
+                                    // Suppress credential-bearing native exceptions.
+                                } finally {
+                                    if (!passedAutoProbe) {
+                                        withContext(NonCancellable + Dispatchers.IO) {
+                                            trial.close()
+                                        }
+                                        if (xrayEngine === trial) xrayEngine = null
+                                        delay(100)
+                                    }
                                 }
+                                if (passedAutoProbe) break
                             }
-                            val best = io.github.romanvht.byedpi.subscription.XrayAutoSelector
-                                .best(measurements) ?: throw CoreStartException("AUTO_NO_WORKING_SERVER")
-                            eligible.first { it.id == best.id }
+                            firstVerified ?: throw CoreStartException("AUTO_NO_WORKING_SERVER")
                         } else eligible.first()
 
                         val baselinePlan = XrayConfigCompiler.compile(
@@ -498,17 +493,25 @@ internal class NativeSession(
                             // a real HTTPS check through the encrypted core
                             // succeeds. The old trial is closed before the
                             // next fingerprint rebinds localhost SOCKS.
-                            val xray = XrayRuntime(service)
+                            val reuseAutoCore = autoEnabled && attemptIndex == 0 &&
+                                trick == RealityTcpTricks.STOCK
+                            val xray = if (reuseAutoCore)
+                                xrayEngine ?: throw CoreStartException("AUTO_PROBE")
+                            else XrayRuntime(service)
                             xrayEngine = xray
                             var remoteCheckStarted = false
                             var passed = false
                             var verificationStarted = 0L
                             try {
                                 corePhase = "XRAY_START"; CoreFailureTrace.mark(service, corePhase)
-                                withContext(Dispatchers.IO) { xray.start(plan.json) }
+                                if (!reuseAutoCore) {
+                                    withContext(Dispatchers.IO) { xray.start(plan.json) }
+                                }
                                 corePhase = "XRAY_SOCKS"; CoreFailureTrace.mark(service, corePhase)
-                                withTimeout(START_TIMEOUT) {
-                                    awaitProxy(config.host, config.port, auth)
+                                if (!reuseAutoCore) {
+                                    withTimeout(START_TIMEOUT) {
+                                        awaitProxy(config.host, config.port, auth)
+                                    }
                                 }
                                 if (traceEligible) {
                                     RealityAssistTrace.mark(service, when {
@@ -537,9 +540,10 @@ internal class NativeSession(
                                 verificationStarted =
                                     android.os.SystemClock.elapsedRealtime()
                                 corePhase = "XRAY_HTTPS"; CoreFailureTrace.mark(service, corePhase)
-                                val nativeHttpsOk = withContext(Dispatchers.IO) {
-                                    xray.verifyHttpsViaCore()
-                                }
+                                val nativeHttpsOk = reuseAutoCore ||
+                                    withContext(Dispatchers.IO) {
+                                        xray.verifyHttpsViaCore()
+                                    }
                                 if (!nativeHttpsOk) {
                                     remoteCheckStarted = true
                                     corePhase = "REMOTE_TEST"; CoreFailureTrace.mark(service, corePhase)
@@ -867,6 +871,9 @@ internal class NativeSession(
                         state = EngineProtocol.STATE_RUNNING
                         if (coreMode) CoreFailureTrace.clear(service)
                         reply(EngineProtocol.STARTED)
+                        if (xrayMode && config.args.getOrNull(2) == "--nlic-auto") {
+                            startAutoHealthMonitor()
+                        }
                     }
                 }
             } catch (e: CancellationException) {
@@ -972,6 +979,34 @@ internal class NativeSession(
             }
             if (ready) return
             delay(75)
+        }
+    }
+
+    /**
+     * A low-frequency encrypted egress check after the VPN is running.
+     * Require two independent cert-verified HTTPS targets to fail on two
+     * rounds before asking the supervisor to find a new protocol/node.
+     * Do not scan while idle or automatically replace manual connections.
+     */
+    private fun startAutoHealthMonitor() {
+        healthJob?.cancel()
+        healthJob = scope.launch {
+            var failures = 0
+            while (state == EngineProtocol.STATE_RUNNING) {
+                delay(if (failures == 0) 30_000L else 8_000L)
+                val engine = xrayEngine ?: break
+                val healthy = withContext(Dispatchers.IO) {
+                    engine.measureHttpsLatencyMs() != null ||
+                        engine.measureHttpsLatencyMs(
+                            "https://cp.cloudflare.com/generate_204") != null
+                }
+                if (state != EngineProtocol.STATE_RUNNING) break
+                if (healthy) failures = 0
+                else if (++failures >= 2) {
+                    fail("LIC-Core / AUTO_EGRESS_LOST")
+                    break
+                }
+            }
         }
     }
 
