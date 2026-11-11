@@ -19,6 +19,10 @@ internal class XrayRuntime(
     companion object {
         private const val TAG = "NLICXray"
         private const val PREFIX = "libv2ray."
+        private val HEALTH_URLS = setOf(
+            "https://example.com/",
+            "https://cp.cloudflare.com/generate_204",
+        )
         fun installed(): Boolean = runCatching {
             Class.forName(PREFIX + "Libv2ray")
             Class.forName(PREFIX + "CoreController")
@@ -67,13 +71,14 @@ internal class XrayRuntime(
      * credential-free diagnostic phase. Never interpret mere core start
      * or SOCKS CONNECT as proof that encrypted egress works.
      */
-    internal fun measureHttpsLatencyMs(): Long? {
+    internal fun measureHttpsLatencyMs(targetUrl: String = "https://example.com/"): Long? {
+        if (targetUrl !in HEALTH_URLS) return null
         val active = controller ?: return null
         if (closed.get()) return null
         return runCatching {
             val ms = active.javaClass
                 .getMethod("measureDelay", String::class.java)
-                .invoke(active, "https://example.com/") as? Number
+                .invoke(active, targetUrl) as? Number
             ms?.toLong()?.takeIf { it in 1L..30_000L }
         }.getOrNull()
     }
