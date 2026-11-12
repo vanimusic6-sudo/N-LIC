@@ -5,10 +5,10 @@ import org.junit.Test
 
 class AutoRecoveryPolicyTest {
     @Test fun delayIsBoundedAndBacksOffWithoutBusyLoop() {
-        assertEquals(4_000L, AutoRecoveryPolicy.delayMs(-1))
-        assertEquals(4_000L, AutoRecoveryPolicy.delayMs(0))
-        assertEquals(8_000L, AutoRecoveryPolicy.delayMs(1))
-        assertEquals(16_000L, AutoRecoveryPolicy.delayMs(2))
+        assertEquals(1_000L, AutoRecoveryPolicy.delayMs(-1))
+        assertEquals(1_000L, AutoRecoveryPolicy.delayMs(0))
+        assertEquals(3_000L, AutoRecoveryPolicy.delayMs(1))
+        assertEquals(8_000L, AutoRecoveryPolicy.delayMs(2))
         assertEquals(180_000L, AutoRecoveryPolicy.delayMs(99))
     }
 

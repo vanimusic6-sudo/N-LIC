@@ -1,134 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
- android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"
- android:background="@color/nlic_canvas">
- <FrameLayout android:layout_width="match_parent" android:layout_height="56dp"
-  android:background="@color/nlic_canvas">
-  <com.google.android.material.appbar.MaterialToolbar android:id="@+id/toolbar"
-   android:layout_width="match_parent" android:layout_height="match_parent"
-   android:paddingEnd="64dp" app:title="N-LIC" app:titleTextColor="@color/nlic_text"
-   android:background="@color/nlic_canvas"/>
-  <!-- A real clickable control: AppCompat's ActionBar takes ownership of
-       Toolbar menu dispatch, so menu-added clicks were not reliable. -->
-  <androidx.appcompat.widget.AppCompatImageButton android:id="@+id/nlic_settings_button"
-   android:layout_width="52dp" android:layout_height="52dp"
-   android:layout_gravity="end|center_vertical" android:layout_marginEnd="12dp"
-   android:padding="14dp" android:src="@android:drawable/ic_menu_manage"
-   android:background="?attr/selectableItemBackgroundBorderless"
-   android:tint="@color/nlic_text" android:contentDescription="@string/nlic_v2_settings"
-   android:focusable="true" android:clickable="true"/>
- </FrameLayout>
- <ScrollView android:layout_width="match_parent" android:layout_height="0dp"
-  android:layout_weight="1" android:fillViewport="true" android:scrollbars="none">
-  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-   android:orientation="vertical" android:paddingStart="22dp" android:paddingEnd="22dp"
-   android:paddingTop="20dp" android:paddingBottom="26dp">
-   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-    <com.google.android.material.button.MaterialButton android:id="@+id/nlic_mode_bypass"
-     style="@style/Widget.MaterialComponents.Button.OutlinedButton" android:layout_width="0dp"
-     android:layout_height="50dp" android:layout_weight="1" android:text="@string/nlic_mode_local"
-     android:textAllCaps="false" android:textSize="14sp" app:cornerRadius="16dp"/>
-    <com.google.android.material.button.MaterialButton android:id="@+id/nlic_mode_subscription"
-     style="@style/Widget.MaterialComponents.Button.OutlinedButton" android:layout_width="0dp"
-     android:layout_height="50dp" android:layout_weight="1" android:layout_marginStart="9dp"
-     android:text="@string/nlic_mode_subscription" android:textAllCaps="false" android:textSize="14sp" app:cornerRadius="16dp"/>
-   </LinearLayout>
-   <TextView android:id="@+id/nlic_status_label" android:layout_width="match_parent"
-    android:layout_height="wrap_content" android:layout_marginTop="37dp"
-    android:text="@string/nlic_control_disconnected" android:textSize="29sp"
-    android:textColor="@color/nlic_text" android:fontFamily="sans-serif-medium"/>
-   <TextView android:id="@+id/nlic_status_message" android:layout_width="match_parent"
-    android:layout_height="wrap_content" android:layout_marginTop="9dp"
-    android:text="@string/nlic_control_status_hint" android:textSize="14sp"
-    android:textColor="@color/nlic_muted" android:maxLines="4" android:ellipsize="end"/>
-   <ProgressBar android:id="@+id/nlic_progress" style="?android:attr/progressBarStyleHorizontal"
-    android:layout_width="match_parent" android:layout_height="2dp"
-    android:layout_marginTop="10dp" android:indeterminate="true" android:visibility="gone"/>
-   <TextView android:id="@+id/nlic_stage_label" android:layout_width="match_parent"
-    android:layout_height="wrap_content" android:layout_marginTop="10dp"
-    android:textColor="@color/nlic_muted" android:textSize="11sp" android:visibility="gone"/>
-   <TextView android:id="@+id/nlic_reality_assist_status" android:layout_width="match_parent"
-    android:layout_height="wrap_content" android:layout_marginTop="12dp"
-    android:textColor="@color/nlic_text" android:textSize="13sp"
-    android:lineSpacingExtra="2dp" android:visibility="gone"/>
-   <View android:layout_width="match_parent" android:layout_height="1dp"
-    android:layout_marginTop="34dp" android:layout_marginBottom="25dp"
-    android:background="@color/nlic_border"/>
-   <LinearLayout android:id="@+id/nlic_subscription_panel" android:layout_width="match_parent"
-    android:layout_height="wrap_content" android:orientation="vertical">
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-     android:text="@string/nlic_control_server_title" android:textColor="@color/nlic_text" android:textSize="17sp"/>
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-     android:orientation="horizontal" android:layout_marginTop="12dp">
-     <com.google.android.material.button.MaterialButton android:id="@+id/nlic_server_picker_button"
-      style="@style/Widget.MaterialComponents.Button.OutlinedButton" android:layout_width="0dp"
-      android:layout_weight="1" android:layout_height="55dp"
-      android:text="@string/nlic_control_select_server" android:textAllCaps="false"
-      android:gravity="center_vertical|start" android:textSize="14sp"
-      android:maxLines="1" android:ellipsize="end" app:cornerRadius="16dp"/>
-     <com.google.android.material.button.MaterialButton android:id="@+id/nlic_manage_profiles"
-      style="@style/Widget.MaterialComponents.Button.OutlinedButton" android:layout_width="55dp"
-      android:layout_height="55dp" android:layout_marginStart="8dp" android:text="+"
-      android:textSize="22sp" android:textAllCaps="false" app:cornerRadius="16dp"
-      android:contentDescription="@string/nlic_profiles_manage"/>
-    </LinearLayout>
-    <TextView android:id="@+id/nlic_server_hint" android:layout_width="match_parent"
-     android:layout_height="wrap_content" android:layout_marginTop="8dp"
-     android:textColor="@color/nlic_muted" android:textSize="12sp" android:maxLines="2"/>
-    <!-- A single, explicit opt-in switch for Smart REALITY. Status and
-         compatibility hint stay visible on the same VPN home screen. -->
-    <com.google.android.material.switchmaterial.SwitchMaterial
-     android:id="@+id/nlic_reality_smart_switch"
-     android:layout_width="match_parent" android:layout_height="wrap_content"
-     android:layout_marginTop="18dp" android:minHeight="48dp"
-     android:text="@string/nlic_reality_smart_switch"
-     android:textColor="@color/nlic_text"/>
-    <TextView android:id="@+id/nlic_reality_smart_hint"
-     android:layout_width="match_parent" android:layout_height="wrap_content"
-     android:layout_marginTop="2dp" android:paddingEnd="16dp"
-     android:textSize="12sp" android:textColor="@color/nlic_muted"
-     android:text="@string/nlic_reality_smart_off"/>
-    <com.google.android.material.button.MaterialButton
-     android:id="@+id/nlic_reality_compare_button"
-     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-     android:layout_width="match_parent" android:layout_height="wrap_content"
-     android:minHeight="48dp" android:layout_marginTop="12dp"
-     android:visibility="gone" android:importantForAccessibility="no"
-     android:text="@string/nlic_reality_compare_button"
-     android:textAllCaps="false" android:textSize="14sp"
-     app:cornerRadius="16dp"/>
-    <TextView android:id="@+id/nlic_reality_compare_result"
-     android:layout_width="match_parent" android:layout_height="wrap_content"
-     android:layout_marginTop="8dp" android:paddingStart="4dp"
-     android:paddingEnd="4dp" android:textColor="@color/nlic_text"
-     android:textSize="13sp" android:lineSpacingExtra="3dp"
-     android:visibility="gone"/>
-    <com.google.android.material.switchmaterial.SwitchMaterial android:id="@+id/nlic_auto_switch"
-     android:layout_width="match_parent" android:layout_height="wrap_content"
-     android:layout_marginTop="18dp" android:minHeight="48dp"
-     android:text="@string/nlic_control_auto_title" android:textColor="@color/nlic_text"/>
-    <com.google.android.material.switchmaterial.SwitchMaterial android:id="@+id/nlic_bay_switch"
-     android:layout_width="match_parent" android:layout_height="wrap_content"
-     android:layout_marginTop="4dp" android:minHeight="48dp"
-     android:text="@string/nlic_control_bay_title" android:textColor="@color/nlic_text"/>
-   </LinearLayout>
-   <LinearLayout android:id="@+id/nlic_bypass_panel" android:layout_width="match_parent"
-    android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-     android:text="@string/nlic_bypass_explanation" android:textColor="@color/nlic_muted"
-     android:textSize="14sp"/>
-    <com.google.android.material.switchmaterial.SwitchMaterial android:id="@+id/nlic_adaptive_switch"
-     android:layout_width="match_parent" android:layout_height="wrap_content"
-     android:layout_marginTop="20dp" android:minHeight="52dp"
-     android:text="@string/nlic_home_auto_network" android:textColor="@color/nlic_text"/>
-   </LinearLayout>
-  </LinearLayout>
- </ScrollView>
- <FrameLayout android:layout_width="match_parent" android:layout_height="77dp"
-  android:paddingStart="22dp" android:paddingEnd="22dp" android:paddingBottom="22dp">
-  <com.google.android.material.button.MaterialButton android:id="@+id/nlic_connect"
-   android:layout_width="match_parent" android:layout_height="55dp"
-   android:text="@string/nlic_control_connect" android:textAllCaps="false"
-   android:textSize="16sp" app:cornerRadius="18dp"/>
- </FrameLayout>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:background="@color/nlic_canvas">
+    <FrameLayout android:layout_width="match_parent" android:layout_height="56dp" android:background="@color/nlic_canvas">
+        <com.google.android.material.appbar.MaterialToolbar android:id="@+id/toolbar" android:layout_width="match_parent" android:layout_height="match_parent" android:paddingEnd="64dp" app:title="N-LIC" app:titleTextColor="@color/nlic_text" android:background="@color/nlic_canvas" />
+        <androidx.appcompat.widget.AppCompatImageButton android:id="@+id/nlic_settings_button" android:layout_width="52dp" android:layout_height="52dp" android:layout_gravity="end|center_vertical" android:layout_marginEnd="12dp" android:padding="14dp" android:src="@android:drawable/ic_menu_manage" android:background="?attr/selectableItemBackgroundBorderless" android:tint="@color/nlic_text" android:contentDescription="@string/nlic_v2_settings" android:focusable="true" android:clickable="true" />
+    </FrameLayout>
+    <ScrollView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:fillViewport="true" android:scrollbars="none">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="22dp" android:paddingEnd="22dp" android:paddingTop="20dp" android:paddingBottom="26dp">
+            <TextView android:id="@+id/nlic_status_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="37dp" android:text="@string/nlic_control_disconnected" android:textSize="30sp" android:textColor="@color/nlic_text" android:fontFamily="sans-serif-medium" android:gravity="center" android:accessibilityLiveRegion="polite" />
+            <TextView android:id="@+id/nlic_status_message" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="9dp" android:text="@string/nlic_control_status_hint" android:textSize="18sp" android:textColor="@color/nlic_muted" android:gravity="center" android:accessibilityLiveRegion="polite" />
+            <ProgressBar android:id="@+id/nlic_progress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="2dp" android:layout_marginTop="10dp" android:indeterminate="true" android:visibility="gone" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/nlic_connect" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/nlic_control_connect" android:textAllCaps="false" android:textSize="25sp" app:cornerRadius="40dp" android:minHeight="184dp" android:layout_marginTop="34dp" android:paddingTop="30dp" android:paddingBottom="30dp" app:icon="@drawable/ic_power" app:iconGravity="textTop" app:iconSize="60dp" app:iconPadding="16dp" android:textColor="@color/nlic_canvas" app:iconTint="@color/nlic_canvas" android:accessibilityLiveRegion="polite" />
+            <TextView android:id="@+id/nlic_simple_hint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:text="@string/nlic_one_tap_hint" android:textSize="17sp" android:textColor="@color/nlic_muted" android:gravity="center" android:lineSpacingExtra="4dp" />
+            <com.google.android.material.button.MaterialButton style="@style/Widget.MaterialComponents.Button.TextButton" android:id="@+id/nlic_connection_options" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="56dp" android:layout_marginTop="32dp" android:text="@string/nlic_connection_options" android:textAllCaps="false" android:textSize="16sp" />
+            <LinearLayout android:id="@+id/nlic_advanced_panel" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                    <com.google.android.material.button.MaterialButton android:id="@+id/nlic_mode_bypass" style="@style/Widget.MaterialComponents.Button.OutlinedButton" android:layout_width="0dp" android:layout_height="50dp" android:layout_weight="1" android:text="@string/nlic_mode_local" android:textAllCaps="false" android:textSize="14sp" app:cornerRadius="16dp" />
+                    <com.google.android.material.button.MaterialButton android:id="@+id/nlic_mode_subscription" style="@style/Widget.MaterialComponents.Button.OutlinedButton" android:layout_width="0dp" android:layout_height="50dp" android:layout_weight="1" android:layout_marginStart="9dp" android:text="@string/nlic_mode_subscription" android:textAllCaps="false" android:textSize="14sp" app:cornerRadius="16dp" />
+                </LinearLayout>
+                <TextView android:id="@+id/nlic_stage_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textColor="@color/nlic_muted" android:textSize="11sp" android:visibility="gone" />
+                <TextView android:id="@+id/nlic_reality_assist_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:textColor="@color/nlic_text" android:textSize="13sp" android:lineSpacingExtra="2dp" android:visibility="gone" />
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="34dp" android:layout_marginBottom="25dp" android:background="@color/nlic_border" />
+                <LinearLayout android:id="@+id/nlic_subscription_panel" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/nlic_control_server_title" android:textColor="@color/nlic_text" android:textSize="17sp" />
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="12dp">
+                        <com.google.android.material.button.MaterialButton android:id="@+id/nlic_server_picker_button" style="@style/Widget.MaterialComponents.Button.OutlinedButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="55dp" android:text="@string/nlic_control_select_server" android:textAllCaps="false" android:gravity="center_vertical|start" android:textSize="14sp" android:maxLines="1" android:ellipsize="end" app:cornerRadius="16dp" />
+                        <com.google.android.material.button.MaterialButton android:id="@+id/nlic_manage_profiles" style="@style/Widget.MaterialComponents.Button.OutlinedButton" android:layout_width="55dp" android:layout_height="55dp" android:layout_marginStart="8dp" android:text="+" android:textSize="22sp" android:textAllCaps="false" app:cornerRadius="16dp" android:contentDescription="@string/nlic_profiles_manage" />
+                    </LinearLayout>
+                    <TextView android:id="@+id/nlic_server_hint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:textColor="@color/nlic_muted" android:textSize="12sp" android:maxLines="2" />
+                    <com.google.android.material.switchmaterial.SwitchMaterial android:id="@+id/nlic_reality_smart_switch" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:minHeight="48dp" android:text="@string/nlic_reality_smart_switch" android:textColor="@color/nlic_text" />
+                    <TextView android:id="@+id/nlic_reality_smart_hint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:paddingEnd="16dp" android:textSize="12sp" android:textColor="@color/nlic_muted" android:text="@string/nlic_reality_smart_off" />
+                    <com.google.android.material.button.MaterialButton android:id="@+id/nlic_reality_compare_button" style="@style/Widget.MaterialComponents.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="48dp" android:layout_marginTop="12dp" android:visibility="gone" android:importantForAccessibility="no" android:text="@string/nlic_reality_compare_button" android:textAllCaps="false" android:textSize="14sp" app:cornerRadius="16dp" />
+                    <TextView android:id="@+id/nlic_reality_compare_result" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:paddingStart="4dp" android:paddingEnd="4dp" android:textColor="@color/nlic_text" android:textSize="13sp" android:lineSpacingExtra="3dp" android:visibility="gone" />
+                    <com.google.android.material.switchmaterial.SwitchMaterial android:id="@+id/nlic_auto_switch" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:minHeight="48dp" android:text="@string/nlic_control_auto_title" android:textColor="@color/nlic_text" />
+                    <com.google.android.material.switchmaterial.SwitchMaterial android:id="@+id/nlic_bay_switch" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:minHeight="48dp" android:text="@string/nlic_control_bay_title" android:textColor="@color/nlic_text" />
+                </LinearLayout>
+                <LinearLayout android:id="@+id/nlic_bypass_panel" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/nlic_bypass_explanation" android:textColor="@color/nlic_muted" android:textSize="14sp" />
+                    <com.google.android.material.switchmaterial.SwitchMaterial android:id="@+id/nlic_adaptive_switch" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:minHeight="52dp" android:text="@string/nlic_home_auto_network" android:textColor="@color/nlic_text" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
 </LinearLayout>

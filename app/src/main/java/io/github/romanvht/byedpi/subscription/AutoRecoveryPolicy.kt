@@ -9,7 +9,7 @@ package io.github.romanvht.byedpi.subscription
  * The supervisor holds the opt-in and command-token cancellation state.
  */
 internal object AutoRecoveryPolicy {
-    private val backoffMs = longArrayOf(4_000L, 8_000L, 16_000L,
+    private val backoffMs = longArrayOf(1_000L, 3_000L, 8_000L,
         30_000L, 60_000L, 120_000L, 180_000L)
 
     fun delayMs(attempt: Int): Long =
@@ -29,5 +29,7 @@ internal object AutoRecoveryPolicy {
         "REMOTE_TLS_EOF",
         "REMOTE_TLS_IO",
         "AUTO_PROBE",
+        "REMOTE_TEST_TIMEOUT",
+        "XRAY_HTTPS_TIMEOUT",
     )
 }

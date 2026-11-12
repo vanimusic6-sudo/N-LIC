@@ -69,6 +69,9 @@ import java.net.URI
 class SubscriptionLabActivity : BaseActivity() {
     private val prefs by lazy { getPreferences() }
     private var busy = false
+    private var operationJob: kotlinx.coroutines.Job? = null
+    private var advancedVisible = false
+    private var lastConnectionState: String? = null
     private var locallyVerified = false
     private var latestMessage: String? = null
     private var comparisonRunning = false
@@ -140,12 +143,16 @@ class SubscriptionLabActivity : BaseActivity() {
     private val realityStatusTicker = object : Runnable {
         override fun run() {
             if (!realityStatusVisible) return
-            updateRealityAssistStatus()
+            val connectionState = "${appStatus.first}:${ServiceManager.isConnecting}:${ServiceManager.isRecovering}"
+            if (connectionState != lastConnectionState) {
+                lastConnectionState = connectionState
+                render()
+            } else if (advancedVisible) updateRealityAssistStatus()
             // Status is a tiny cross-process AtomicFile, not a live
             // waveform. Frequent 800 ms polling during long idle periods
             // causes unnecessary wakeups and main-thread UI churn.
             window.decorView.postDelayed(this,
-                if (busy || comparisonRunning) 2_000L else 5_000L)
+                if (busy || comparisonRunning || ServiceManager.isRecovering) 1_000L else 3_000L)
         }
     }
 
@@ -208,6 +215,19 @@ class SubscriptionLabActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_nlic_control)
+        // Set up the one-button path once. Later explicit advanced choices
+        // survive app restarts and are never overwritten by a render.
+        if (!prefs.getBoolean("nlic_one_tap_configured", false)) {
+            val setup = prefs.edit().putBoolean("nlic_one_tap_configured", true)
+                .putBoolean("nlic_core_auto", true)
+            if (!prefs.contains("nlic_reality_tcp_utls"))
+                setup.putString("nlic_reality_tcp_utls", RealityAssistPolicy.SMART)
+            setup.commit()
+        }
+        findViewById<MaterialButton>(R.id.nlic_connection_options).setOnClickListener {
+            advancedVisible = !advancedVisible
+            render()
+        }
         setupToolbar()
         supportActionBar?.setDisplayHomeAsUpEnabled(false)
         supportActionBar?.title = "N-LIC"
@@ -266,9 +286,12 @@ class SubscriptionLabActivity : BaseActivity() {
             }
         }
         findViewById<MaterialButton>(R.id.nlic_connect).setOnClickListener {
-            if (appStatus.first == AppStatus.Running && appStatus.second == Mode.VPN)
-                disconnectCore()
-            else requestConnection()
+            if (busy || ServiceManager.isConnecting || ServiceManager.isRecovering ||
+                appStatus.first == AppStatus.Running && appStatus.second == Mode.VPN) {
+                cancelConnection()
+            } else if (connectionMode() == ConnectionMode.SUBSCRIPTION && readCatalog().allNodes.isEmpty()) {
+                showImportDialog(subscription = true)
+            } else requestConnection()
         }
         render()
         // The home power button starts this Activity with an explicit visible
@@ -596,18 +619,27 @@ class SubscriptionLabActivity : BaseActivity() {
             } finally {
                 if (!success) {
                     // No automatic direct fallback or unsafe implicit ByeDPI start.
-                    prefs.edit().putBoolean("nlic_core_mode", false).commit()
+                    if (!ServiceManager.isRecovering)
+                        prefs.edit().putBoolean("nlic_core_mode", false).commit()
                     locallyVerified = false
                 }
             }
         }
     }
 
-    private fun disconnectCore() = runOperation {
-        ServiceManager.waitStop()
-        prefs.edit().putBoolean("nlic_core_mode", false).commit()
-        locallyVerified = false
-        latestMessage = null
+    private fun cancelConnection() {
+        operationJob?.cancel()
+        operationJob = null
+        // Stop clears recovery intent synchronously on the main dispatcher.
+        // It works during handshake, backoff and established VPN sessions.
+        lifecycleScope.launch {
+            ServiceManager.waitStop()
+            prefs.edit().putBoolean("nlic_core_mode", false).commit()
+            locallyVerified = false
+            latestMessage = null
+            busy = false
+            render()
+        }
     }
 
     private fun readCatalog(): SubscriptionCatalog =
@@ -625,9 +657,7 @@ class SubscriptionLabActivity : BaseActivity() {
                     XrayConfigCompiler.Result.Compiled
             }
             return if (prefs.getBoolean("nlic_core_auto", false)) {
-                io.github.romanvht.byedpi.subscription.XrayAutoSelector.candidates(
-                    catalog.allNodes, catalog.selectedNodeId, bay, supported
-                ).isNotEmpty()
+                catalog.allNodes.any(supported)
             } else {
                 catalog.allNodes.any { it.id == catalog.selectedNodeId && supported(it) }
             }
@@ -679,6 +709,10 @@ class SubscriptionLabActivity : BaseActivity() {
 
     private fun render() {
         val local = connectionMode() == ConnectionMode.LOCAL
+        findViewById<View>(R.id.nlic_advanced_panel).visibility =
+            if (advancedVisible) View.VISIBLE else View.GONE
+        findViewById<MaterialButton>(R.id.nlic_connection_options).setText(
+            if (advancedVisible) R.string.nlic_hide_options else R.string.nlic_connection_options)
         findViewById<View>(R.id.nlic_bypass_panel).visibility =
             if (local) View.VISIBLE else View.GONE
         findViewById<View>(R.id.nlic_subscription_panel).visibility =
@@ -694,14 +728,20 @@ class SubscriptionLabActivity : BaseActivity() {
         val details = findViewById<TextView>(R.id.nlic_status_message)
         val stage = findViewById<TextView>(R.id.nlic_stage_label)
         val runningVpn = appStatus.first == AppStatus.Running && appStatus.second == Mode.VPN
+        val recovering = ServiceManager.isRecovering && !runningVpn
+        val connecting = busy || ServiceManager.isConnecting
         title.setText(when {
+            recovering -> R.string.nlic_reconnecting
             comparisonRunning -> R.string.nlic_reality_compare_in_progress
-            busy -> R.string.nlic_core_connecting
+            connecting -> R.string.nlic_core_connecting
             runningVpn -> R.string.nlic_control_running
             else -> R.string.nlic_control_disconnected
         })
         val failure = if (local) null else ServiceManager.lastCoreFailureCode
         details.text = when {
+            recovering -> getString(R.string.nlic_reconnecting_hint)
+            connecting -> getString(R.string.nlic_one_tap_connecting)
+            runningVpn -> getString(R.string.nlic_one_tap_connected)
             comparisonRunning -> getString(R.string.nlic_reality_compare_description)
             busy -> getString(R.string.nlic_control_working)
             failure != null && !runningVpn -> failureAdvice(failure)
@@ -725,16 +765,31 @@ class SubscriptionLabActivity : BaseActivity() {
             else -> getString(R.string.nlic_control_preview_badge)
         }
         findViewById<View>(R.id.nlic_progress).visibility =
-            if (busy) View.VISIBLE else View.GONE
+            if (connecting || recovering) View.VISIBLE else View.GONE
 
-        val choices = all.take(150)
+        findViewById<MaterialButton>(R.id.nlic_connect).apply {
+            isEnabled = !comparisonRunning
+            setText(when {
+                runningVpn -> R.string.nlic_core_disconnect
+                connecting || recovering -> R.string.nlic_cancel_connection
+                !local && all.isEmpty() -> R.string.nlic_setup_connection
+                else -> R.string.nlic_control_connect
+            })
+            contentDescription = text
+        }
+        findViewById<TextView>(R.id.nlic_simple_hint).setText(when {
+            recovering -> R.string.nlic_reconnecting_hint
+            runningVpn -> R.string.nlic_one_tap_connected
+            !local && all.isEmpty() -> R.string.nlic_setup_hint
+            else -> R.string.nlic_one_tap_hint
+        })
+        if (!advancedVisible) return
+
+        val choices = all
         val labels = choices.map { node -> node.name + "  ·  " + node.protocol }
         findViewById<MaterialButton>(R.id.nlic_server_picker_button).apply {
             text = if (auto) {
-                if (BuildConfig.NLIC_XRAY_INCLUDED && runningVpn && selected != null) {
-                    getString(R.string.nlic_control_auto_selected) + " · " +
-                        selected.name + " · " + selected.protocol
-                } else getString(R.string.nlic_control_auto_selected)
+                getString(R.string.nlic_auto_full_pool, all.size)
             } else selected?.let { it.name + "  ·  " + it.protocol }
                 ?: getString(R.string.nlic_control_select_server)
             isEnabled = !busy && choices.isNotEmpty()
@@ -809,12 +864,17 @@ class SubscriptionLabActivity : BaseActivity() {
         val assistHint = findViewById<TextView>(R.id.nlic_reality_smart_hint)
         assistSwitch.setOnCheckedChangeListener(null)
         assistSwitch.isChecked = assistMode == RealityAssistPolicy.SMART
-        assistSwitch.isEnabled = !busy && !runningVpn && !auto && !bay &&
-            realityCompatible
+        val autoRealityCompatible = auto && all.any { node ->
+            val plan = XrayConfigCompiler.compile(node, LocalSocksAuth("nlic", "a".repeat(48)))
+                as? XrayConfigCompiler.Result.Compiled
+            plan != null && RealityAssistPolicy.baselineFingerprint(plan.json) != null
+        }
+        assistSwitch.isEnabled = !busy && !runningVpn && !bay &&
+            (realityCompatible || autoRealityCompatible)
         assistHint.setText(when {
             runningVpn -> R.string.nlic_reality_smart_disconnect
+            auto && autoRealityCompatible -> R.string.nlic_helper_auto_hint
             !realityCompatible -> R.string.nlic_reality_smart_need_server
-            auto -> R.string.nlic_reality_smart_disable_auto
             bay -> R.string.nlic_reality_smart_disable_bay
             assistMode == RealityAssistPolicy.SMART -> R.string.nlic_reality_smart_on
             assistMode == RealityAssistPolicy.FIREFOX ->
@@ -880,7 +940,7 @@ class SubscriptionLabActivity : BaseActivity() {
             }
         }
         assistSwitch.setOnCheckedChangeListener { _, enabled ->
-            if (busy || runningVpn || auto || bay || !realityCompatible) {
+            if (busy || runningVpn || bay || !(realityCompatible || autoRealityCompatible)) {
                 render()
                 return@setOnCheckedChangeListener
             }
@@ -911,7 +971,7 @@ class SubscriptionLabActivity : BaseActivity() {
         val autoSwitch = findViewById<SwitchMaterial>(R.id.nlic_auto_switch)
         autoSwitch.setOnCheckedChangeListener(null)
         autoSwitch.isChecked = auto
-        autoSwitch.isEnabled = !busy &&
+        autoSwitch.isEnabled = !busy && !runningVpn &&
             (BuildConfig.NLIC_LIBBOX_INCLUDED || BuildConfig.NLIC_XRAY_INCLUDED) &&
             all.isNotEmpty()
         autoSwitch.setOnCheckedChangeListener { _, value ->
@@ -936,7 +996,7 @@ class SubscriptionLabActivity : BaseActivity() {
         val baySwitch = findViewById<SwitchMaterial>(R.id.nlic_bay_switch)
         baySwitch.setOnCheckedChangeListener(null)
         baySwitch.isChecked = bay
-        baySwitch.isEnabled = !busy &&
+        baySwitch.isEnabled = !busy && !runningVpn &&
             (BuildConfig.NLIC_LIBBOX_INCLUDED || BuildConfig.NLIC_XRAY_INCLUDED) &&
             (bay || bayEligible)
         baySwitch.setOnCheckedChangeListener { _, value ->
@@ -955,13 +1015,8 @@ class SubscriptionLabActivity : BaseActivity() {
             }
         }
 
-        findViewById<MaterialButton>(R.id.nlic_connect).apply {
-            isEnabled = !busy && (runningVpn || local || canConnect(catalog))
-            setText(if (runningVpn) R.string.nlic_core_disconnect
-                else R.string.nlic_control_connect)
-        }
         findViewById<MaterialButton>(R.id.nlic_manage_profiles).isEnabled = !busy
-        updateRealityAssistStatus()
+        if (advancedVisible) updateRealityAssistStatus()
     }
 
     /**
@@ -984,7 +1039,7 @@ class SubscriptionLabActivity : BaseActivity() {
             RealityAssistTrace.Event.SKIPPED_DISABLED ->
                 "LIC-Assist не участвовал: использован исходный профиль."
             RealityAssistTrace.Event.SKIPPED_AUTO ->
-                "LIC-helper не участвовал: включён автоматический выбор серверов."
+                getString(R.string.nlic_helper_auto_hint)
             RealityAssistTrace.Event.SKIPPED_BAY ->
                 "LIC-helper не участвовал: LIC-Bay владеет TCP-сокетом сервера. Выключи LIC-Bay для Duet."
             RealityAssistTrace.Event.SKIPPED_UNSUPPORTED ->
@@ -1368,7 +1423,7 @@ class SubscriptionLabActivity : BaseActivity() {
         if (busy) return
         busy = true
         render()
-        lifecycleScope.launch {
+        operationJob = lifecycleScope.launch {
             try {
                 block()
             } catch (e: CancellationException) {

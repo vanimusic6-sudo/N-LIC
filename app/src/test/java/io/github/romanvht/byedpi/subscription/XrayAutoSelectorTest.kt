@@ -45,4 +45,11 @@ class XrayAutoSelectorTest {
         }.isEmpty())
         assertNull(XrayAutoSelector.best(emptyList()))
     }
+    @Test fun fullCatalogIncludesWorkingNodeBeyondEveryOldShortlist() {
+        val nodes = (1..300).map { node("node-$it") }
+        val selected = XrayAutoSelector.candidates(nodes, "node-250", false) { true }
+        assertEquals(300, selected.size)
+        assertEquals("node-250", selected.first().id)
+        assertEquals(nodes.map { it.id }.toSet(), selected.map { it.id }.toSet())
+    }
 }

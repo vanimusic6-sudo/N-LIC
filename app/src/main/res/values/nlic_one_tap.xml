@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nlic_one_tap_hint">Нажмите кнопку — НЛИК сам выберет подключение и восстановит его при сбое.</string>
+    <string name="nlic_one_tap_connecting">Ищем работающее подключение. Можно отменить кнопкой ниже.</string>
+    <string name="nlic_one_tap_connected">Можно свернуть приложение и пользоваться интернетом.</string>
+    <string name="nlic_reconnecting">Восстанавливаем связь</string>
+    <string name="nlic_reconnecting_hint">НЛИК повторит поиск автоматически. Ничего нажимать не нужно.</string>
+    <string name="nlic_connection_options">Настройки подключения</string>
+    <string name="nlic_hide_options">Скрыть настройки подключения</string>
+    <string name="nlic_cancel_connection">Остановить</string>
+    <string name="nlic_setup_connection">Настроить подключение</string>
+    <string name="nlic_setup_hint">Один раз добавьте подписку или сервер. После настройки останется одна кнопка.</string>
+    <string name="nlic_auto_full_pool">Авто · все локации (%1$d)</string>
+    <string name="nlic_helper_auto_hint">Auto проверяет обычные и защитные варианты REALITY. Рабочий маршрут выбирает ядро.</string>
+</resources>

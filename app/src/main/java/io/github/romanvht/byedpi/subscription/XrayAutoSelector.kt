@@ -1,7 +1,7 @@
 package io.github.romanvht.byedpi.subscription
 
 /**
- * Safe, bounded LIC-Auto for Xray.
+ * Full-catalog LIC-Auto ordering for Xray.
  *
  * The caller evaluates candidates by actually starting an isolated Xray
  * outbound and checking authenticated, certificate-validated HTTPS.
@@ -12,7 +12,6 @@ package io.github.romanvht.byedpi.subscription
  * Only pre-validated profiles are included. No credentials logged.
  */
 internal object XrayAutoSelector {
-    const val MAX_CANDIDATES = 6
 
     data class Measurement(val id: String, val elapsedMs: Long)
 
@@ -22,10 +21,8 @@ internal object XrayAutoSelector {
         bayEnabled: Boolean,
         isSupported: (SubscriptionNode) -> Boolean,
     ): List<SubscriptionNode> {
-        // Compiling one Xray JSON can be expensive (WireGuard PEM, VMess
-        // import). The UI may hold 500 nodes: examine at most enough to
-        // fill the six candidate slots instead of compiling all 500 on
-        // every Compose/View re-render or connection attempt.
+        // No server-count shortlist. The runtime compiles this on IO once;
+        // the UI uses any-supported checks instead of compiling the catalog.
         val selected = nodes.firstOrNull { it.id == selectedId }
         val ordered = sequence {
             if (selected != null) yield(selected)
@@ -38,14 +35,13 @@ internal object XrayAutoSelector {
             })
             yieldAll(nodes.asSequence().filter { it.id != selectedId })
         }
-        val chosen = ArrayList<SubscriptionNode>(MAX_CANDIDATES)
+        val chosen = ArrayList<SubscriptionNode>()
         val seen = HashSet<String>()
         for (node in ordered) {
             if (!seen.add(node.id)) continue
             if (bayEnabled && !LICBay.plan(node).supported) continue
             if (!isSupported(node)) continue
             chosen.add(node)
-            if (chosen.size == MAX_CANDIDATES) break
         }
         return chosen
     }

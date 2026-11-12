@@ -144,6 +144,86 @@ internal object XrayConfigCompiler {
         }
     }
 
+    /**
+     * All imported compatible endpoints share ONE core and authenticated SOCKS
+     * listener. Native leastPing routes new streams using verified HTTPS probe
+     * results; existing streams retain their outbound. No direct outbound exists.
+     * The initial encrypted fallback is usable while the first scan completes.
+     */
+    fun compileAuto(
+        nodes: List<SubscriptionNode>,
+        auth: LocalSocksAuth,
+        bayPort: Int? = null,
+        assistMode: String = RealityAssistPolicy.PROFILE,
+        probeUrl: String = "https://example.com/",
+    ): Result {
+        if (probeUrl !in setOf("https://example.com/",
+                "https://cp.cloudflare.com/generate_204"))
+            return Result.Unsupported("Invalid Auto health target")
+        var root: JsonObject? = null
+        val outbounds = JsonArray()
+        val tags = JsonArray()
+        val explicit = RealityAssistPolicy.explicitFingerprint(assistMode)
+        for (node in nodes.distinctBy { it.id }) {
+            val stock = compile(node, auth, bayPort, explicit) as? Result.Compiled
+                ?: continue
+            val stockRoot = JsonParser.parseString(stock.json).asJsonObject
+            if (root == null) root = stockRoot.deepCopy()
+            val variants = mutableListOf<JsonObject>()
+            // An enabled helper really participates in Auto. Keep the original
+            // authenticated profile as fallback; never rewrite provider keys,
+            // transport, SNI, Vision flow or XHTTP parameters.
+            if (assistMode == RealityAssistPolicy.SMART && bayPort == null &&
+                RealityAssistPolicy.baselineFingerprint(stock.json) != null) {
+                for (fp in listOf(RealityAssistPolicy.FIREFOX, RealityAssistPolicy.CHROME)) {
+                    val helper = compile(node, auth, null, fp,
+                        RealityTcpTricks.DEFAULT_HELPER) as? Result.Compiled
+                    if (helper != null) variants.add(JsonParser.parseString(helper.json)
+                        .asJsonObject.getAsJsonArray("outbounds")[0].asJsonObject.deepCopy())
+                }
+            }
+            variants.add(stockRoot.getAsJsonArray("outbounds")[0].asJsonObject.deepCopy())
+            for (outbound in variants) {
+                val tag = "lic-auto-${tags.size()}"
+                outbound.addProperty("tag", tag)
+                tags.add(tag)
+                outbounds.add(outbound)
+            }
+        }
+        val config = root ?: return Result.Unsupported("No compatible Auto servers")
+        if (bayPort != null) outbounds.add(config.getAsJsonArray("outbounds")[1].deepCopy())
+        config.add("outbounds", outbounds)
+        config.add("observatory", JsonObject().apply {
+            add("subjectSelector", JsonArray().apply { add("lic-auto-") })
+            addProperty("probeUrl", probeUrl)
+            // Probe the full pool initially, then sleep between rounds. A
+            // large subscription must not wake hundreds of flows every 10s.
+            addProperty("probeInterval", when {
+                tags.size() > 100 -> "180s"
+                tags.size() > 24 -> "90s"
+                else -> "30s"
+            })
+            addProperty("enableConcurrency", true)
+        })
+        config.add("routing", JsonObject().apply {
+            addProperty("domainStrategy", "AsIs")
+            add("balancers", JsonArray().apply { add(JsonObject().apply {
+                addProperty("tag", "lic-auto-best")
+                add("selector", JsonArray().apply { add("lic-auto-") })
+                addProperty("fallbackTag", tags[0].asString)
+                add("strategy", JsonObject().apply { addProperty("type", "leastPing") })
+            }) })
+            add("rules", JsonArray().apply { add(JsonObject().apply {
+                addProperty("type", "field")
+                add("network", com.google.gson.JsonPrimitive("tcp,udp"))
+                addProperty("balancerTag", "lic-auto-best")
+            }) })
+        })
+        // A single probe can be blocked independently of the user's traffic;
+        // startup/watchdog also verify a second independent HTTPS target.
+        return Result.Compiled(config.toString(), "AUTO")
+    }
+
     private fun convert(src: JsonObject): JsonObject? {
         val type = src.get("type")?.asString ?: return null
         val server = src.get("server")?.asString ?: return null

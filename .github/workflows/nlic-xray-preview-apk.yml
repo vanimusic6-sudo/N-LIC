@@ -2,7 +2,7 @@ name: N-LIC V2 Release APK (DEV signed)
 
 on:
   push:
-    branches: [feature/nlic-xray-core-20261104, feature/nlic-dual-mode-resilience-20261104 , feature/nlic-v2-ui-core, feature/lic-assist-reality-tcp-20261105, feature/lic-reality-smart-assist-20261105, fix/lic-reality-visible-status-20261105, fix/lic-assist-main-switch-20261105, feature/lic-assist-reality-ab-test-20261105, feature/lic-reality-diagnostics-v2-20261105, feature/lic-reality-stream-pcap-audit-20261105, feature/lic-reality-adaptive-selection-20261105, feature/lic-reality-transport-tricks-20261105, fix/lic-assist-unified-workbench-20261105, feature/lic-helper-dual-firstflight-20261106, feature/lic-helper-hardening-thermal-20261106, feature/nlic-field-failover-20261111, feature/nlic-xhttp-real-transport-20261111, feature/nlic-awg31-packet-engine-20261112]
+    branches: [feature/nlic-xray-core-20261104, feature/nlic-dual-mode-resilience-20261104 , feature/nlic-v2-ui-core, feature/lic-assist-reality-tcp-20261105, feature/lic-reality-smart-assist-20261105, fix/lic-reality-visible-status-20261105, fix/lic-assist-main-switch-20261105, feature/lic-assist-reality-ab-test-20261105, feature/lic-reality-diagnostics-v2-20261105, feature/lic-reality-stream-pcap-audit-20261105, feature/lic-reality-adaptive-selection-20261105, feature/lic-reality-transport-tricks-20261105, fix/lic-assist-unified-workbench-20261105, feature/lic-helper-dual-firstflight-20261106, feature/lic-helper-hardening-thermal-20261106, feature/nlic-field-failover-20261111, feature/nlic-xhttp-real-transport-20261111, feature/nlic-awg31-packet-engine-20261112, feature/nlic-one-tap-resilience-20261112]
     paths:
       - app/**
       - tools/reality_clienthello_audit.py
@@ -166,8 +166,8 @@ jobs:
           mkdir -p xray-preview
           apk="$(find app/build/outputs/apk/release -type f -name '*arm64-v8a*release*.apk' -print -quit)"
           test -s "$apk"
-          cp "$apk" xray-preview/N-LIC-V2-2.1.1-arm64-Release-DEV.apk
-          apk=xray-preview/N-LIC-V2-2.1.1-arm64-Release-DEV.apk
+          cp "$apk" xray-preview/N-LIC-2.1.2-OneTap-arm64-DEV.apk
+          apk=xray-preview/N-LIC-2.1.2-OneTap-arm64-DEV.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$apk" > xray-preview/SIGNATURE.txt
           grep -iq '9eac8ece5fb89eeacb03c5eff20155724a206d73180d58c78fc7d3911dbee5c5' xray-preview/SIGNATURE.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" > xray-preview/APK_METADATA.txt
@@ -186,7 +186,7 @@ jobs:
               assert 'lib/arm64-v8a/libbyedpi.so' in entries, 'Stable ByeDPI rollback missing'
           PY
           cat > xray-preview/READ_ME_FIRST.txt <<'EOF'
-          N-LIC V2 version 2.1.1-v2-preview (versionCode 2101).
+          N-LIC version 2.1.2-one-tap-dev (versionCode 2102).
           DEV-signed optimized Release APK, not a production signing key.
           Xray-core provided by 2dust/AndroidLibXrayLite v26.10.31.
           Native AAR SHA256:
@@ -218,3 +218,57 @@ jobs:
         run: |
           rm -rf .signing
           rm -f app/libs/libv2ray.aar
+
+  publish_one_tap_dev:
+    name: Publish verified One-Tap DEV APK to GitHub Releases
+    needs: xray_preview
+    if: github.ref == 'refs/heads/feature/nlic-one-tap-resilience-20261112'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: v2.1.2-dev-20261112
+    steps:
+      - name: Download exact artifact from the successful build in this run
+        uses: actions/download-artifact@v4
+        with:
+          name: N-LIC-V2-ARM64-DevSigned
+          path: dist
+      - name: Verify APK checksum and publish DEV release
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=dist/N-LIC-2.1.2-OneTap-arm64-DEV.apk
+          test -s "$apk"
+          expected="$(awk 'NF { print $1; exit }' dist/SHA256SUMS.txt)"
+          actual="$(sha256sum "$apk" | awk '{ print $1 }')"
+          test -n "$expected"
+          test "$actual" = "$expected"
+          printf '%s  %s\n' "$actual" "$(basename "$apk")" > dist/SHA256SUMS.txt
+          cat > /tmp/release-notes.md <<'NOTES'
+          N-LIC 2.1.2 DEV · ARM64 · оптимизированная Release-сборка с DEV-подписью.
+
+          Скачайте **N-LIC-2.1.2-OneTap-arm64-DEV.apk** в Assets ниже.
+
+          - Главный экран с одной большой кнопкой; настройки подключения раскрываются отдельно.
+          - LIC Auto использует все совместимые импортированные локации, без прежнего ограничения 6/12/24.
+          - Одно ядро сравнивает HTTPS-задержку маршрутов и выбирает лучший для новых соединений без перезапуска VPN; уже открытые потоки остаются на своём маршруте.
+          - Защитные варианты LIC-helper участвуют в Auto вместе с исходными REALITY-профилями.
+          - Автовосстановление после первой неудачной попытки, повторный поиск при потере связи и ожидание появления сети.
+          - Параллельные HTTPS-проверки с отменой оставшихся запросов после успеха; кнопка «Остановить» работает во время подключения и восстановления.
+          - Яркая жёлтая иконка с контрастным знаком N.
+
+          APK публикуется только после успешной сборки, модульных тестов, lint и проверки DEV-подписи. Обход на конкретном операторе и работа на телефоне требуют полевой проверки.
+          NOTES
+          printf '\nCommit: `%s`\nBuild: https://github.com/%s/actions/runs/%s\n' "$GITHUB_SHA" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> /tmp/release-notes.md
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Refusing to overwrite existing release $RELEASE_TAG" >&2
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" "$apk" dist/SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title 'N-LIC 2.1.2 DEV — одна кнопка (ARM64)' \
+            --notes-file /tmp/release-notes.md --prerelease --latest=false

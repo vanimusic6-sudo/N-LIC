@@ -30,14 +30,13 @@ internal data class EndpointCheck(
 }
 
 internal object LICAuto {
-    private const val MAX_NODES = 24
     private const val ATTEMPTS = 2
     private const val CONNECT_TIMEOUT_MS = 1400
     private val UDP_PROTOCOLS = setOf("HYSTERIA2", "HY2", "TUIC")
 
     suspend fun check(nodes: List<SubscriptionNode>): List<EndpointCheck> = coroutineScope {
         val limiter = Semaphore(3)
-        nodes.take(MAX_NODES).map { node ->
+        nodes.distinctBy { it.id }.map { node ->
             async(Dispatchers.IO) {
                 limiter.withPermit {
                     coroutineContext.ensureActive()

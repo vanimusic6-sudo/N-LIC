@@ -140,7 +140,7 @@ internal object SingBoxConfigCompiler {
             if (result !is Result.Compiled) return@mapNotNull null
             val root = JsonParser.parseString(result.config).asJsonObject
             node to root
-        }.take(12).toList()
+        }.toList()
         if (valid.isEmpty()) {
             return Result.Unsupported("No compatible servers for LIC-Auto and LIC-Bay")
         }

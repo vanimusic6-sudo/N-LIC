@@ -46,6 +46,12 @@ object ServiceManager {
     private var recoveryArmed = false
     private var recoveryAttempts = 0
 
+    val isConnecting: Boolean get() = session?.let {
+        !it.stopping && !it.started.isCompleted
+    } == true
+    val isRecovering: Boolean get() = recoveryArmed && recoveryAttempts > 0 &&
+        (recoveryJob?.isActive == true || isConnecting)
+
     // This field is intentionally process-local and contains only a fixed
     // diagnostic code. Never persist a native exception or subscription URI.
     @Volatile var lastCoreFailureCode: String? = null
@@ -268,6 +274,10 @@ object ServiceManager {
         current.expectedCore = mode == Mode.VPN &&
             app.getPreferences().getBoolean("nlic_core_mode", false)
         session = current
+        // Arm on explicit connection intent, including the very first failed
+        // scan. Invalid imports/native crashes remain excluded by policy.
+        if (current.expectedCore && app.getPreferences()
+                .getBoolean("nlic_core_auto", false)) recoveryArmed = true
         if (current.expectedCore) {
             lastCoreFailureCode = null
             io.github.romanvht.byedpi.subscription.CoreFailureTrace.clear(app)
@@ -473,8 +483,24 @@ object ServiceManager {
         recoveryJob?.cancel()
         val waitMs = AutoRecoveryPolicy.delayMs(recoveryAttempts++)
         val token = commands.get()
+        // Rotate only the fixed HTTPS health endpoint after a failed round:
+        // blocking a connectivity site must not poison every subsequent scan.
+        app.getPreferences().edit().putString("nlic_auto_probe_url",
+            if (recoveryAttempts % 2 == 1) "https://cp.cloudflare.com/generate_204"
+            else "https://example.com/").apply()
         recoveryJob = scope.launch {
             delay(waitMs)
+            // Internet-capable physical link only; Android VALIDATED is not
+            // required because captive-portal checks themselves may be blocked.
+            val connectivity = app.getSystemService(Context.CONNECTIVITY_SERVICE)
+                as? ConnectivityManager
+            while (commands.get() == token && recoveryArmed &&
+                connectivity != null && connectivity.allNetworks.none { network ->
+                    connectivity.getNetworkCapabilities(network)?.let { caps ->
+                        caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                            !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                    } == true
+                }) delay(5_000L)
             // Never revive a stopped or manually reconfigured VPN.
             if (commands.get() != token || session != null ||
                 TestService.isRunning || !recoveryArmed ||

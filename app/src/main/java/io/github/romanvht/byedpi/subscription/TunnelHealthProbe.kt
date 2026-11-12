@@ -1,5 +1,12 @@
 package io.github.romanvht.byedpi.subscription
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
+import java.util.concurrent.atomic.AtomicReference
 import java.io.DataInputStream
 import java.io.EOFException
 import java.net.InetSocketAddress
@@ -62,6 +69,40 @@ internal object TunnelHealthProbe {
         target: String = TARGET,
     ): Boolean = probe(host, port, auth, target) == EgressResult.OK
 
+    /** Close blocking sockets on cancellation, so a slow probe cannot hold
+     * the winning connection or user disconnect until its read times out. */
+    suspend fun probeCancellable(
+        host: String, port: Int, auth: LocalSocksAuth?, target: String,
+    ): EgressResult = withContext(Dispatchers.IO) {
+        suspendCancellableCoroutine { continuation ->
+            val active = AtomicReference<Socket?>()
+            continuation.invokeOnCancellation { runCatching { active.getAndSet(null)?.close() } }
+            val result = probeDetailed(host, port, auth, target) { socket ->
+                active.set(socket)
+                if (!continuation.isActive) socket.close()
+            }.result
+            active.set(null)
+            continuation.resume(result)
+        }
+    }
+
+    suspend fun checkAny(host: String, port: Int, auth: LocalSocksAuth?): Boolean = coroutineScope {
+        val checks = listOf("example.com", "cp.cloudflare.com").map { target ->
+            async { probeCancellable(host, port, auth, target) }
+        }.toMutableList()
+        try {
+            while (checks.isNotEmpty()) {
+                val (job, result) = kotlinx.coroutines.selects.select<
+                    Pair<kotlinx.coroutines.Deferred<EgressResult>, EgressResult>> {
+                    checks.forEach { check -> check.onAwait { check to it } }
+                }
+                checks.remove(job)
+                if (result == EgressResult.OK) return@coroutineScope true
+            }
+            false
+        } finally { checks.forEach { it.cancel() } }
+    }
+
     /**
      * Stage measurements for an HTTPS request through the existing SOCKS5
      * tunnel. IMPORTANT: SOCKS CONNECT is not a direct measurement of the
@@ -85,6 +126,7 @@ internal object TunnelHealthProbe {
     internal fun probeDetailed(
         host: String, port: Int, auth: LocalSocksAuth? = null,
         target: String = TARGET,
+        onSocket: (Socket) -> Unit = {},
     ): DetailedProbe {
         val path = requireNotNull(TRUSTED_HTTPS_PROBES[target])
         val started = System.nanoTime()
@@ -96,8 +138,10 @@ internal object TunnelHealthProbe {
         var httpMs: Long? = null
         val result = try {
             Socket().use { socket ->
-                socket.connect(InetSocketAddress(host, port), TIMEOUT)
-                socket.soTimeout = TIMEOUT
+                onSocket(socket)
+                fun remaining(): Int = (TIMEOUT - elapsed()).coerceAtLeast(1L).toInt()
+                socket.connect(InetSocketAddress(host, port), remaining())
+                socket.soTimeout = remaining()
                 localTcpMs = elapsed()
                 stage = EgressResult.SOCKS
                 connectDomain(socket, target, 443, auth)
@@ -105,7 +149,7 @@ internal object TunnelHealthProbe {
                 stage = EgressResult.TLS
                 val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
                 (factory.createSocket(socket, target, 443, true) as SSLSocket).use { tls ->
-                    tls.soTimeout = TIMEOUT
+                    tls.soTimeout = remaining()
                     tls.sslParameters = tls.sslParameters.apply {
                         endpointIdentificationAlgorithm = "HTTPS"
                     }
@@ -119,6 +163,8 @@ internal object TunnelHealthProbe {
                     val line = StringBuilder()
                     val input = tls.inputStream
                     while (line.length < 128) {
+                        if (elapsed() >= TIMEOUT) throw SocketTimeoutException()
+                        tls.soTimeout = remaining()
                         val ch = input.read()
                         if (ch < 0 || ch == 10) break
                         line.append(ch.toChar())

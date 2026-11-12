@@ -1,6 +1,7 @@
 package io.github.romanvht.byedpi.subscription
 
 import java.io.DataInputStream
+import kotlinx.coroutines.launch
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.Executors
@@ -197,6 +198,30 @@ class TunnelHealthProbeTest {
             val port = server.localPort
             server.close()
             assertFalse(TunnelHealthProbe.check("127.0.0.1", port))
+        }
+    }
+    @Test fun cancellingProbeClosesStalledSocketWithoutWaitingForTimeout() = kotlinx.coroutines.runBlocking {
+        ServerSocket(0).use { server ->
+            val accepted = java.util.concurrent.CountDownLatch(1)
+            val closed = java.util.concurrent.CountDownLatch(1)
+            val peer = kotlin.concurrent.thread(isDaemon = true) {
+                server.accept().use { socket ->
+                    socket.soTimeout = 2_000
+                    accepted.countDown()
+                    try {
+                        while (socket.inputStream.read() >= 0) { }
+                        closed.countDown()
+                    } catch (_: Exception) { }
+                }
+            }
+            val job = launch(kotlinx.coroutines.Dispatchers.IO) {
+                TunnelHealthProbe.probeCancellable("127.0.0.1", server.localPort, null, "example.com")
+            }
+            assertTrue(accepted.await(1, java.util.concurrent.TimeUnit.SECONDS))
+            job.cancel()
+            kotlinx.coroutines.withTimeout(1_000L) { job.join() }
+            assertTrue(closed.await(1, java.util.concurrent.TimeUnit.SECONDS))
+            peer.join(1_000L)
         }
     }
 }

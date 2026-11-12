@@ -46,6 +46,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -328,53 +329,37 @@ internal class NativeSession(
                         }
                         if (eligible.isEmpty()) throw CoreStartException("BAY_UDP_UNAVAILABLE")
 
-                        // LIC-Auto commits the FIRST verified encrypted egress.
-                        // Keep its core alive: no ranking scan or second handshake.
-                        val selected = if (autoEnabled) {
-                            var firstVerified:
-                                io.github.romanvht.byedpi.subscription.SubscriptionNode? = null
-                            for (candidate in eligible) {
-                                corePhase = "AUTO_PROBE"; CoreFailureTrace.mark(service, corePhase)
-                                val compiled = XrayConfigCompiler.compile(
-                                    candidate, auth, if (bayEnabled) bayPort else null,
-                                    realityFingerprint
-                                ) as? XrayConfigCompiler.Result.Compiled ?: continue
-                                val trial = XrayRuntime(service)
-                                xrayEngine = trial
-                                var passedAutoProbe = false
-                                try {
-                                    withContext(Dispatchers.IO) { trial.start(compiled.json) }
-                                    withTimeout(5_000) {
-                                        awaitProxy(config.host, config.port, auth)
-                                    }
-                                    // Core HTTPS is certificate-validated,
-                                    // not a bare TCP/SOCKS handshake.
-                                    val nativeMs = withContext(Dispatchers.IO) {
-                                        trial.measureHttpsLatencyMs() ?:
-                                            trial.measureHttpsLatencyMs(
-                                                "https://cp.cloudflare.com/generate_204")
-                                    }
-                                    if (nativeMs != null) {
-                                        firstVerified = candidate
-                                        passedAutoProbe = true
-                                    }
-                                } catch (cancelled: CancellationException) {
-                                    if (cancelled !is TimeoutCancellationException) throw cancelled
-                                } catch (_: Exception) {
-                                    // Suppress credential-bearing native exceptions.
-                                } finally {
-                                    if (!passedAutoProbe) {
-                                        withContext(NonCancellable + Dispatchers.IO) {
-                                            trial.close()
-                                        }
-                                        if (xrayEngine === trial) xrayEngine = null
-                                        delay(100)
+                        // The native observer races every compatible encrypted
+                        // outbound in one core. New connections use the measured
+                        // best route, while existing streams stay on their node.
+                        if (autoEnabled) {
+                            corePhase = "AUTO_PROBE"; CoreFailureTrace.mark(service, corePhase)
+                            val autoPlan = withContext(Dispatchers.IO) {
+                                XrayConfigCompiler.compileAuto(eligible, auth,
+                                    if (bayEnabled) bayPort else null, assistMode,
+                                    service.getPreferences().getString(
+                                        "nlic_auto_probe_url", "https://example.com/")
+                                        ?: "https://example.com/")
+                            } as? XrayConfigCompiler.Result.Compiled
+                                ?: throw CoreStartException("AUTO_NO_WORKING_SERVER")
+                            val trial = XrayRuntime(service)
+                            xrayEngine = trial
+                            withContext(Dispatchers.IO) { trial.start(autoPlan.json) }
+                            withTimeout(5_000L) { awaitProxy(config.host, config.port, auth) }
+                            corePhase = "REMOTE_TEST"; CoreFailureTrace.mark(service, corePhase)
+                            try {
+                                withTimeout(18_000L) {
+                                    while (!TunnelHealthProbe.checkAny(config.host, config.port, auth)) {
+                                        delay(150L)
                                     }
                                 }
-                                if (passedAutoProbe) break
+                            } catch (cancelled: TimeoutCancellationException) {
+                                throw CoreStartException("AUTO_NO_WORKING_SERVER")
                             }
-                            firstVerified ?: throw CoreStartException("AUTO_NO_WORKING_SERVER")
-                        } else eligible.first()
+                        }
+                        // Metadata only. Auto selection is managed by the core;
+                        // do not overwrite the user's manually selected node.
+                        val selected = eligible.first()
 
                         val baselinePlan = XrayConfigCompiler.compile(
                             selected, auth, if (bayEnabled) bayPort else null
@@ -387,7 +372,7 @@ internal class NativeSession(
                         // the Duet/FinalMask layer cannot reach that socket.
                         val adaptive = eligibleReality && !autoEnabled && !bayEnabled &&
                             assistMode == RealityAssistPolicy.SMART
-                        val traceEligible = eligibleReality &&
+                        val traceEligible = !autoEnabled && eligibleReality &&
                             (!autoEnabled || assistMode != RealityAssistPolicy.SMART) &&
                             !(bayEnabled && assistMode == RealityAssistPolicy.SMART)
 
@@ -627,13 +612,6 @@ internal class NativeSession(
                             if (passed) break
                         }
                         if (!xrayReady) throw CoreStartException("REALITY_EGRESS")
-                        // Save only the actually verified Auto winner.
-                        // Explicit manual selections are never overwritten.
-                        if (autoEnabled) withContext(Dispatchers.IO) {
-                            runCatching {
-                                SubscriptionVault.select(service, selected.id)
-                            }
-                        }
                         val physical = NetworkEnvironment.capture(service)
                         val mtu = AccessPolicy.tunMtu(
                             physical,
@@ -996,11 +974,10 @@ internal class NativeSession(
             var failures = 0
             while (state == EngineProtocol.STATE_RUNNING) {
                 delay(if (failures == 0) 30_000L else 8_000L)
-                val engine = xrayEngine ?: break
+                if (xrayEngine == null) break
                 val healthy = withContext(Dispatchers.IO) {
-                    engine.measureHttpsLatencyMs() != null ||
-                        engine.measureHttpsLatencyMs(
-                            "https://cp.cloudflare.com/generate_204") != null
+                    TunnelHealthProbe.checkAny("127.0.0.1",
+                        XrayConfigCompiler.SOCKS_PORT, localAuth)
                 }
                 if (state != EngineProtocol.STATE_RUNNING) break
                 if (healthy) failures = 0
@@ -1024,15 +1001,32 @@ internal class NativeSession(
             "www.gstatic.com", "cp.cloudflare.com",
             "example.com", "www.wikipedia.org",
         )
-        val outcomes = mutableListOf<TunnelHealthProbe.EgressResult>()
-        for ((index, target) in targets.withIndex()) {
-            val result = withContext(Dispatchers.IO) {
-                TunnelHealthProbe.probe(host, port, auth, target)
+        val outcomes = kotlinx.coroutines.coroutineScope {
+            val checks = targets.map { target ->
+                async(Dispatchers.IO) {
+                    TunnelHealthProbe.probeCancellable(host, port, auth, target)
+                }
             }
-            if (result == TunnelHealthProbe.EgressResult.OK) return
-            outcomes += result
-            if (index < targets.lastIndex) delay(300)
+            val pending = checks.toMutableList()
+            val results = mutableListOf<TunnelHealthProbe.EgressResult>()
+            try {
+                while (pending.isNotEmpty()) {
+                    val (job, result) = kotlinx.coroutines.selects.select<
+                        Pair<kotlinx.coroutines.Deferred<TunnelHealthProbe.EgressResult>,
+                            TunnelHealthProbe.EgressResult>> {
+                        pending.forEach { check -> check.onAwait { check to it } }
+                    }
+                    pending.remove(job)
+                    if (result == TunnelHealthProbe.EgressResult.OK) {
+                        checks.forEach { it.cancel() }
+                        return@coroutineScope listOf(result)
+                    }
+                    results.add(result)
+                }
+                results
+            } finally { checks.forEach { it.cancel() } }
         }
+        if (TunnelHealthProbe.EgressResult.OK in outcomes) return
         // Differentiate local connection, SOCKS outbound, verified TLS and
         // HTTP response failures. Persist only enum names, not destinations.
         val mostFrequent = outcomes.groupingBy { it }.eachCount()
