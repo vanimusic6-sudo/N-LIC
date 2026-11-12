@@ -172,7 +172,7 @@ jobs:
           grep -iq '9eac8ece5fb89eeacb03c5eff20155724a206d73180d58c78fc7d3911dbee5c5' xray-preview/SIGNATURE.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" > xray-preview/APK_METADATA.txt
           grep -q 'io.github.vanimusic6sudo.nlic' xray-preview/APK_METADATA.txt
-          grep -q "versionCode='2101'" xray-preview/APK_METADATA.txt
+          grep -q "versionCode='2102'" xray-preview/APK_METADATA.txt
           if grep -q '^application-debuggable' xray-preview/APK_METADATA.txt; then exit 1; fi
           python3 - "$apk" <<'PY'
           import sys,zipfile
