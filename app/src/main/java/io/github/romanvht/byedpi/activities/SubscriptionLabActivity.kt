@@ -835,7 +835,7 @@ class SubscriptionLabActivity : BaseActivity() {
         }
         findViewById<TextView>(R.id.nlic_server_hint).text = when {
             all.isEmpty() -> getString(R.string.nlic_control_start_hint)
-            auto -> getString(R.string.nlic_core_auto_desc)
+            auto -> getString(R.string.nlic_auto_catalog_hint)
             selected == null -> getString(R.string.nlic_ui_step_choose)
             selected.protocol == "AMNEZIAWG" ->
                 getString(R.string.nlic_awg_requires_native)
@@ -873,7 +873,8 @@ class SubscriptionLabActivity : BaseActivity() {
             (realityCompatible || autoRealityCompatible)
         assistHint.setText(when {
             runningVpn -> R.string.nlic_reality_smart_disconnect
-            auto && autoRealityCompatible -> R.string.nlic_helper_auto_hint
+            auto && autoRealityCompatible && assistMode == RealityAssistPolicy.SMART ->
+                R.string.nlic_helper_auto_hint
             !realityCompatible -> R.string.nlic_reality_smart_need_server
             bay -> R.string.nlic_reality_smart_disable_bay
             assistMode == RealityAssistPolicy.SMART -> R.string.nlic_reality_smart_on

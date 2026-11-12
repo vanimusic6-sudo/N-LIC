@@ -12,4 +12,5 @@
     <string name="nlic_setup_hint">Один раз добавьте подписку или сервер. После настройки останется одна кнопка.</string>
     <string name="nlic_auto_full_pool">Авто · все локации (%1$d)</string>
     <string name="nlic_helper_auto_hint">Auto проверяет обычные и защитные варианты REALITY. Рабочий маршрут выбирает ядро.</string>
+    <string name="nlic_auto_catalog_hint">Все совместимые локации участвуют в HTTPS-проверке. Ядро выбирает лучшую по задержке для новых соединений, сохраняя уже открытые потоки.</string>
 </resources>

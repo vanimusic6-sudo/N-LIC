@@ -1,4 +1,4 @@
 <resources>
     <string name="nlic_xray_bay_hint" translatable="false">LIC-Bay передаёт TCP и UDP от Xray к VPN-серверу через локальный SOCKS5 ByeDPI. Для WireGuard используется UDP ASSOCIATE. Работоспособность обхода DPI и UDP не гарантируется; прямого обходного маршрута при ошибке нет.</string>
-    <string name="nlic_xray_auto_failed" translatable="false">LIC-Auto не нашёл рабочего зашифрованного подключения среди проверенных серверов. Проверяются до трёх узлов по настоящему HTTPS через Xray; обычный TCP-пинг не считается успешным VPN. Попробуй другой сервер или отключи Bay для диагностики.</string>
+    <string name="nlic_xray_auto_failed" translatable="false">Не найдено работающее подключение среди совместимых локаций. НЛИК повторит HTTPS-проверку автоматически. Можно остановить поиск кнопкой на главном экране.</string>
 </resources>
