@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nlic_one_tap_hint">Түймені басыңыз. N-LIC қосылымды өзі таңдап, ақау болса қалпына келтіреді.</string>
+    <string name="nlic_one_tap_connecting">Жұмыс істейтін қосылым ізделуде. Төмендегі түймемен тоқтатуға болады.</string>
+    <string name="nlic_one_tap_connected">Қолданбаны кішірейтіп, интернетті пайдалана беруге болады.</string>
+    <string name="nlic_reconnecting">Байланыс қалпына келтірілуде</string>
+    <string name="nlic_reconnecting_hint">N-LIC іздеуді автоматты түрде қайталайды. Ештеңе басудың қажеті жоқ.</string>
+    <string name="nlic_connection_options">Қосылым параметрлері</string>
+    <string name="nlic_hide_options">Қосылым параметрлерін жасыру</string>
+    <string name="nlic_cancel_connection">Тоқтату</string>
+    <string name="nlic_setup_connection">Қосылымды баптау</string>
+    <string name="nlic_setup_hint">Жазылымды немесе серверді бір рет қосыңыз. Баптаудан кейін бір түйме жеткілікті.</string>
+    <string name="nlic_auto_full_pool">Авто · барлық орындар (%1$d)</string>
+    <string name="nlic_helper_auto_hint">Авто режимі бастапқы және көмекші REALITY профильдерін тексереді. Жұмыс істейтін бағытты ядро таңдайды.</string>
+    <string name="nlic_auto_catalog_hint">Барлық үйлесімді орындар HTTPS арқылы тексеріледі. Ядро жаңа қосылымдар үшін кідірісі ең аз бағытты таңдап, ашық ағындарды сақтайды.</string>
+</resources>

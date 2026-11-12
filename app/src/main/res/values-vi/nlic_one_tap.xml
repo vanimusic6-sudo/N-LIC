@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nlic_one_tap_hint">Nhấn nút. N-LIC sẽ chọn kết nối và tự khôi phục nếu kết nối gặp lỗi.</string>
+    <string name="nlic_one_tap_connecting">Đang tìm kết nối hoạt động. Nhấn nút bên dưới để hủy.</string>
+    <string name="nlic_one_tap_connected">Bạn có thể thu nhỏ ứng dụng và sử dụng internet.</string>
+    <string name="nlic_reconnecting">Đang kết nối lại</string>
+    <string name="nlic_reconnecting_hint">N-LIC sẽ tự động tìm lại. Bạn không cần thao tác thêm.</string>
+    <string name="nlic_connection_options">Cài đặt kết nối</string>
+    <string name="nlic_hide_options">Ẩn cài đặt kết nối</string>
+    <string name="nlic_cancel_connection">Dừng</string>
+    <string name="nlic_setup_connection">Thiết lập kết nối</string>
+    <string name="nlic_setup_hint">Thêm gói đăng ký hoặc máy chủ một lần. Sau khi thiết lập, bạn chỉ cần một nút.</string>
+    <string name="nlic_auto_full_pool">Tự động · mọi vị trí (%1$d)</string>
+    <string name="nlic_helper_auto_hint">Chế độ Tự động kiểm tra các cấu hình REALITY gốc và hỗ trợ. Lõi chọn tuyến đang hoạt động.</string>
+    <string name="nlic_auto_catalog_hint">Mọi vị trí tương thích đều được kiểm tra qua HTTPS. Lõi chọn tuyến có độ trễ thấp nhất cho kết nối mới và giữ nguyên các luồng hiện có.</string>
+</resources>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nlic_one_tap_hint">Düğmeye basın. N-LIC bir bağlantı seçer ve hata olursa bağlantıyı otomatik olarak yeniden kurar.</string>
+    <string name="nlic_one_tap_connecting">Çalışan bir bağlantı aranıyor. İptal etmek için aşağıdaki düğmeye basın.</string>
+    <string name="nlic_one_tap_connected">Uygulamayı küçültüp interneti kullanabilirsiniz.</string>
+    <string name="nlic_reconnecting">Yeniden bağlanıyor</string>
+    <string name="nlic_reconnecting_hint">N-LIC aramayı otomatik olarak tekrarlar. Bir işlem yapmanız gerekmez.</string>
+    <string name="nlic_connection_options">Bağlantı ayarları</string>
+    <string name="nlic_hide_options">Bağlantı ayarlarını gizle</string>
+    <string name="nlic_cancel_connection">Durdur</string>
+    <string name="nlic_setup_connection">Bağlantıyı ayarla</string>
+    <string name="nlic_setup_hint">Bir kez abonelik veya sunucu ekleyin. Kurulumdan sonra tek düğme yeterlidir.</string>
+    <string name="nlic_auto_full_pool">Otomatik · tüm konumlar (%1$d)</string>
+    <string name="nlic_helper_auto_hint">Otomatik mod, özgün ve yardımcı REALITY profillerini sınar. Çekirdek çalışan bir rota seçer.</string>
+    <string name="nlic_auto_catalog_hint">Tüm uyumlu konumlar HTTPS üzerinden sınanır. Çekirdek, mevcut akışları koruyarak yeni bağlantılar için en düşük gecikmeli rotayı seçer.</string>
+</resources>

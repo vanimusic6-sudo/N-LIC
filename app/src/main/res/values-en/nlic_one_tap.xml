@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nlic_one_tap_hint">Press the button. N-LIC will choose a connection and restore it if it fails.</string>
+    <string name="nlic_one_tap_connecting">Finding a working connection. Use the button below to cancel.</string>
+    <string name="nlic_one_tap_connected">You can minimize the app and use the internet.</string>
+    <string name="nlic_reconnecting">Reconnecting</string>
+    <string name="nlic_reconnecting_hint">N-LIC will search again automatically. No action is needed.</string>
+    <string name="nlic_connection_options">Connection settings</string>
+    <string name="nlic_hide_options">Hide connection settings</string>
+    <string name="nlic_cancel_connection">Stop</string>
+    <string name="nlic_setup_connection">Set up connection</string>
+    <string name="nlic_setup_hint">Add a subscription or server once. After setup, only one button is needed.</string>
+    <string name="nlic_auto_full_pool">Auto · all locations (%1$d)</string>
+    <string name="nlic_helper_auto_hint">Auto tests original and helper REALITY profiles. The core chooses a working route.</string>
+    <string name="nlic_auto_catalog_hint">All compatible locations are tested over HTTPS. The core chooses the lowest-latency route for new connections while preserving existing streams.</string>
+</resources>
