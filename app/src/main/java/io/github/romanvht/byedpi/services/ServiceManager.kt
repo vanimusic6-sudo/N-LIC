@@ -164,6 +164,7 @@ object ServiceManager {
 
     suspend fun waitStop() {
         clearRecovery()
+        lastCoreFailureCode = null
         commands.incrementAndGet()
         withContext(Dispatchers.Main.immediate + NonCancellable) {
             application?.let {
@@ -342,6 +343,9 @@ object ServiceManager {
             return
         }
         val current = Session(running.first, NativeEngine(app, running.first, running.second))
+        // Reattaching after UI process death must retain the Auto supervisor.
+        current.expectedCore = running.first == Mode.VPN &&
+            app.getPreferences().getBoolean("nlic_core_mode", false)
         session = current
         if (running.first == Mode.VPN) beginNetworkObservation(app)
         // A recovered process may still be initializing. Query its native
