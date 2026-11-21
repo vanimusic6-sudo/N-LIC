@@ -162,7 +162,16 @@ class MainActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         // Reconcile the actual OS VPN state before showing the cockpit,
         // including Always-on sessions restored after process death.
+
         ServiceManager.refresh(this)
+        // Scanning the TV QR never silently connects a VPN or exports data.
+        // The user must select and confirm which subscription to send.
+        if (intent?.action == Intent.ACTION_VIEW &&
+            intent.data?.scheme == "nlic" && intent.data?.host == "pair") {
+            startActivity(Intent(this, TvSendActivity::class.java).setData(intent.data))
+            finish()
+            return
+        }
         // Xray preview now launches into the actual two-mode cockpit,
         // preserving the old interface behind an explicit legacy action.
         if (BuildConfig.NLIC_XRAY_INCLUDED && savedInstanceState == null &&

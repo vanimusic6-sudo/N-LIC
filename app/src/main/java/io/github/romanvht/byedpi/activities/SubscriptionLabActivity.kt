@@ -19,6 +19,14 @@ import android.provider.OpenableColumns
 import java.io.ByteArrayOutputStream
 import android.text.InputType
 import android.view.View
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.graphics.Bitmap
+import android.graphics.Color
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
+import com.google.zxing.qrcode.QRCodeWriter
+import io.github.romanvht.byedpi.subscription.TvPairTransfer
 import android.view.WindowManager
 import android.widget.EditText
 import android.widget.ScrollView
@@ -71,6 +79,8 @@ class SubscriptionLabActivity : BaseActivity() {
     private var busy = false
     private var operationJob: kotlinx.coroutines.Job? = null
     private var advancedVisible = false
+    private var tvPair: TvPairTransfer.PairServer? = null
+    private var tvPairDialog: AlertDialog? = null
     private var lastConnectionState: String? = null
     private var locallyVerified = false
     private var latestMessage: String? = null
@@ -224,6 +234,17 @@ class SubscriptionLabActivity : BaseActivity() {
                 setup.putString("nlic_reality_tcp_utls", RealityAssistPolicy.SMART)
             setup.commit()
         }
+        val tvMode = isTelevision()
+        findViewById<View>(R.id.nlic_tv_receive).visibility =
+            if (tvMode) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.nlic_phone_send_tv).visibility =
+            if (tvMode) View.GONE else View.VISIBLE
+        findViewById<MaterialButton>(R.id.nlic_tv_receive).setOnClickListener {
+            showTvPairing()
+        }
+        findViewById<MaterialButton>(R.id.nlic_phone_send_tv).setOnClickListener {
+            startActivity(Intent(this, TvSendActivity::class.java))
+        }
         findViewById<MaterialButton>(R.id.nlic_connection_options).setOnClickListener {
             advancedVisible = !advancedVisible
             render()
@@ -306,6 +327,107 @@ class SubscriptionLabActivity : BaseActivity() {
         }
     }
 
+
+    private fun showTvPairing() {
+        if (tvPair != null) return
+        lifecycleScope.launch {
+            val pair = try {
+                withContext(Dispatchers.IO) {
+                    TvPairTransfer.openServer(applicationContext) { ok, count ->
+                        runOnUiThread {
+                            if (isFinishing || isDestroyed) return@runOnUiThread
+                            tvPairDialog?.dismiss()
+                            if (ok) {
+                                render()
+                                AlertDialog.Builder(this@SubscriptionLabActivity)
+                                    .setTitle("Подписка получена")
+                                    .setMessage("Получено профилей: " + count +
+                                        ". Теперь можно подключаться.")
+                                    .setPositiveButton(android.R.string.ok, null)
+                                    .show()
+                            } else {
+                                Toast.makeText(this@SubscriptionLabActivity,
+                                    "Время сопряжения истекло. Попробуйте ещё раз.",
+                                    Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                Toast.makeText(this@SubscriptionLabActivity,
+                    "Нет локальной сети. Подключите ТВ к Wi-Fi или Ethernet.",
+                    Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            tvPair = pair
+            val picture = try {
+                val matrix = QRCodeWriter().encode(
+                    pair.pairingUri.toString(), BarcodeFormat.QR_CODE, 360, 360,
+                    mapOf(EncodeHintType.MARGIN to 2)
+                )
+                Bitmap.createBitmap(360, 360, Bitmap.Config.ARGB_8888).apply {
+                    val pixels = IntArray(360 * 360)
+                    for (y in 0 until 360) for (x in 0 until 360) {
+                        pixels[y * 360 + x] =
+                            if (matrix[x, y]) Color.BLACK else Color.WHITE
+                    }
+                    setPixels(pixels, 0, 360, 0, 0, 360, 360)
+                }
+            } catch (_: Exception) {
+                pair.close()
+                tvPair = null
+                Toast.makeText(this@SubscriptionLabActivity,
+                    "Не удалось создать QR-код.", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            val column = LinearLayout(this@SubscriptionLabActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                val pad = tvDp(20)
+                setPadding(pad, tvDp(12), pad, tvDp(12))
+                addView(ImageView(this@SubscriptionLabActivity).apply {
+                    setImageBitmap(picture)
+                    adjustViewBounds = true
+                    layoutParams = LinearLayout.LayoutParams(
+                        tvDp(360), tvDp(360)).apply {
+                        gravity = android.view.Gravity.CENTER_HORIZONTAL
+                    }
+                })
+                addView(TextView(this@SubscriptionLabActivity).apply {
+                    text = "Откройте камеру телефона и наведите на QR. " +
+                        "Если камера не распознаёт ссылку, откройте N-LIC " +
+                        "на телефоне → «Отправить на ТВ»."
+                    textSize = 19f
+                    setPadding(0, tvDp(12), 0, tvDp(10))
+                })
+                addView(TextView(this@SubscriptionLabActivity).apply {
+                    text = "IP: " + pair.ip + "   Порт: " + pair.port +
+                        "\nКод: " + pair.pairingCode.chunked(11).joinToString("-")
+                    textSize = 14f
+                    setTextIsSelectable(true)
+                })
+                addView(TextView(this@SubscriptionLabActivity).apply {
+                    text = "Одноразовое подключение, 2 минуты. " +
+                        "Подписка передаётся только зашифрованной."
+                    textSize = 14f
+                })
+            }
+            val dialog = AlertDialog.Builder(this@SubscriptionLabActivity)
+                .setTitle("Получить подписку с телефона")
+                .setView(column)
+                .setNegativeButton("Закрыть", null)
+                .create()
+            tvPairDialog = dialog
+            dialog.setOnDismissListener {
+                pair.close()
+                if (tvPair === pair) tvPair = null
+                if (tvPairDialog === dialog) tvPairDialog = null
+                picture.recycle()
+            }
+            dialog.show()
+            pair.start()
+        }
+    }
+
     private fun isTelevision(): Boolean =
         (resources.configuration.uiMode and
             android.content.res.Configuration.UI_MODE_TYPE_MASK) ==
@@ -321,6 +443,8 @@ class SubscriptionLabActivity : BaseActivity() {
         val focusableIds = intArrayOf(
             R.id.nlic_connect,
             R.id.nlic_connection_options,
+            R.id.nlic_tv_receive,
+            R.id.nlic_phone_send_tv,
             R.id.nlic_settings_button,
             R.id.nlic_mode_bypass,
             R.id.nlic_mode_subscription,
@@ -390,6 +514,13 @@ class SubscriptionLabActivity : BaseActivity() {
         realityStatusVisible = false
         window.decorView.removeCallbacks(realityStatusTicker)
         super.onPause()
+    }
+
+    override fun onDestroy() {
+        tvPair?.close()
+        tvPairDialog?.dismiss()
+        tvPair = null
+        super.onDestroy()
     }
 
     override fun onStop() {

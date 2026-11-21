@@ -14,6 +14,7 @@ require(!(includeNativeLibbox && includeNativeXray)) {
 // without changing the arm64-only consumer Release DEV artifact.
 val abis = when {
     System.getenv("NLIC_EMULATOR_X86_ONLY") == "true" -> setOf("x86_64")
+    System.getenv("NLIC_TV_MULTI_ABI") == "true" -> setOf("armeabi-v7a", "arm64-v8a")
     (includeNativeLibbox || includeNativeXray) && System.getenv("NLIC_ARM64_ONLY") == "true" -> setOf("arm64-v8a")
     else -> setOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
 }
@@ -56,8 +57,8 @@ android {
         minSdk = if (includeNativeLibbox || includeNativeXray) 24 else 21
         //noinspection OldTargetApi
         targetSdk = 34
-        versionCode = 2103
-        versionName = "2.1.3-tv-dev"
+        versionCode = 2104
+        versionName = "2.1.4-tv-pair-dev"
         buildConfigField("boolean", "NLIC_LIBBOX_INCLUDED",
             if (includeNativeLibbox) "true" else "false")
 
@@ -183,6 +184,8 @@ dependencies {
     implementation("androidx.preference:preference-ktx:1.2.1")
     implementation("com.google.android.material:material:1.13.0")
     implementation("com.google.code.gson:gson:2.14.0")
+    // QR creation only; ZXing core 3.5.3 is Apache-2.0 licensed.
+    implementation("com.google.zxing:core:3.5.3")
     // Pin a modern TLS-validated HTTPS client; its DNS callback is used to
     // prevent DNS rebinding when importing user-provided subscription URLs.
     implementation("com.squareup.okhttp3:okhttp:5.3.2")
