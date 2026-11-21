@@ -142,7 +142,9 @@ jobs:
           grep -q 'startLoop' /tmp/nlic-xray-api.txt
           grep -q 'stopLoop' /tmp/nlic-xray-api.txt
           # Fail closed if this pinned gomobile AAR cannot run on 32-bit TVs.
-          unzip -Z1 app/libs/libv2ray.aar | grep -q '^jni/armeabi-v7a/.*gojni.*\.so
+          unzip -Z1 app/libs/libv2ray.aar > /tmp/nlic-xray-aar-entries.txt
+          grep -Eq '^jni/armeabi-v7a/.*gojni.*\.so$' /tmp/nlic-xray-aar-entries.txt
+          grep -Eq '^jni/arm64-v8a/.*gojni.*\.so$' /tmp/nlic-xray-aar-entries.txt
 
       - name: Restore isolated DEV signing identity
         shell: bash
