@@ -294,6 +294,9 @@ class SubscriptionLabActivity : BaseActivity() {
             } else requestConnection()
         }
         render()
+        // The normal phone layout and its touch behavior remain unchanged.
+        // Television mode adds explicit D-pad focus and Back navigation only.
+        if (isTelevision()) setupTvNavigation()
         // The home power button starts this Activity with an explicit visible
         // user gesture. Never autoplay VPN merely because Activity resumed
         // or was restored from background.
@@ -301,6 +304,78 @@ class SubscriptionLabActivity : BaseActivity() {
             intent.getBooleanExtra("nlic_quick_connect", false)) {
             window.decorView.post { requestConnection() }
         }
+    }
+
+    private fun isTelevision(): Boolean =
+        (resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_TYPE_MASK) ==
+            android.content.res.Configuration.UI_MODE_TYPE_TELEVISION ||
+            packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
+
+    private fun tvDp(value: Int): Int =
+        (value * resources.displayMetrics.density + 0.5f).toInt()
+
+    private fun setupTvNavigation() {
+        // All actions retain their existing onClick handlers. This is a
+        // presentation/focus layer, NOT another VPN connection path.
+        val focusableIds = intArrayOf(
+            R.id.nlic_connect,
+            R.id.nlic_connection_options,
+            R.id.nlic_settings_button,
+            R.id.nlic_mode_bypass,
+            R.id.nlic_mode_subscription,
+            R.id.nlic_server_picker_button,
+            R.id.nlic_manage_profiles,
+            R.id.nlic_reality_smart_switch,
+            R.id.nlic_reality_compare_button,
+            R.id.nlic_auto_switch,
+            R.id.nlic_bay_switch,
+            R.id.nlic_adaptive_switch
+        )
+        for (id in focusableIds) {
+            val control = findViewById<View>(id)
+            control.isFocusable = true
+            control.setOnFocusChangeListener { view, focused ->
+                if (view is MaterialButton) {
+                    val modeButton = id == R.id.nlic_mode_bypass ||
+                        id == R.id.nlic_mode_subscription
+                    view.strokeWidth = when {
+                        focused -> tvDp(3)
+                        modeButton -> tvDp(1)
+                        else -> 0
+                    }
+                    view.elevation = if (focused) tvDp(8).toFloat() else 0f
+                    val activeMode = (id == R.id.nlic_mode_bypass &&
+                        connectionMode() == ConnectionMode.LOCAL) ||
+                        (id == R.id.nlic_mode_subscription &&
+                            connectionMode() == ConnectionMode.SUBSCRIPTION)
+                    view.strokeColor = ColorStateList.valueOf(ContextCompat.getColor(
+                        this, when {
+                            focused -> R.color.nlic_success
+                            modeButton && activeMode -> R.color.nlic_accent
+                            else -> R.color.nlic_border
+                        }
+                    ))
+                }
+            }
+        }
+
+        // Only a visible remote click triggers the VPN permission dialog.
+        findViewById<View>(R.id.nlic_connect).requestFocus()
+        onBackPressedDispatcher.addCallback(
+            this, object : androidx.activity.OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (advancedVisible) {
+                        advancedVisible = false
+                        render()
+                        findViewById<View>(R.id.nlic_connection_options).requestFocus()
+                    } else {
+                        isEnabled = false
+                        onBackPressedDispatcher.onBackPressed()
+                    }
+                }
+            }
+        )
     }
 
     override fun onResume() {
