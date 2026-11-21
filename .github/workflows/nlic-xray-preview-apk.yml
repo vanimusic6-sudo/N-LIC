@@ -169,7 +169,7 @@ jobs:
           apk="$(find app/build/outputs/apk/release -type f -name '*arm64-v8a*release*.apk' -print -quit)"
           test -s "$apk"
           cp "$apk" xray-preview/N-LIC-2.1.3-TV-arm64-DEV.apk
-          apk=xray-preview/N-LIC-2.1.2-OneTap-arm64-DEV.apk
+          apk=xray-preview/N-LIC-2.1.3-TV-arm64-DEV.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$apk" > xray-preview/SIGNATURE.txt
           grep -iq '9eac8ece5fb89eeacb03c5eff20155724a206d73180d58c78fc7d3911dbee5c5' xray-preview/SIGNATURE.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" > xray-preview/APK_METADATA.txt
@@ -188,7 +188,7 @@ jobs:
               assert 'lib/arm64-v8a/libbyedpi.so' in entries, 'Stable ByeDPI rollback missing'
           PY
           cat > xray-preview/READ_ME_FIRST.txt <<'EOF'
-          N-LIC version 2.1.3-tv-dev (versionCode 2102).
+          N-LIC version 2.1.3-tv-dev (versionCode 2103).
           DEV-signed optimized Release APK, not a production signing key.
           Xray-core provided by 2dust/AndroidLibXrayLite v26.10.31.
           Native AAR SHA256:
