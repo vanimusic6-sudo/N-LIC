@@ -237,7 +237,7 @@ internal object TvPairTransfer {
         return cipher.doFinal(plain)
     }
 
-    private fun decrypt(key: ByteArray, iv: ByteArray, encrypted: ByteArray): ByteArray {
+    internal fun decrypt(key: ByteArray, iv: ByteArray, encrypted: ByteArray): ByteArray {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv))
         cipher.updateAAD(aad)

@@ -77,7 +77,7 @@ class TvSendActivity : BaseActivity() {
 
         send = MaterialButton(this).apply {
             text = "Выбрать и отправить подписку"
-            isAllCaps = false
+            setAllCaps(false)
             textSize = 17f
             minHeight = dp(64)
             setOnClickListener { chooseSubscription() }
