@@ -401,7 +401,7 @@ class SubscriptionLabActivity : BaseActivity() {
                 })
                 addView(TextView(this@SubscriptionLabActivity).apply {
                     text = "IP: " + pair.ip + "   Порт: " + pair.port +
-                        "\nКод: " + pair.pairingCode.chunked(11).joinToString("-")
+                        "\nКод: " + pair.pairingCode.chunked(11).joinToString(" ")
                     textSize = 14f
                     setTextIsSelectable(true)
                 })

@@ -230,7 +230,7 @@ internal object TvPairTransfer {
         }
     }
 
-    private fun encrypt(key: ByteArray, iv: ByteArray, plain: ByteArray): ByteArray {
+    internal fun encrypt(key: ByteArray, iv: ByteArray, plain: ByteArray): ByteArray {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv))
         cipher.updateAAD(aad)

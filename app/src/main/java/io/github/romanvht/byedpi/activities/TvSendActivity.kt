@@ -114,7 +114,7 @@ class TvSendActivity : BaseActivity() {
         val query = Uri.Builder().scheme("nlic").authority("pair")
             .appendQueryParameter("ip", ip.text.toString().trim())
             .appendQueryParameter("port", port.text.toString().trim())
-            .appendQueryParameter("key", code.text.toString().replace("-", "").trim())
+            .appendQueryParameter("key", code.text.toString().filterNot(Char::isWhitespace))
             .build()
         return TvPairTransfer.readTarget(query)
     }
