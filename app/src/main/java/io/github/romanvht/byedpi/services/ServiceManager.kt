@@ -151,6 +151,7 @@ object ServiceManager {
 
     suspend fun waitStart(context: Context, mode: Mode): Boolean {
         val app = context.applicationContext as Application
+        application = app
         clearRecovery()
         val command = commands.incrementAndGet()
         return withContext(Dispatchers.Main.immediate) {
@@ -467,6 +468,9 @@ object ServiceManager {
         recoveryJob = null
         recoveryArmed = false
         recoveryAttempts = 0
+        // User stop/new manual start must not inherit an obsolete retry route.
+        application?.getPreferences()?.edit()
+            ?.remove("nlic_auto_recovery_round")?.apply()
     }
 
     private fun shouldRecover(current: Session, failed: Boolean): Boolean {
@@ -493,9 +497,13 @@ object ServiceManager {
         val token = commands.get()
         // Rotate only the fixed HTTPS health endpoint after a failed round:
         // blocking a connectivity site must not poison every subsequent scan.
-        app.getPreferences().edit().putString("nlic_auto_probe_url",
-            if (recoveryAttempts % 2 == 1) "https://cp.cloudflare.com/generate_204"
-            else "https://example.com/").apply()
+        app.getPreferences().edit()
+            .putString("nlic_auto_probe_url",
+                if (recoveryAttempts % 2 == 1) "https://cp.cloudflare.com/generate_204"
+                else "https://example.com/")
+            // No server credentials or IPs are persisted, only a counter.
+            .putInt("nlic_auto_recovery_round", recoveryAttempts)
+            .apply()
         recoveryJob = scope.launch {
             delay(waitMs)
             // Internet-capable physical link only; Android VALIDATED is not

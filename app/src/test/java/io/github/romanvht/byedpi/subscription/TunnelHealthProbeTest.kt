@@ -28,6 +28,37 @@ class TunnelHealthProbeTest {
                 javax.net.ssl.SSLProtocolException("TLS protocol mismatch")))
     }
 
+    @Test fun healthProbeUsesAlternativeOriginsOnlyOnPrimaryFailure() =
+        kotlinx.coroutines.runBlocking {
+            val allTargets = TunnelHealthProbe.PRIMARY_HEALTH_TARGETS +
+                TunnelHealthProbe.BACKUP_HEALTH_TARGETS
+            assertEquals(4, allTargets.toSet().size)
+            val seen = mutableListOf<String>()
+            val healthy = TunnelHealthProbe.checkAnyWithProbe { target ->
+                seen.add(target)
+                if (target == "example.com") TunnelHealthProbe.EgressResult.OK
+                else TunnelHealthProbe.EgressResult.HTTP
+            }
+            assertTrue(healthy)
+            assertTrue(seen.all { it in TunnelHealthProbe.PRIMARY_HEALTH_TARGETS })
+            seen.clear()
+            val recovered = TunnelHealthProbe.checkAnyWithProbe { target ->
+                seen.add(target)
+                if (target == "www.gstatic.com") TunnelHealthProbe.EgressResult.OK
+                else TunnelHealthProbe.EgressResult.HTTP
+            }
+            assertTrue(recovered)
+            assertTrue(TunnelHealthProbe.PRIMARY_HEALTH_TARGETS.all { it in seen })
+            assertTrue("www.gstatic.com" in seen)
+            seen.clear()
+            val failed = TunnelHealthProbe.checkAnyWithProbe { target ->
+                seen.add(target)
+                TunnelHealthProbe.EgressResult.HTTP
+            }
+            assertFalse(failed)
+            assertEquals(allTargets.toSet(), seen.toSet())
+        }
+
     @Test fun localProxyRefusalIsDistinguishedFromRemoteTlsFailure() {
         val port = ServerSocket(0).use { it.localPort }
         assertEquals(TunnelHealthProbe.EgressResult.CONNECT,

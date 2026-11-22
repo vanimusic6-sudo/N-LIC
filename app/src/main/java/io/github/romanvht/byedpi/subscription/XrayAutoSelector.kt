@@ -46,6 +46,24 @@ internal object XrayAutoSelector {
         return chosen
     }
 
+    /**
+     * On a failed Auto reconnect, move the encrypted backup route to a
+     * different server. Xray continues to measure the entire catalog;
+     * only its fallbackTag changes when the probe URL is filtered.
+     *
+     * Candidate ordering puts distinct transport families before repeats.
+     * Neither the user's selected node nor its encrypted profile is edited.
+     */
+    internal fun onRecovery(
+        candidates: List<SubscriptionNode>,
+        failedRounds: Int,
+    ): List<SubscriptionNode> {
+        if (failedRounds <= 0 || candidates.size <= 1) return candidates
+        val backupIndex = (failedRounds - 1) % (candidates.size - 1) + 1
+        val backup = candidates[backupIndex]
+        return listOf(backup) + candidates.filterNot { it.id == backup.id }
+    }
+
     fun best(measurements: List<Measurement>): Measurement? =
         measurements.filter { it.elapsedMs in 1L..60_000L }
             .minWithOrNull(compareBy<Measurement> { it.elapsedMs }.thenBy { it.id })

@@ -20,6 +20,27 @@ class XrayAutoSelectorTest {
         assertEquals(4, chosen.size)
     }
 
+    @Test fun failedRecoveryRotatesBackupWithoutDroppingNodes() {
+        val original = listOf(node("chosen"), node("reality"), node("xhttp"),
+            node("other"))
+        assertEquals(original, XrayAutoSelector.onRecovery(original, 0))
+        assertEquals(original, XrayAutoSelector.onRecovery(original, -1))
+        assertEquals(listOf("reality", "chosen", "xhttp", "other"),
+            XrayAutoSelector.onRecovery(original, 1).map { it.id })
+        assertEquals(listOf("xhttp", "chosen", "reality", "other"),
+            XrayAutoSelector.onRecovery(original, 2).map { it.id })
+        assertEquals(listOf("other", "chosen", "reality", "xhttp"),
+            XrayAutoSelector.onRecovery(original, 3).map { it.id })
+        assertEquals("reality", XrayAutoSelector.onRecovery(original, 4).first().id)
+        for (round in 0..1000) {
+            val recovered = XrayAutoSelector.onRecovery(original, round)
+            assertEquals(original.map { it.id }.toSet(), recovered.map { it.id }.toSet())
+            assertEquals(original.size, recovered.size)
+        }
+        assertEquals(original.take(1), XrayAutoSelector.onRecovery(original.take(1), 5))
+        assertTrue(XrayAutoSelector.onRecovery(emptyList(), 8).isEmpty())
+    }
+
     @Test fun bestRequiresVerifiedHttpsAndRanksSmallestLatency() {
         val tested = listOf(
             XrayAutoSelector.Measurement("A", 400),
