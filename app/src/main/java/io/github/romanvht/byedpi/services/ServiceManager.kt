@@ -471,7 +471,11 @@ object ServiceManager {
 
     private fun scheduleRecovery(app: Application) {
         recoveryJob?.cancel()
-        val waitMs = AutoRecoveryPolicy.delayMs(recoveryAttempts++)
+        val waitMs = AutoRecoveryPolicy.jitteredDelayMs(
+            recoveryAttempts, SystemClock.elapsedRealtimeNanos()
+        )
+        // Saturation is harmless; Int overflow is not.
+        if (recoveryAttempts < 1_000) recoveryAttempts++
         val token = commands.get()
         recoveryJob = scope.launch {
             delay(waitMs)

@@ -15,6 +15,20 @@ internal object AutoRecoveryPolicy {
     fun delayMs(attempt: Int): Long =
         backoffMs[attempt.coerceIn(0, backoffMs.lastIndex)]
 
+    /**
+     * +/-20% bounded jitter avoids synchronized reconnection storms after
+     * carrier outages. No randomness is stored or transmitted, and the
+     * retry ceiling stays at 180 seconds even for unbounded attempts.
+     */
+    fun jitteredDelayMs(attempt: Int, entropy: Long): Long {
+        val base = delayMs(attempt)
+        val spread = base / 5L
+        val mixed = entropy xor (entropy ushr 32) xor
+            (attempt.coerceAtLeast(0).toLong() * -7046029254386353131L)
+        val offset = ((mixed and Long.MAX_VALUE) % (spread * 2L + 1L)) - spread
+        return (base + offset).coerceIn(1_000L, 180_000L)
+    }
+
     fun retryable(code: String?): Boolean = code in setOf(
         "AUTO_EGRESS_LOST",
         "AUTO_NO_WORKING_SERVER",

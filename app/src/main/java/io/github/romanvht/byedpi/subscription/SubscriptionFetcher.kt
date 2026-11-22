@@ -29,6 +29,9 @@ internal object SubscriptionFetcher {
         return try {
             val url = URI(input)
             val host = url.host?.lowercase() ?: return false
+            // Forbid ambiguous absolute-name spellings of local domains
+            // such as localhost. or gateway.local. before DNS resolution.
+            if (host.endsWith(".")) return false
             url.scheme.equals("https", true) && url.userInfo == null &&
                 url.fragment == null && url.port in -1..65535 &&
                 url.port != 0 && host != "localhost" &&
@@ -85,7 +88,10 @@ internal object SubscriptionFetcher {
                 ))
             }
             // 2000::/3 global unicast, excluding special-use assignments.
+            // 6to4 embeds IPv4 addresses and must not bypass our IPv4
+            // private-address guard through an IPv6 tunnel endpoint.
             if (a[0] !in 0x20..0x3f) return false
+            if (a[0] == 0x20 && a[1] == 0x02) return false // 6to4
             if (a[0] == 0x20 && a[1] == 0x01 &&
                 a[2] <= 0x01) return false              // IETF special-purpose
             if (a[0] == 0x20 && a[1] == 0x01 &&

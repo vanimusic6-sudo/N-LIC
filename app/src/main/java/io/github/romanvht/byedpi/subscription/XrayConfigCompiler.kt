@@ -75,6 +75,11 @@ internal object XrayConfigCompiler {
                     reality.addProperty("fingerprint", realityClientFingerprint)
                 }
             }
+            // No future importer may silently compile a plaintext VLESS/Trojan
+            // outbound, even when its source parser accidentally regresses.
+            if (!hasAuthenticatedTransport(outbound)) {
+                return Result.Unsupported("Encrypted outbound transport required")
+            }
             // Packetization and TCP socket techniques are different from
             // uTLS ClientHello impersonation. No remote cooperation required,
             // but fail closed if a profile is incompatible with this node or
@@ -141,6 +146,27 @@ internal object XrayConfigCompiler {
             Result.Compiled(root.toString(), node.protocol)
         } catch (_: Exception) {
             Result.Unsupported("Invalid Xray connection parameters")
+        }
+    }
+
+    /**
+     * Last-line confidentiality invariant: do not convert parser regressions
+     * into an unencrypted tunnel. VMess, WireGuard and Shadowsocks retain
+     * their existing protocol-level AEAD validation in the source parser.
+     */
+    internal fun hasAuthenticatedTransport(outbound: JsonObject): Boolean {
+        val protocol = outbound.get("protocol")?.asString ?: return false
+        if (protocol in setOf("wireguard", "shadowsocks", "vmess")) return true
+        if (protocol !in setOf("vless", "trojan")) return false
+        val stream = outbound.getAsJsonObject("streamSettings") ?: return false
+        return when (stream.get("security")?.asString) {
+            "reality" -> stream.getAsJsonObject("realitySettings")?.let {
+                !it.get("serverName")?.asString.isNullOrBlank() &&
+                    !it.get("password")?.asString.isNullOrBlank()
+            } == true
+            "tls" -> stream.getAsJsonObject("tlsSettings")
+                ?.get("allowInsecure")?.asBoolean == false
+            else -> false
         }
     }
 
