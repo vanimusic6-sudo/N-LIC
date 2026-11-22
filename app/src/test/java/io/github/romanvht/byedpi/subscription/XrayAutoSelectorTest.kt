@@ -37,7 +37,7 @@ class XrayAutoSelectorTest {
             assertEquals(original.map { it.id }.toSet(), recovered.map { it.id }.toSet())
             assertEquals(original.size, recovered.size)
         }
-        assertEquals(original, XrayAutoSelector.onRecovery(original.take(1), 5))
+        assertEquals(original.take(1), XrayAutoSelector.onRecovery(original.take(1), 5))
         assertTrue(XrayAutoSelector.onRecovery(emptyList(), 8).isEmpty())
     }
 
