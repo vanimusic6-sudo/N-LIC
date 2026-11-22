@@ -23,9 +23,15 @@ internal object AutoRecoveryPolicy {
     fun jitteredDelayMs(attempt: Int, entropy: Long): Long {
         val base = delayMs(attempt)
         val spread = base / 5L
-        val mixed = entropy xor (entropy ushr 32) xor
+        // Mix both inputs using SplitMix64 finalization. XOR alone keeps
+        // adjacent timer values almost identical; combined with the upper
+        // delay cap that silently eliminates jitter for several attempts.
+        var bits = entropy xor
             (attempt.coerceAtLeast(0).toLong() * -7046029254386353131L)
-        val offset = ((mixed and Long.MAX_VALUE) % (spread * 2L + 1L)) - spread
+        bits = (bits xor (bits ushr 30)) * -4658895280553007687L
+        bits = (bits xor (bits ushr 27)) * -7723592293110705685L
+        bits = bits xor (bits ushr 31)
+        val offset = ((bits and Long.MAX_VALUE) % (spread * 2L + 1L)) - spread
         return (base + offset).coerceIn(1_000L, 180_000L)
     }
 
