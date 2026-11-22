@@ -15,6 +15,23 @@ internal object AutoRecoveryPolicy {
     fun delayMs(attempt: Int): Long =
         backoffMs[attempt.coerceIn(0, backoffMs.lastIndex)]
 
+    /**
+     * Add 20% bounded delay jitter after an operator-wide outage. Mixing
+     * entropy protects adjacent monotonic timer values from collapsing
+     * to one repeated delay. This is not cryptographic randomness.
+     */
+    fun jitteredDelayMs(attempt: Int, entropy: Long): Long {
+        val base = delayMs(attempt)
+        val spread = base / 5L
+        var bits = entropy xor
+            (attempt.coerceAtLeast(0).toLong() * -7046029254386353131L)
+        bits = (bits xor (bits ushr 30)) * -4658895280553007687L
+        bits = (bits xor (bits ushr 27)) * -7723592293110705685L
+        bits = bits xor (bits ushr 31)
+        val offset = ((bits and Long.MAX_VALUE) % (spread * 2L + 1L)) - spread
+        return (base + offset).coerceIn(800L, 180_000L)
+    }
+
     fun retryable(code: String?): Boolean = code in setOf(
         "AUTO_EGRESS_LOST",
         "AUTO_NO_WORKING_SERVER",

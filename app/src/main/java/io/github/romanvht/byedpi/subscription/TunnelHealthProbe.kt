@@ -184,14 +184,16 @@ internal object TunnelHealthProbe {
             httpMs, elapsed())
     }
 
-    /** A cert-verified HTTPS success (200-399) proves end-to-end egress.
+    /** A cert-verified HTTPS 2xx response proves useful end-to-end egress.
      * It must not depend on a particular CDN returning exactly 204.
      */
     internal fun acceptsHttpsResponse(statusLine: String): Boolean {
         val normalized = statusLine.trimEnd('\r')
         val match = Regex("^HTTP/1\\.[01] ([0-9]{3})(?: [^\r\n]*)?$")
             .matchEntire(normalized) ?: return false
-        return match.groupValues[1].toInt() in 200..399
+        // A 3xx may come from a captive portal or a redirected probe.
+        // Since redirects are not followed, it is not proof of egress.
+        return match.groupValues[1].toInt() in 200..299
     }
 
     /**
@@ -285,14 +287,20 @@ internal object TunnelHealthProbe {
         if (auth != null) {
             val user = auth.username.toByteArray(Charsets.US_ASCII)
             val pass = auth.password.toByteArray(Charsets.US_ASCII)
-            require(user.size in 1..255 && pass.size in 1..255)
-            output.write(byteArrayOf(1, user.size.toByte()))
-            output.write(user)
-            output.write(pass.size)
-            output.write(pass)
-            output.flush()
-            check(input.readUnsignedByte() == 1 && input.readUnsignedByte() == 0) {
-                "SOCKS credentials were rejected"
+            try {
+                require(user.size in 1..255 && pass.size in 1..255)
+                output.write(byteArrayOf(1, user.size.toByte()))
+                output.write(user)
+                output.write(pass.size)
+                output.write(pass)
+                output.flush()
+                check(input.readUnsignedByte() == 1 && input.readUnsignedByte() == 0) {
+                    "SOCKS credentials were rejected"
+                }
+            } finally {
+                // Do not retain temporary raw credential buffers.
+                user.fill(0)
+                pass.fill(0)
             }
         }
     }

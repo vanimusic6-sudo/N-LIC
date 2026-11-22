@@ -2,9 +2,10 @@ name: N-LIC Android TV DEV APK
 
 on:
   push:
-    branches: [feature/nlic-xray-core-20261104, feature/nlic-dual-mode-resilience-20261104 , feature/nlic-v2-ui-core, feature/lic-assist-reality-tcp-20261105, feature/lic-reality-smart-assist-20261105, fix/lic-reality-visible-status-20261105, fix/lic-assist-main-switch-20261105, feature/lic-assist-reality-ab-test-20261105, feature/lic-reality-diagnostics-v2-20261105, feature/lic-reality-stream-pcap-audit-20261105, feature/lic-reality-adaptive-selection-20261105, feature/lic-reality-transport-tricks-20261105, fix/lic-assist-unified-workbench-20261105, feature/lic-helper-dual-firstflight-20261106, feature/lic-helper-hardening-thermal-20261106, feature/nlic-field-failover-20261111, feature/nlic-xhttp-real-transport-20261111, feature/nlic-awg31-packet-engine-20261112, feature/nlic-one-tap-resilience-20261112, feature/nlic-android-tv-20261121, fix/nlic-tv-universal-pair-20261121]
+    branches: [feature/nlic-xray-core-20261104, feature/nlic-dual-mode-resilience-20261104 , feature/nlic-v2-ui-core, feature/lic-assist-reality-tcp-20261105, feature/lic-reality-smart-assist-20261105, fix/lic-reality-visible-status-20261105, fix/lic-assist-main-switch-20261105, feature/lic-assist-reality-ab-test-20261105, feature/lic-reality-diagnostics-v2-20261105, feature/lic-reality-stream-pcap-audit-20261105, feature/lic-reality-adaptive-selection-20261105, feature/lic-reality-transport-tricks-20261105, fix/lic-assist-unified-workbench-20261105, feature/lic-helper-dual-firstflight-20261106, feature/lic-helper-hardening-thermal-20261106, feature/nlic-field-failover-20261111, feature/nlic-xhttp-real-transport-20261111, feature/nlic-awg31-packet-engine-20261112, feature/nlic-one-tap-resilience-20261112, feature/nlic-android-tv-20261121, fix/nlic-tv-universal-pair-20261121, feature/nlic-215-secure-tv-20261122]
     paths:
       - app/**
+      - settings.gradle.kts
       - tools/reality_clienthello_audit.py
       - tests/nlic-v2/test_reality_clienthello_audit.py
       - .github/workflows/nlic-xray-preview-apk.yml
@@ -175,13 +176,13 @@ jobs:
           for target in armeabi-v7a arm64-v8a universal; do
             apk="$(find app/build/outputs/apk/release -type f -name "*$target*release*.apk" -print -quit)"
             test -s "$apk"
-            cp "$apk" "xray-preview/N-LIC-2.1.4-TV-$target-DEV.apk"
-            output="xray-preview/N-LIC-2.1.4-TV-$target-DEV.apk"
+            cp "$apk" "xray-preview/N-LIC-2.1.5-TV-$target-DEV.apk"
+            output="xray-preview/N-LIC-2.1.5-TV-$target-DEV.apk"
             "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$output" > /tmp/nlic-tv-signature.txt
             grep -iq '9eac8ece5fb89eeacb03c5eff20155724a206d73180d58c78fc7d3911dbee5c5' /tmp/nlic-tv-signature.txt
             "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$output" > /tmp/nlic-tv-metadata.txt
             grep -q 'io.github.vanimusic6sudo.nlic' /tmp/nlic-tv-metadata.txt
-            grep -q "versionCode='2104'" /tmp/nlic-tv-metadata.txt
+            grep -q "versionCode='2105'" /tmp/nlic-tv-metadata.txt
             if grep -q '^application-debuggable' /tmp/nlic-tv-metadata.txt; then exit 1; fi
           done
           python3 - <<'PY'
@@ -193,7 +194,7 @@ jobs:
               ("arm64-v8a", ("arm64-v8a",)),
               ("universal", ("armeabi-v7a", "arm64-v8a")),
           ):
-              apk = base / f"N-LIC-2.1.4-TV-{target}-DEV.apk"
+              apk = base / f"N-LIC-2.1.5-TV-{target}-DEV.apk"
               with ZipFile(apk) as z:
                   entries = set(z.namelist())
                   assert "classes.dex" in entries
@@ -206,7 +207,7 @@ jobs:
               print("Validated", apk, tuple(abis))
           PY
           cat > xray-preview/READ_ME_FIRST.txt <<'EOF'
-          N-LIC 2.1.4 TV DEV. Experimental Android TV + phone build.
+          N-LIC 2.1.5 TV Security DEV. Experimental Android TV + phone build.
           Choose armeabi-v7a for 32-bit TV OS, arm64-v8a for 64-bit TV OS.
           The universal APK contains both ABIs and is the safest first try.
           Minimum Android version: 7.0 (API 24) when Xray is included.
@@ -221,7 +222,7 @@ jobs:
           require real-device validation. Do not use for sensitive traffic.
           ZXing core 3.5.3 is licensed under Apache License 2.0.
           EOF
-          (cd xray-preview && sha256sum N-LIC-2.1.4-TV-*-DEV.apk > SHA256SUMS.txt)
+          (cd xray-preview && sha256sum N-LIC-2.1.5-TV-*-DEV.apk > SHA256SUMS.txt)
 
       - name: Publish Xray preview APK
         if: success()
