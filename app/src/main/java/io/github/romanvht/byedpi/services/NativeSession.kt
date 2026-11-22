@@ -328,6 +328,17 @@ internal class NativeSession(
                                 LICBay.plan(it).transport != BayTransport.UDP_ASSOCIATE
                         }
                         if (eligible.isEmpty()) throw CoreStartException("BAY_UDP_UNAVAILABLE")
+                        // Auto retries rotate Xray's fallbackTag, but keep every
+                        // authenticated outbound in the same measured pool.
+                        // User-selected server and manual mode remain untouched.
+                        val orderedEligible = if (autoEnabled) {
+                            io.github.romanvht.byedpi.subscription.XrayAutoSelector.onRecovery(
+                                eligible,
+                                service.getPreferences().getInt(
+                                    "nlic_auto_recovery_round", 0
+                                ).coerceIn(0, 1_000_000)
+                            )
+                        } else eligible
 
                         // The native observer races every compatible encrypted
                         // outbound in one core. New connections use the measured
@@ -335,7 +346,7 @@ internal class NativeSession(
                         if (autoEnabled) {
                             corePhase = "AUTO_PROBE"; CoreFailureTrace.mark(service, corePhase)
                             val autoPlan = withContext(Dispatchers.IO) {
-                                XrayConfigCompiler.compileAuto(eligible, auth,
+                                XrayConfigCompiler.compileAuto(orderedEligible, auth,
                                     if (bayEnabled) bayPort else null, assistMode,
                                     service.getPreferences().getString(
                                         "nlic_auto_probe_url", "https://example.com/")
@@ -359,7 +370,7 @@ internal class NativeSession(
                         }
                         // Metadata only. Auto selection is managed by the core;
                         // do not overwrite the user's manually selected node.
-                        val selected = eligible.first()
+                        val selected = orderedEligible.first()
 
                         val baselinePlan = XrayConfigCompiler.compile(
                             selected, auth, if (bayEnabled) bayPort else null
