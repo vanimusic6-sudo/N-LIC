@@ -13,6 +13,8 @@ class SubscriptionFetcherTest {
         assertFalse(SubscriptionFetcher.validSubscriptionUrl("https://user:pass@public.example.org/"))
         assertFalse(SubscriptionFetcher.validSubscriptionUrl("https://public.example.org/#secret"))
         assertFalse(SubscriptionFetcher.validSubscriptionUrl("https://localhost/sub"))
+        assertFalse(SubscriptionFetcher.validSubscriptionUrl("https://localhost./sub"))
+        assertFalse(SubscriptionFetcher.validSubscriptionUrl("https://gateway.local./sub"))
         assertFalse(SubscriptionFetcher.validSubscriptionUrl("https://127.0.0.1/sub"))
         assertFalse(SubscriptionFetcher.validSubscriptionUrl("https://192.168.1.10/sub"))
         assertFalse(SubscriptionFetcher.validSubscriptionUrl("https://public.example.org:0/sub"))
@@ -24,7 +26,7 @@ class SubscriptionFetcherTest {
             "198.19.255.255", "198.51.100.42", "203.0.113.12",
             "192.0.2.10", "192.88.99.1", "0.1.2.3",
             "fc00::1", "fd12:3456::1", "2001:db8::1",
-            "2001::1", "3fff::2"
+            "2001::1", "3fff::2", "2002:0a00:0001::1"
         )
         for (ip in blocked) {
             assertFalse(ip, SubscriptionFetcher.publicAddress(InetAddress.getByName(ip)))

@@ -32,7 +32,7 @@ object ServiceManager {
     private const val PAUSE_NOTIFICATION_ID = 3
     private val scope = CoroutineScope(
         Dispatchers.Main.immediate + SupervisorJob() + CoroutineExceptionHandler {
-            _, error -> Log.e(TAG, "Service command failed", error)
+            _, _ -> Log.e(TAG, "Service command failed (details withheld)")
         }
     )
     private val commands = AtomicLong()
@@ -485,7 +485,11 @@ object ServiceManager {
 
     private fun scheduleRecovery(app: Application) {
         recoveryJob?.cancel()
-        val waitMs = AutoRecoveryPolicy.delayMs(recoveryAttempts++)
+        val waitMs = AutoRecoveryPolicy.jitteredDelayMs(
+            recoveryAttempts, SystemClock.elapsedRealtimeNanos()
+        )
+        // Never overflow the retry counter during prolonged outages.
+        if (recoveryAttempts < 1_000_000) recoveryAttempts++
         val token = commands.get()
         // Rotate only the fixed HTTPS health endpoint after a failed round:
         // blocking a connectivity site must not poison every subsequent scan.

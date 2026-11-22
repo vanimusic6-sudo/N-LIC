@@ -1,5 +1,6 @@
 package io.github.romanvht.byedpi.subscription
 
+import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import org.junit.Assert.*
 import org.junit.Test
@@ -14,6 +15,31 @@ class XrayConfigCompilerTest {
     private fun root(raw: String) =
         JsonParser.parseString((XrayConfigCompiler.compile(node(raw), auth)
             as XrayConfigCompiler.Result.Compiled).json).asJsonObject
+
+    @Test fun encryptedTransportGuardRejectsDowngrade() {
+        fun outbound(protocol: String, security: String, insecure: Boolean = false) =
+            JsonObject().apply {
+                addProperty("protocol", protocol)
+                add("streamSettings", JsonObject().apply {
+                    addProperty("security", security)
+                    when (security) {
+                        "tls" -> add("tlsSettings", JsonObject().apply {
+                            addProperty("allowInsecure", insecure)
+                        })
+                        "reality" -> add("realitySettings", JsonObject().apply {
+                            addProperty("serverName", "example.com")
+                            addProperty("password", "dummy-valid-public-reality-key")
+                        })
+                    }
+                })
+            }
+        assertFalse(XrayConfigCompiler.hasAuthenticatedTransport(outbound("vless", "none")))
+        assertFalse(XrayConfigCompiler.hasAuthenticatedTransport(outbound("trojan", "none")))
+        assertFalse(XrayConfigCompiler.hasAuthenticatedTransport(outbound("vless", "tls", true)))
+        assertTrue(XrayConfigCompiler.hasAuthenticatedTransport(outbound("vless", "tls")))
+        assertTrue(XrayConfigCompiler.hasAuthenticatedTransport(outbound("vless", "reality")))
+        assertFalse(XrayConfigCompiler.hasAuthenticatedTransport(outbound("freedom", "tls")))
+    }
 
     @Test fun realityUsesXraySchemaInsteadOfSingBoxFields() {
         val raw = "vless://$uuid@edge.example:443?encryption=none&security=reality" +

@@ -37,7 +37,9 @@ class TunnelHealthProbeTest {
     @Test fun `verified HTTPS response accepts normal successful sites not only 204`() {
         assertTrue(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 204 No Content\r"))
         assertTrue(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 200 OK"))
-        assertTrue(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 301 Moved Permanently"))
+        assertFalse(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 301 Moved Permanently"))
+        assertFalse(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 302 Found"))
+        assertFalse(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 307 Temporary Redirect"))
         assertFalse(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 403 Forbidden"))
         assertFalse(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 500 Server Error"))
         assertFalse(TunnelHealthProbe.acceptsHttpsResponse("HTTP/1.1 invalid status"))

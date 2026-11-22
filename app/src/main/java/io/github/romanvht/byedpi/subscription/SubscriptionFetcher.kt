@@ -29,6 +29,8 @@ internal object SubscriptionFetcher {
         return try {
             val url = URI(input)
             val host = url.host?.lowercase() ?: return false
+            // Avoid trailing-dot aliases of local names before DNS lookup.
+            if (host.endsWith(".")) return false
             url.scheme.equals("https", true) && url.userInfo == null &&
                 url.fragment == null && url.port in -1..65535 &&
                 url.port != 0 && host != "localhost" &&
@@ -85,7 +87,10 @@ internal object SubscriptionFetcher {
                 ))
             }
             // 2000::/3 global unicast, excluding special-use assignments.
+            // 6to4 encapsulates IPv4 and is not an acceptable public
+            // subscription destination for a strict SSRF policy.
             if (a[0] !in 0x20..0x3f) return false
+            if (a[0] == 0x20 && a[1] == 0x02) return false // deprecated 6to4
             if (a[0] == 0x20 && a[1] == 0x01 &&
                 a[2] <= 0x01) return false              // IETF special-purpose
             if (a[0] == 0x20 && a[1] == 0x01 &&

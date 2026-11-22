@@ -75,6 +75,11 @@ internal object XrayConfigCompiler {
                     reality.addProperty("fingerprint", realityClientFingerprint)
                 }
             }
+            // Fail closed even if a future profile parser regresses.
+            // VLESS has no native encryption and Trojan requires TLS.
+            if (!hasAuthenticatedTransport(outbound)) {
+                return Result.Unsupported("Authenticated encrypted outbound required")
+            }
             // Packetization and TCP socket techniques are different from
             // uTLS ClientHello impersonation. No remote cooperation required,
             // but fail closed if a profile is incompatible with this node or
@@ -222,6 +227,27 @@ internal object XrayConfigCompiler {
         // A single probe can be blocked independently of the user's traffic;
         // startup/watchdog also verify a second independent HTTPS target.
         return Result.Compiled(config.toString(), "AUTO")
+    }
+
+    /**
+     * Last-line encryption guard. The parser separately validates the AEAD
+     * suites for WireGuard, Shadowsocks and VMess. The Xray JSON compiler
+     * must never silently downgrade VLESS or Trojan to plaintext.
+     */
+    internal fun hasAuthenticatedTransport(outbound: JsonObject): Boolean {
+        val protocol = outbound.get("protocol")?.asString ?: return false
+        if (protocol in setOf("wireguard", "shadowsocks", "vmess")) return true
+        if (protocol !in setOf("vless", "trojan")) return false
+        val stream = outbound.getAsJsonObject("streamSettings") ?: return false
+        return when (stream.get("security")?.asString) {
+            "reality" -> stream.getAsJsonObject("realitySettings")?.let {
+                !it.get("serverName")?.asString.isNullOrBlank() &&
+                    !it.get("password")?.asString.isNullOrBlank()
+            } == true
+            "tls" -> stream.getAsJsonObject("tlsSettings")
+                ?.get("allowInsecure")?.asBoolean == false
+            else -> false
+        }
     }
 
     private fun convert(src: JsonObject): JsonObject? {
