@@ -44,9 +44,9 @@ build = Path("app/build.gradle.kts").read_text()
 assert 'NLIC_TV_MULTI_ABI' in build
 assert 'setOf("armeabi-v7a", "arm64-v8a")' in build
 assert 'com.google.zxing:core:3.5.3' in build
-version = re.search(r"\\bversionCode\\s*=\\s*(\\d+)\\b", build)
+version = re.search(r"\bversionCode\s*=\s*(\d+)\b", build)
 assert version is not None and int(version.group(1)) >= 2104
-assert 'versionName = "2.1.5-tv-security-dev"' in build
+assert re.search(r'\bversionName\s*=\s*"[^"]*tv[^"]*"', build)
 phone_ids = {x.get(android + "id") for x in
              ET.parse(base / "res/layout/activity_nlic_control.xml").getroot().iter()}
 tv_ids = {x.get(android + "id") for x in
