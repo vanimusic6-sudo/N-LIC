@@ -57,8 +57,8 @@ android {
         minSdk = if (includeNativeLibbox || includeNativeXray) 24 else 21
         //noinspection OldTargetApi
         targetSdk = 34
-        versionCode = 2105
-        versionName = "2.1.5-tv-security-dev"
+        versionCode = 2106
+        versionName = "2.1.6-tv-resilience-dev"
         buildConfigField("boolean", "NLIC_LIBBOX_INCLUDED",
             if (includeNativeLibbox) "true" else "false")
 
