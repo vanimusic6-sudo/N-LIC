@@ -86,10 +86,26 @@ internal object TunnelHealthProbe {
         }
     }
 
-    suspend fun checkAny(host: String, port: Int, auth: LocalSocksAuth?): Boolean = coroutineScope {
-        val checks = listOf("example.com", "cp.cloudflare.com").map { target ->
-            async { probeCancellable(host, port, auth, target) }
-        }.toMutableList()
+    // Keep the healthy path light: two probes in parallel. Only if both
+    // fail do we try a second pair of HTTPS origins. Two censored public
+    // health endpoints must not be interpreted as dead VPN transport.
+    internal val PRIMARY_HEALTH_TARGETS = listOf("example.com", "cp.cloudflare.com")
+    internal val BACKUP_HEALTH_TARGETS = listOf("www.gstatic.com", "www.wikipedia.org")
+
+    suspend fun checkAny(host: String, port: Int, auth: LocalSocksAuth?): Boolean =
+        checkAnyWithProbe { target -> probeCancellable(host, port, auth, target) }
+
+    /** Staged, cancellable probe groups; tests inject results without a network. */
+    internal suspend fun checkAnyWithProbe(
+        probe: suspend (String) -> EgressResult,
+    ): Boolean = probeGroup(PRIMARY_HEALTH_TARGETS, probe) ||
+        probeGroup(BACKUP_HEALTH_TARGETS, probe)
+
+    private suspend fun probeGroup(
+        targets: List<String>,
+        probe: suspend (String) -> EgressResult,
+    ): Boolean = coroutineScope {
+        val checks = targets.map { target -> async { probe(target) } }.toMutableList()
         try {
             while (checks.isNotEmpty()) {
                 val (job, result) = kotlinx.coroutines.selects.select<
