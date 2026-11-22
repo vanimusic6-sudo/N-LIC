@@ -32,6 +32,8 @@ import io.github.romanvht.byedpi.BuildConfig
 import io.github.romanvht.byedpi.subscription.SubscriptionVault
 import io.github.romanvht.byedpi.subscription.SingBoxConfigCompiler
 import io.github.romanvht.byedpi.subscription.XrayBayArgs
+import io.github.romanvht.byedpi.subscription.PacketDesyncPolicy
+import io.github.romanvht.byedpi.subscription.RealityAssistPolicy
 import io.github.romanvht.byedpi.subscription.CoreStartException
 
 import kotlinx.coroutines.CompletableDeferred
@@ -86,11 +88,31 @@ internal class NativeEngine(
                     // Only the pinned local ByeDPI command generator is allowed.
                     // User subscription entries cannot add proxy flags or
                     // create an externally listening ByeDPI server.
-                    val strategy = AdaptiveDpiPolicy.decide(
+                    val legacy = AdaptiveDpiPolicy.decide(
                         context,
                         preferences.getBoolean(AdaptiveDpiPolicy.KEY, true),
                         "-s0+sm",
                     )?.command ?: "-s0+sm"
+                    // ByeDPI owns the physical socket of this dedicated,
+                    // user-enabled Bay relay. Fake-TTL/OOB are packet/socket
+                    // manipulations rather than Xray TLS-record splitting.
+                    val isRawReality = eligible.all { node ->
+                        val plan = io.github.romanvht.byedpi.subscription.XrayConfigCompiler
+                            .compile(node, authForValidation) as?
+                                io.github.romanvht.byedpi.subscription.XrayConfigCompiler
+                                    .Result.Compiled
+                        plan != null &&
+                            RealityAssistPolicy.baselineFingerprint(plan.json) != null
+                    }
+                    val usePacket = PacketDesyncPolicy.shouldUse(
+                        bay, preferences.getBoolean(PacketDesyncPolicy.PREF_KEY, true),
+                        isRawReality
+                    )
+                    val selectedMode = preferences.getString(
+                        PacketDesyncPolicy.MODE_KEY, PacketDesyncPolicy.FAKE_TTL)
+                    val strategy = if (usePacket)
+                        PacketDesyncPolicy.command(selectedMode, isRawReality) ?: legacy
+                    else legacy
                     val arguments = try {
                         ByeDpiProxyCmdPreferences(
                             context, strategy, "127.0.0.1", bayPort,

@@ -17,4 +17,5 @@
     <string name="nlic_bypass_status_hint" translatable="false">Выбран обход без подписки. Используются локальные стратегии ByeDPI, подобранные по результатам тестов сети.</string>
     <string name="nlic_mode_subscription_status" translatable="false">Подключение к VPN-серверу</string>
     <string name="nlic_bypass_unavailable" translatable="false">Проверь локальный движок ByeDPI и настройки обхода.</string>
+    <string name="nlic_awg_requires_native" translatable="false">Профиль AmneziaWG сохранён безопасно, но нативное ядро AWG 3.1 в эту сборку ещё не встроено. Обычный WireGuard не поддерживает его защиту: подключение отключено.</string>
 </resources>

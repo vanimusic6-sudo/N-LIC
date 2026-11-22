@@ -782,6 +782,8 @@ class SubscriptionLabActivity : BaseActivity() {
             all.isEmpty() -> getString(R.string.nlic_control_start_hint)
             auto -> getString(R.string.nlic_core_auto_desc)
             selected == null -> getString(R.string.nlic_ui_step_choose)
+            selected.protocol == "AMNEZIAWG" ->
+                getString(R.string.nlic_awg_requires_native)
             (if (BuildConfig.NLIC_XRAY_INCLUDED) {
                 XrayConfigCompiler.compile(selected, LocalSocksAuth("nlic", "a".repeat(48))) is XrayConfigCompiler.Result.Compiled
             } else {
