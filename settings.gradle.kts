@@ -2,8 +2,6 @@
 // Google's public HTTPS GCS mirror serves the same Maven Central artifacts.
 // Retain canonical Maven Central as fallback if the mirror is unavailable.
 // Source: https://docs.cloud.google.com/docs/buildpacks/java
-val centralMirror = "https://maven-central.storage-download.googleapis.com/maven2/"
-
 pluginManagement {
     repositories {
         google()
